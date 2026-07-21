@@ -47,3 +47,7 @@ data/arxiv_cache/
 # 系统文件
 .DS_Store
 Thumbs.db
+
+# 示例和输出目录
+example/
+output/
