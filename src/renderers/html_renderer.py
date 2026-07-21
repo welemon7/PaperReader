@@ -62,6 +62,7 @@ class HtmlPosterRenderer:
         return self.template.render(
             poster_title=blueprint.poster_title,
             authors_str=blueprint.authors_str,
+            poster_width=blueprint.width_px,
             color_scheme=blueprint.color_scheme,
             rows=rows,
             figure_map=figure_map,
@@ -135,7 +136,8 @@ class HtmlPosterRenderer:
         return fig_map
 
     @staticmethod
-    def capture_png(html_path: Path, png_path: Path) -> bool:
+    @staticmethod
+    def capture_png(html_path: Path, png_path: Path, width: int = 1200, height: int = 1697) -> bool:
         try:
             from playwright.sync_api import sync_playwright
         except ImportError:
@@ -147,8 +149,8 @@ class HtmlPosterRenderer:
             with sync_playwright() as p:
                 browser = p.chromium.launch()
                 page = browser.new_page(
-                    viewport={"width": 1200, "height": 1680},
-                    device_scale_factor=2,
+                    viewport={"width": width, "height": height},
+                    device_scale_factor=1,
                 )
                 page.goto(html_path.as_uri())
                 page.wait_for_timeout(3000)

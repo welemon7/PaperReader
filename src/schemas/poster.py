@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 from typing import Literal
 from pydantic import BaseModel, Field
 
@@ -32,7 +32,9 @@ class PosterBlueprint(BaseModel):
     poster_title: str = ''
     authors_str: str = ''
     width_px: int = 1200
-    height_px: int = 1680
+    height_px: int = 1697
+    width_mm: int = 841
+    height_mm: int = 1189
     sections: list[PosterSection] = Field(default_factory=list)
     figure_placements: list[FigurePlacement] = Field(default_factory=list)
     formula_displays: list[FormulaDisplay] = Field(default_factory=list)

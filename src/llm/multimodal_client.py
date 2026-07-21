@@ -78,7 +78,7 @@ def multimodal_analyze(
         return None
 
 
-def capture_poster(html_path: Path, png_path: Path) -> Optional[Path]:
+def capture_poster(html_path: Path, png_path: Path, width: int = 1200, height: int = 1697) -> Optional[Path]:
     """Capture poster HTML as PNG image using Playwright."""
     try:
         from playwright.sync_api import sync_playwright
@@ -89,7 +89,7 @@ def capture_poster(html_path: Path, png_path: Path) -> Optional[Path]:
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
-            page = browser.new_page(viewport={"width": 1200, "height": 1680}, device_scale_factor=2)
+            page = browser.new_page(viewport={"width": width, "height": height}, device_scale_factor=1)
             page.goto(html_path.as_uri())
             page.wait_for_timeout(5000)
             page.screenshot(path=str(png_path), full_page=True)

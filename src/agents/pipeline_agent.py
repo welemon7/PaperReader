@@ -96,7 +96,8 @@ def run_pipeline(
 
     # ---- Phase 3: Plan ----
     logger.info("=== Phase 3: Plan ===")
-    blueprint = generate_blueprint(doc, analysis)
+    use_gemini = bool(settings.gemini_api_key) if hasattr(settings, "gemini_api_key") else False
+    blueprint = generate_blueprint(doc, analysis, use_gemini=use_gemini)
     results["blueprint"] = blueprint
     blueprint_path = output_dir / "blueprint.json"
     blueprint_path.write_text(blueprint.model_dump_json(indent=2), encoding="utf-8")

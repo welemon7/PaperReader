@@ -36,23 +36,16 @@ class ExperimentSummary(BaseModel):
     @field_validator('datasets', 'metrics', 'takeaways', mode='before')
     @classmethod
     def ensure_list(cls, v):
-        """统一将字符串转换为列表"""
         if isinstance(v, str):
-            # 如果字符串包含中文顿号、逗号或英文逗号，按这些分隔符分割
-            # 否则将整个字符串作为列表的一个元素
-            if '、' in v or '，' in v or ',' in v or '；' in v or ';' in v:
-                # 按常见分隔符分割
-                items = re.split(r'[、，,；;]\s*', v)
+            if ',' in v or ';' in v:
+                items = re.split(r'[,;]\s*', v)
                 items = [item.strip() for item in items if item.strip()]
                 return items if items else [v.strip()]
             else:
-                # 单个值，直接放入列表
                 return [v.strip()]
         elif isinstance(v, list):
-            # 如果已经是列表，确保每个元素都是字符串
             return [str(item).strip() for item in v if str(item).strip()]
         else:
-            # 其他情况（None, int等），转为字符串并放入列表
             return [str(v)] if v else []
 
 
@@ -77,6 +70,9 @@ class PaperAnalysis(BaseModel):
 
     # Conclusion
     conclusion: str = Field(default="")
+
+    # Code URL
+    code_url: str = Field(default="", description="Project code repository link extracted from the paper")
 
     # Full text
     full_analysis_md: str = Field(default="", description="Full LLM analysis in Markdown")

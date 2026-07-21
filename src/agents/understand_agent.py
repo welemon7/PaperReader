@@ -118,6 +118,7 @@ _SYSTEM_PROMPT = (
     "\n  - role: what this figure illustrates"
     "\n- experiments: Object with datasets, metrics, main_results, takeaways"
     "\n- conclusion: Summary of the paper conclusion"
+    "\n- code_url: Project code repository URL extracted from the paper body (e.g. GitHub link). Leave empty string if not found."
     "\n- full_analysis_md: Complete markdown analysis of the paper"
     "\n\nBe precise and concise."
 )
@@ -185,6 +186,7 @@ def _parse_analysis(doc: PaperDocument, llm_resp: dict) -> PaperAnalysis:
             else None
         ),
         conclusion=llm_resp.get("conclusion", ""),
+        code_url=llm_resp.get("code_url", ""),
         full_analysis_md=llm_resp.get("full_analysis_md", ""),
     )
 

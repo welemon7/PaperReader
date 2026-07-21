@@ -17,7 +17,15 @@ logger = logging.getLogger(__name__)
 def generate_blueprint(
     doc: PaperDocument,
     analysis: PaperAnalysis,
+    use_gemini: bool = False,
 ) -> PosterBlueprint:
+    if use_gemini:
+        try:
+            from src.config import settings
+            if settings.gemini_api_key:
+                return _gemini_layout(doc, analysis)
+        except Exception:
+            logger.warning("Gemini layout failed, falling back to static layout")
     sections = []
     sections.append(_build_title_section(doc, analysis))
     sections.extend(_build_row1(analysis))
@@ -29,7 +37,8 @@ def generate_blueprint(
         paper_id=doc.paper_id,
         poster_title=doc.title,
         authors_str="; ".join(a.name for a in doc.authors),
-        width_px=1200, height_px=1680,
+        width_px=1200, height_px=1697,
+        width_mm=841, height_mm=1189,
         sections=sections,
         figure_placements=figure_placements,
         formula_displays=formula_displays,
@@ -157,10 +166,15 @@ def _build_row3(analysis: PaperAnalysis) -> list[PosterSection]:
         column=2, col_span=1, row=3,
     )
 
+    code_link_text = analysis.code_url if analysis.code_url else "Code will be available at paper project page (if applicable)."
+    if analysis.code_url:
+        code_link_md = f"[{analysis.code_url}]({analysis.code_url})"
+    else:
+        code_link_md = code_link_text
     proj_link = PosterSection(
         section_id="sec-project-link", type="project_link",
         title="Code / Project",
-        content_md="Code will be available at paper project page (if applicable).",
+        content_md=code_link_md,
         column=3, col_span=1, row=3,
     )
     return [contributions, highlights, proj_link]
@@ -192,6 +206,127 @@ def _place_formulas(analysis: PaperAnalysis) -> list[FormulaDisplay]:
             latex=f.latex, semantic_desc=f.semantic_desc,
         ))
     return displays
+
+_GEMINI_LAYOUT_PROMPT = (
+    "You are a scientific poster layout designer. "
+    "Given a paper analysis, design the optimal poster layout.\n\n"
+    "Return JSON with:\n"
+    '- "sections": list of {section_id, type, title, column, col_span, row} '
+    "- design the grid layout\n"
+    '- "figure_placements": list of {figure_id, section_id, width_ratio, caption} '
+    "- max 4 figures\n"
+    '- "color_scheme": dict with primary, accent, background, text, '
+    "section_header_bg, section_header_text, border, highlight\n\n"
+    "Layout rules:\n"
+    "- Core architecture/overview figures: place in method section, "
+    "width_ratio >= 0.8\n"
+    "- Result/comparison figures: group in experiments section, "
+    "width_ratio 0.45-0.55\n"
+    "- Max 4 figures total. Remove redundant ones.\n"
+    "- Design a grid that tells a visual story: motivation -> method "
+    "-> results -> contributions\n"
+    "- Use 2-3 rows with flexible column spans"
+)
+
+
+def _gemini_layout(
+    doc: PaperDocument,
+    analysis: PaperAnalysis,
+) -> PosterBlueprint:
+    """Use Gemini to design the poster layout based on paper analysis."""
+    from src.config import settings
+    from src.llm.client import LLMClient
+
+    gemini = LLMClient(
+        api_key=settings.gemini_api_key,
+        base_url=settings.gemini_base_url,
+        model=settings.gemini_model,
+    )
+
+    prompt_parts = []
+    prompt_parts.append(f"Paper: {doc.title}")
+    prompt_parts.append(f"\nProblem: {analysis.problem_statement}")
+    prompt_parts.append("\nContributions:")
+    for contrib in analysis.contributions:
+        prompt_parts.append(f"- {contrib.text}")
+    prompt_parts.append(f"\nMethod: {analysis.method_overview}")
+    prompt_parts.append("\nKey Figures:")
+    for fig in analysis.key_figures:
+        prompt_parts.append(f"- [{fig.figure_id}] {fig.caption} ({fig.role})")
+    if analysis.experiments:
+        prompt_parts.append("\nExperiments:")
+        exp = analysis.experiments
+        if exp.datasets:
+            prompt_parts.append(f"Datasets: {', '.join(exp.datasets)}")
+        prompt_parts.append(f"Results: {exp.main_results}")
+
+    user_prompt = "\n".join(prompt_parts)
+    try:
+        result = gemini.chat_json(system=_GEMINI_LAYOUT_PROMPT, user=user_prompt)
+    except Exception as e:
+        logger.warning("Gemini layout call failed: %s, using static fallback", e)
+        return _static_layout(doc, analysis)
+
+    sections = []
+    for s in result.get("sections", []):
+        sections.append(PosterSection(
+            section_id=s.get("section_id", ""),
+            type=s.get("type", "motivation"),
+            title=s.get("title", ""),
+            content_md=s.get("content_md", ""),
+            column=s.get("column", 1),
+            col_span=s.get("col_span", 1),
+            row=s.get("row", 0),
+        ))
+
+    figure_placements = []
+    for fp in result.get("figure_placements", []):
+        figure_placements.append(FigurePlacement(
+            figure_id=fp.get("figure_id", ""),
+            section_id=fp.get("section_id", ""),
+            width_ratio=fp.get("width_ratio", 0.9),
+            caption=fp.get("caption", ""),
+        ))
+
+    formula_displays = _place_formulas(analysis)
+    color_scheme = result.get("color_scheme", _default_colors())
+
+    return PosterBlueprint(
+        paper_id=doc.paper_id,
+        poster_title=doc.title,
+        authors_str="; ".join(a.name for a in doc.authors),
+        width_px=1200, height_px=1697,
+        width_mm=841, height_mm=1189,
+        sections=sections,
+        figure_placements=figure_placements,
+        formula_displays=formula_displays,
+        color_scheme=color_scheme,
+    )
+
+
+def _static_layout(
+    doc: PaperDocument,
+    analysis: PaperAnalysis,
+) -> PosterBlueprint:
+    """Static fallback layout when Gemini is unavailable."""
+    sections = []
+    sections.append(_build_title_section(doc, analysis))
+    sections.extend(_build_row1(analysis))
+    sections.extend(_build_row2(analysis))
+    sections.extend(_build_row3(analysis))
+    figure_placements = _place_figures(analysis, sections)
+    formula_displays = _place_formulas(analysis)
+    return PosterBlueprint(
+        paper_id=doc.paper_id,
+        poster_title=doc.title,
+        authors_str="; ".join(a.name for a in doc.authors),
+        width_px=1200, height_px=1697,
+        width_mm=841, height_mm=1189,
+        sections=sections,
+        figure_placements=figure_placements,
+        formula_displays=formula_displays,
+        color_scheme=_default_colors(),
+    )
 
 
 def _default_colors() -> dict:
