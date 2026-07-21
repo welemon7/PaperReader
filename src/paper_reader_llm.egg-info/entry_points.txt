@@ -1,0 +1,2 @@
+[console_scripts]
+parse-paper = src.main:cli_entry

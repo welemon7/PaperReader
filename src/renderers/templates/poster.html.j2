@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ poster_title }} - Poster</title>
+<style>
+:root {
+    --primary: {{ color_scheme.primary }};
+    --accent: {{ color_scheme.accent }};
+    --bg: {{ color_scheme.background }};
+    --text: {{ color_scheme.text }};
+    --header-bg: {{ color_scheme.section_header_bg }};
+    --header-text: {{ color_scheme.section_header_text }};
+    --border: {{ color_scheme.border }};
+    --highlight: {{ color_scheme.highlight }};
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    background: #e0e0e0; display: flex; justify-content: center; padding: 40px;
+    font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 14px; line-height: 1.6;
+    color: var(--text);
+}
+.poster {
+    width: 1200px; min-height: 1680px; background: var(--bg);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2); padding: 0;
+}
+.title-bar {
+    background: var(--primary); color: white; padding: 30px 40px; text-align: center;
+}
+.title-bar h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+.title-bar .authors { font-size: 16px; opacity: 0.9; }
+.row { display: flex; }
+.col { flex: 1; padding: 8px; min-width: 0; }
+.col-span-2 { flex: 2; }
+.col-span-3 { flex: 3; }
+.section {
+    background: #fafafa; border: 1px solid var(--border); border-radius: 4px;
+    margin-bottom: 8px; height: 100%; overflow: hidden;
+}
+.section-header {
+    background: var(--header-bg); color: var(--header-text); padding: 8px 14px;
+    font-size: 16px; font-weight: 600; letter-spacing: 0.3px;
+}
+.section-body { padding: 12px 14px; font-size: 13px; }
+.section-body ul, .section-body ol { padding-left: 20px; margin: 6px 0; }
+.section-body li { margin-bottom: 4px; }
+.section-body p { margin-bottom: 6px; }
+.section-body strong { color: var(--primary); }
+table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 12px; }
+th, td { border: 1px solid #d5dbdb; padding: 6px 10px; text-align: center; }
+th { background: #1a5276; color: white; font-weight: 600; }
+tr:nth-child(even) { background: #f8f9fa; }.figure-placeholder {
+    background: #eef2f7; border: 1px dashed var(--border); border-radius: 4px;
+    padding: 20px; text-align: center; margin: 8px 0; color: #888;
+    min-height: 80px; display: flex; align-items: center; justify-content: center;
+}
+.figure-placeholder img { max-width: 100%; height: auto; border-radius: 2px; }
+@media print {
+    body { background: white; padding: 0; }
+    .poster { box-shadow: none; }
+}
+</style>
+</head>
+<body>
+<div class="poster">
+    <div class="title-bar">
+        <h1>{{ poster_title }}</h1>
+        {% if authors_str %}
+        <div class="authors">{{ authors_str }}</div>
+        {% endif %}
+    </div>
+
+    {% for row_data in rows %}
+    <div class="row">
+        {% for sec in row_data.sections %}
+        <div class="col col-span-{{ sec.col_span }}">
+            {% if sec.type != 'title' %}
+            <div class="section">
+                <div class="section-header">{{ sec.title }}</div>
+                <div class="section-body">
+                    {{ sec.content_html|safe }}
+                    {% set section_figs = figure_map.get(sec.section_id, []) %}
+                    {% for fig in section_figs %}
+                    <div class="figure-placeholder">
+                        {% if fig.src %}
+                        {% if fig.src and fig.src.strip() %}<img src="{{ fig.src }}" alt="{{ fig.caption }}" style="max-width:100%">{% else %}<div style="min-height:80px;display:flex;align-items:center;justify-content:center;color:#999;font-style:italic;border:1px dashed #ddd;border-radius:4px;padding:10px;margin:8px 0">[Figure: {{ fig.caption }}]</div>{% endif %}
+                        {% else %}
+                        <em>[Figure: {{ fig.caption }}]</em>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endfor %}
+</div>
+<script>
+MathJax = { tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] } };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</body>
+</html>

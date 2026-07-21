@@ -1,0 +1,209 @@
+{
+  "paper_id": "2607.14989",
+  "poster_title": "OmniaBench: Benchmarking General AI Agents Across Diverse Scenarios",
+  "authors_str": "",
+  "width_px": 1200,
+  "height_px": 1680,
+  "sections": [
+    {
+      "section_id": "sec-title",
+      "type": "title",
+      "title": "OmniaBench: Benchmarking General AI Agents Across Diverse Scenarios",
+      "content_md": "OmniaBench: Benchmarking General AI Agents Across Diverse Scenarios\n\nOmniaBench：跨多样化场景评估通用AI智能体",
+      "content_html": "",
+      "column": 1,
+      "col_span": 3,
+      "row": 0
+    },
+    {
+      "section_id": "sec-motivation",
+      "type": "motivation",
+      "title": "Motivation",
+      "content_md": "现有智能体基准测试通常局限于有限的场景、工具生态或任务格式，缺乏对真实世界通用智能体应用多样性的覆盖，难以全面评估智能体在多领域、多轮交互、状态跟踪和工具执行等方面的综合能力。",
+      "content_html": "<p>现有智能体基准测试通常局限于有限的场景、工具生态或任务格式，缺乏对真实世界通用智能体应用多样性的覆盖，难以全面评估智能体在多领域、多轮交互、状态跟踪和工具执行等方面的综合能力。</p>",
+      "column": 1,
+      "col_span": 1,
+      "row": 1
+    },
+    {
+      "section_id": "sec-method-overview",
+      "type": "method_overview",
+      "title": "Method Overview",
+      "content_md": "OmniaBench从应用商店、产品需求文档、网络搜索和人工精炼中收集场景知识，构建层次化的ToC、ToB和ToE场景分类体系，并实例化为包含工具、实体、状态和初始化配置的可执行交互环境。任务通过四种路线（DAG、Solver、Program、DAG-S）构建，支持单轮和多轮交互模式，并采用基于rubric和VerifyCode的评估协议。",
+      "content_html": "<p>OmniaBench从应用商店、产品需求文档、网络搜索和人工精炼中收集场景知识，构建层次化的ToC、ToB和ToE场景分类体系，并实例化为包含工具、实体、状态和初始化配置的可执行交互环境。任务通过四种路线（DAG、Solver、Program、DAG-S）构建，支持单轮和多轮交互模式，并采用基于rubric和VerifyCode的评估协议。</p>",
+      "column": 2,
+      "col_span": 1,
+      "row": 1
+    },
+    {
+      "section_id": "sec-key-idea",
+      "type": "key_idea",
+      "title": "Key Idea",
+      "content_md": "提出OmniaBench，一个场景丰富且具有挑战性的通用智能体基准测试，覆盖90个一级领域和354个二级领域，基于真实应用生态系统构建可执行任务环境。",
+      "content_html": "<p>提出OmniaBench，一个场景丰富且具有挑战性的通用智能体基准测试，覆盖90个一级领域和354个二级领域，基于真实应用生态系统构建可执行任务环境。</p>",
+      "column": 3,
+      "col_span": 1,
+      "row": 1
+    },
+    {
+      "section_id": "sec-main-method",
+      "type": "main_method",
+      "title": "Method",
+      "content_md": "OmniaBench从应用商店、产品需求文档、网络搜索和人工精炼中收集场景知识，构建层次化的ToC、ToB和ToE场景分类体系，并实例化为包含工具、实体、状态和初始化配置的可执行交互环境。任务通过四种路线（DAG、Solver、Program、DAG-S）构建，支持单轮和多轮交互模式，并采用基于rubric和VerifyCode的评估协议。\n\n**Key Formulas:**\n- $$ \\mathcal{P} = (\\mathcal{S}, \\mathcal{O}, \\mathcal{A}, \\mathcal{T}, \\Omega, \\rho_0), $$\n  将智能体任务形式化为部分可观测马尔可夫决策过程，包含状态空间、观测空间、动作空间、转移函数、观测函数和初始状态分布。\n- $$ h_t = (o_0, a_0, o_1, a_1, \\ldots, o_t), $$\n  定义智能体在时间步t的历史为观测和动作的交替序列。\n- $$ a_t \\sim \\pi_\\theta(\\cdot \\mid h_t). $$\n  智能体的策略根据历史选择动作。\n- $$ \\mathcal{A} = \\mathcal{A}_{\\mathrm{msg}} \\cup \\mathcal{A}_{\\mathrm{tool}} \\cup \\mathcal{A}_{\\mathrm{final}}, $$\n  动作空间由消息动作、工具调用动作和最终回答动作三部分组成。\n- $$ \\textsc{User Prompt} = \\textsc{Persona} \\oplus \\textsc{Environment Summary} \\oplus \\textsc{Task Description}. $$\n  用户提示由角色卡片、环境摘要和任务描述三部分拼接而成。",
+      "content_html": "<p>OmniaBench从应用商店、产品需求文档、网络搜索和人工精炼中收集场景知识，构建层次化的ToC、ToB和ToE场景分类体系，并实例化为包含工具、实体、状态和初始化配置的可执行交互环境。任务通过四种路线（DAG、Solver、Program、DAG-S）构建，支持单轮和多轮交互模式，并采用基于rubric和VerifyCode的评估协议。</p>\n<p><strong>Key Formulas:</strong>\n- $$ \\mathcal{P} = (\\mathcal{S}, \\mathcal{O}, \\mathcal{A}, \\mathcal{T}, \\Omega, \\rho_0), $$\n  将智能体任务形式化为部分可观测马尔可夫决策过程，包含状态空间、观测空间、动作空间、转移函数、观测函数和初始状态分布。\n- $$ h_t = (o_0, a_0, o_1, a_1, \\ldots, o_t), $$\n  定义智能体在时间步t的历史为观测和动作的交替序列。\n- $$ a_t \\sim \\pi_\\theta(\\cdot \\mid h_t). $$\n  智能体的策略根据历史选择动作。\n- $$ \\mathcal{A} = \\mathcal{A}_{\\mathrm{msg}} \\cup \\mathcal{A}_{\\mathrm{tool}} \\cup \\mathcal{A}_{\\mathrm{final}}, $$\n  动作空间由消息动作、工具调用动作和最终回答动作三部分组成。\n- $$ \\textsc{User Prompt} = \\textsc{Persona} \\oplus \\textsc{Environment Summary} \\oplus \\textsc{Task Description}. $$\n  用户提示由角色卡片、环境摘要和任务描述三部分拼接而成。</p>",
+      "column": 1,
+      "col_span": 2,
+      "row": 2
+    },
+    {
+      "section_id": "sec-experiments",
+      "type": "experiments",
+      "title": "Experiments",
+      "content_md": "| **Metric** | **Value** |\n|-----------|----------|\n| Datasets | OmniaBench包含1431个任务（完整集）, 其中挑战集644个任务, 覆盖DAG, Solver, Program, DAG-S四种路线。 |\n| Metrics | 主要指标为Pass@1（任务完成率）, 此外还报告了用户轮次, 各领域得分, 能力维度得分等。 |\n| Best Result | 最佳闭源模型Claude-Sonnet-5总体得分58.54，最佳开源模型GLM-5.2得分56.83，表明OmniaBench对当前前沿模型具有显著挑战性。 |\n\n**Takeaways:**\n- 不同模型在领域和能力维度上表现出明显的专业化差异\n- 工具使用效率和错误模式分析揭示了模型在状态管理\n- 多轮交互等方面的不足\n- 评估稳定性分析表明rubric-based评估具有良好的一致性。",
+      "content_html": "<table>\n<thead>\n<tr>\n<th><strong>Metric</strong></th>\n<th><strong>Value</strong></th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td>Datasets</td>\n<td>OmniaBench包含1431个任务（完整集）, 其中挑战集644个任务, 覆盖DAG, Solver, Program, DAG-S四种路线。</td>\n</tr>\n<tr>\n<td>Metrics</td>\n<td>主要指标为Pass@1（任务完成率）, 此外还报告了用户轮次, 各领域得分, 能力维度得分等。</td>\n</tr>\n<tr>\n<td>Best Result</td>\n<td>最佳闭源模型Claude-Sonnet-5总体得分58.54，最佳开源模型GLM-5.2得分56.83，表明OmniaBench对当前前沿模型具有显著挑战性。</td>\n</tr>\n</tbody>\n</table>\n<p><strong>Takeaways:</strong>\n- 不同模型在领域和能力维度上表现出明显的专业化差异\n- 工具使用效率和错误模式分析揭示了模型在状态管理\n- 多轮交互等方面的不足\n- 评估稳定性分析表明rubric-based评估具有良好的一致性。</p>",
+      "column": 3,
+      "col_span": 1,
+      "row": 2
+    },
+    {
+      "section_id": "sec-contributions",
+      "type": "contributions",
+      "title": "Contributions",
+      "content_md": "- **[dataset]** 提出OmniaBench，一个场景丰富且具有挑战性的通用智能体基准测试，覆盖90个一级领域和354个二级领域，基于真实应用生态系统构建可执行任务环境。\n- **[method]** 开发了十维能力分类体系（任务理解、信息收集、规划与决策、状态管理、工具使用、代码与编程操作、数据分析、办公与文档处理、交互协作、可靠性与安全性），支持细粒度诊断分析。\n- **[method]** 设计了组合式原子难度框架，涵盖用户意图、角色约束、目标分解、环境状态变化、工具执行、多轮交互、错误恢复和结果验证，用于刻画通用智能体任务中的细粒度挑战。\n- **[application]** 对闭源和开源模型进行了系统评估与分析，从总体结果、领域类别、能力维度、任务复杂度、交互轮次、错误分布和评估稳定性等多个角度揭示了当前通用智能体的能力边界。",
+      "content_html": "<ul>\n<li><strong>[dataset]</strong> 提出OmniaBench，一个场景丰富且具有挑战性的通用智能体基准测试，覆盖90个一级领域和354个二级领域，基于真实应用生态系统构建可执行任务环境。</li>\n<li><strong>[method]</strong> 开发了十维能力分类体系（任务理解、信息收集、规划与决策、状态管理、工具使用、代码与编程操作、数据分析、办公与文档处理、交互协作、可靠性与安全性），支持细粒度诊断分析。</li>\n<li><strong>[method]</strong> 设计了组合式原子难度框架，涵盖用户意图、角色约束、目标分解、环境状态变化、工具执行、多轮交互、错误恢复和结果验证，用于刻画通用智能体任务中的细粒度挑战。</li>\n<li><strong>[application]</strong> 对闭源和开源模型进行了系统评估与分析，从总体结果、领域类别、能力维度、任务复杂度、交互轮次、错误分布和评估稳定性等多个角度揭示了当前通用智能体的能力边界。</li>\n</ul>",
+      "column": 1,
+      "col_span": 1,
+      "row": 3
+    },
+    {
+      "section_id": "sec-highlights",
+      "type": "highlights",
+      "title": "Highlights",
+      "content_md": "1. 不同模型在领域和能力维度上表现出明显的专业化差异\n2. 工具使用效率和错误模式分析揭示了模型在状态管理\n3. 多轮交互等方面的不足\n4. 评估稳定性分析表明rubric-based评估具有良好的一致性。",
+      "content_html": "<ol>\n<li>不同模型在领域和能力维度上表现出明显的专业化差异</li>\n<li>工具使用效率和错误模式分析揭示了模型在状态管理</li>\n<li>多轮交互等方面的不足</li>\n<li>评估稳定性分析表明rubric-based评估具有良好的一致性。</li>\n</ol>",
+      "column": 2,
+      "col_span": 1,
+      "row": 3
+    },
+    {
+      "section_id": "sec-project-link",
+      "type": "project_link",
+      "title": "Code / Project",
+      "content_md": "Code will be available at paper project page (if applicable).",
+      "content_html": "<p>Code will be available at paper project page (if applicable).</p>",
+      "column": 3,
+      "col_span": 1,
+      "row": 3
+    }
+  ],
+  "figure_placements": [
+    {
+      "figure_id": "fig-010",
+      "section_id": "sec-main-method",
+      "width_ratio": 0.95,
+      "caption": "OmniaBench的概念概览。该图总结了基准测试的关键组成部分，包括数据源、可执行任务环境、交互式智能体轨迹和评估协议。OmniaBench旨在覆盖多样化的ToC、ToB和ToE领域，并通过基于rubric和代码的标准以及聚合性能指标来评估通用智能体。"
+    },
+    {
+      "figure_id": "fig-009",
+      "section_id": "sec-main-method",
+      "width_ratio": 0.95,
+      "caption": "OmniaBench排行榜。"
+    },
+    {
+      "figure_id": "fig-008",
+      "section_id": "sec-main-method",
+      "width_ratio": 0.95,
+      "caption": "代表性智能体场景上的性能。"
+    },
+    {
+      "figure_id": "fig-001",
+      "section_id": "sec-main-method",
+      "width_ratio": 0.95,
+      "caption": "能力轮廓。"
+    },
+    {
+      "figure_id": "fig-cache-fig3_tob_toc_toe",
+      "section_id": "sec-main-method",
+      "width_ratio": 0.9,
+      "caption": "Figure: fig3_tob_toc_toe"
+    },
+    {
+      "figure_id": "fig-cache-figure_env_statics",
+      "section_id": "sec-main-method",
+      "width_ratio": 0.9,
+      "caption": "Figure: figure_env_statics"
+    },
+    {
+      "figure_id": "fig-cache-pipeline",
+      "section_id": "sec-main-method",
+      "width_ratio": 0.9,
+      "caption": "Figure: pipeline"
+    },
+    {
+      "figure_id": "fig-cache-synthesis_pipeline",
+      "section_id": "sec-main-method",
+      "width_ratio": 0.9,
+      "caption": "Figure: synthesis_pipeline"
+    },
+    {
+      "figure_id": "fig-cache-T-SNE-domain",
+      "section_id": "sec-main-method",
+      "width_ratio": 0.9,
+      "caption": "Figure: T-SNE-domain"
+    },
+    {
+      "figure_id": "fig-cache-taxonomy",
+      "section_id": "sec-main-method",
+      "width_ratio": 0.9,
+      "caption": "Figure: taxonomy"
+    },
+    {
+      "figure_id": "fig-cache-v12_micro_22models",
+      "section_id": "sec-main-method",
+      "width_ratio": 0.9,
+      "caption": "Figure: v12_micro_22models"
+    }
+  ],
+  "formula_displays": [
+    {
+      "formula_id": "f-001",
+      "section_id": "sec-main-method",
+      "latex": "\\mathcal{P} = (\\mathcal{S}, \\mathcal{O}, \\mathcal{A}, \\mathcal{T}, \\Omega, \\rho_0),",
+      "semantic_desc": "将智能体任务形式化为部分可观测马尔可夫决策过程，包含状态空间、观测空间、动作空间、转移函数、观测函数和初始状态分布。"
+    },
+    {
+      "formula_id": "f-002",
+      "section_id": "sec-main-method",
+      "latex": "h_t = (o_0, a_0, o_1, a_1, \\ldots, o_t),",
+      "semantic_desc": "定义智能体在时间步t的历史为观测和动作的交替序列。"
+    },
+    {
+      "formula_id": "f-003",
+      "section_id": "sec-main-method",
+      "latex": "a_t \\sim \\pi_\\theta(\\cdot \\mid h_t).",
+      "semantic_desc": "智能体的策略根据历史选择动作。"
+    },
+    {
+      "formula_id": "f-004",
+      "section_id": "sec-main-method",
+      "latex": "\\mathcal{A} = \\mathcal{A}_{\\mathrm{msg}} \\cup \\mathcal{A}_{\\mathrm{tool}} \\cup \\mathcal{A}_{\\mathrm{final}},",
+      "semantic_desc": "动作空间由消息动作、工具调用动作和最终回答动作三部分组成。"
+    },
+    {
+      "formula_id": "f-008",
+      "section_id": "sec-main-method",
+      "latex": "\\textsc{User Prompt} = \\textsc{Persona} \\oplus \\textsc{Environment Summary} \\oplus \\textsc{Task Description}.",
+      "semantic_desc": "用户提示由角色卡片、环境摘要和任务描述三部分拼接而成。"
+    }
+  ],
+  "color_scheme": {
+    "primary": "#1a5276",
+    "accent": "#2980b9",
+    "background": "#ffffff",
+    "text": "#2c3e50",
+    "section_header_bg": "#1a5276",
+    "section_header_text": "#ffffff",
+    "border": "#d5dbdb",
+    "highlight": "#f39c12"
+  }
+}
