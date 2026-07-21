@@ -16,13 +16,16 @@
     --highlight: #f39c12;
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { min-height: 100%; }
 body {
-    background: #e0e0e0; display: flex; justify-content: center; padding: 40px;
+    background: #e0e0e0; display: flex; justify-content: center; padding: 24px;
     font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 14px; line-height: 1.6;
     color: var(--text);
 }
 .poster {
-    width: 1200px; background: var(--bg);
+    width: min(1200px, calc(100vw - 48px));
+    min-height: min(1697px, calc(100vh - 48px));
+    background: var(--bg);
     box-shadow: 0 4px 20px rgba(0,0,0,0.2); padding: 0;
 }
 .title-bar {
@@ -50,12 +53,32 @@ body {
 table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 12px; }
 th, td { border: 1px solid #d5dbdb; padding: 6px 10px; text-align: center; }
 th { background: #1a5276; color: white; font-weight: 600; }
-tr:nth-child(even) { background: #f8f9fa; }.figure-placeholder {
+tr:nth-child(even) { background: #f8f9fa; }
+.figure-stack {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 8px;
+}
+.figure-card {
+    background: #fff;
+    border: 1px solid #e3e8ee;
+    border-radius: 4px;
+    padding: 8px;
+}
+.figure-card.full { grid-column: 1 / -1; }
+.figure-caption {
+    font-size: 12px;
+    line-height: 1.35;
+    margin-top: 6px;
+    color: #4f5d73;
+}
+.figure-card img { width: 100%; height: auto; display: block; border-radius: 2px; }
+.figure-placeholder {
     background: #eef2f7; border: 1px dashed var(--border); border-radius: 4px;
     padding: 20px; text-align: center; margin: 8px 0; color: #888;
     min-height: 80px; display: flex; align-items: center; justify-content: center;
 }
-.figure-placeholder img { max-width: 100%; height: auto; border-radius: 2px; }
 @media print {
     body { background: white; padding: 0; }
     .poster { box-shadow: none; }
@@ -92,7 +115,7 @@ tr:nth-child(even) { background: #f8f9fa; }.figure-placeholder {
             <div class="section">
                 <div class="section-header">Method Overview</div>
                 <div class="section-body">
-                    <p>本文提出无数据对抗蒸馏（DFAD）框架，通过生成器与判别器（学生和教师联合）的对抗训练来估计并最小化模型差异。生成器产生“困难样本”以扩大差异，而学生和教师则作为判别器减少差异，从而在无真实数据的情况下训练学生模型。</p>
+                    <p>本文提出无数据对抗蒸馏（DFAD）框架，通过生成器与判别器（学生和教师联合）的对抗训练来估计并最小化模型差异。生成器产生“困难样本”以扩大差异，而学生和教师则共同作为判别器来减小差异，从而在无真实数据的情况下训练学生模型。</p>
                     
                     
                 </div>
@@ -122,161 +145,201 @@ tr:nth-child(even) { background: #f8f9fa; }.figure-placeholder {
             <div class="section">
                 <div class="section-header">Method</div>
                 <div class="section-body">
-                    <p>本文提出无数据对抗蒸馏（DFAD）框架，通过生成器与判别器（学生和教师联合）的对抗训练来估计并最小化模型差异。生成器产生“困难样本”以扩大差异，而学生和教师则作为判别器减少差异，从而在无真实数据的情况下训练学生模型。</p>
+                    <p>本文提出无数据对抗蒸馏（DFAD）框架，通过生成器与判别器（学生和教师联合）的对抗训练来估计并最小化模型差异。生成器产生“困难样本”以扩大差异，而学生和教师则共同作为判别器来减小差异，从而在无真实数据的情况下训练学生模型。</p>
 <p><strong>Key Formulas:</strong>
 - $$ \mathcal{S}^* = \min_\mathcal{S}\mathcal{D}(\mathcal{T}, \mathcal{S}) $$
   最优学生模型通过最小化教师与学生之间的模型差异得到。
 - $$ \mathcal{D}(\mathcal{T}, \mathcal{S}; p) = \mathbb{E}_{x\sim p(x)} [ \frac{1}{n} \|\mathcal{T}(x) - \mathcal{S}(x) \|_1 ] $$
-  模型差异定义为教师与学生输出之间的L1距离的期望。
-- $$ \mathcal{D}(\mathcal{T}, \mathcal{S}; \mathcal{G}) = \mathbb{E}_{z\sim p_z(z)} [ \frac{1}{n} \|\mathcal{T}(\mathcal{G}(z)) - \mathcal{S}(\mathcal{G}(z)) \|_1 ] $$
-  使用生成器生成的样本近似计算模型差异。
-- $$ \mathcal{L}_{IM} = \mathcal{D}(\mathcal{T}, \mathcal{S}; \mathcal{G}^h) = \mathbb{E}_{z\sim p_z(z)} [ \frac{1}{n} \|\mathcal{T}(\mathcal{G}^h(z)) - \mathcal{S}(\mathcal{G}^h(z)) \|_1 ] $$
-  学生模型的损失函数，即使用硬样本生成器计算的模型差异。
-- $$ \mathcal{L}_{GEN} = - \mathcal{L}_{IM} = - \mathbb{E}_{z\sim p_z(z)} [ \frac{1}{n} \|\mathcal{T}(\mathcal{G}(z)) - \mathcal{S}(\mathcal{G}(z)) \|_1 ] $$
-  生成器的损失函数，旨在最大化模型差异以产生困难样本。</p>
+  模型差异定义为教师和学生输出之间的L1距离的期望。
+- $$ \mathcal{L}_{IM} = \mathbb{E}_{z\sim p_z(z)} [ \frac{1}{n} \|\mathcal{T}(\mathcal{G}(z)) - \mathcal{S}(\mathcal{G}(z)) \|_1 ] $$
+  学生模型的损失函数，即生成样本上的模型差异。
+- $$ \mathcal{L}_{GEN} = - \mathbb{E}_{z\sim p_z(z)} [ \frac{1}{n} \|\mathcal{T}(\mathcal{G}(z)) - \mathcal{S}(\mathcal{G}(z)) \|_1 ] $$
+  生成器的损失函数，旨在最大化模型差异以产生困难样本。
+- $$ \mathcal{L}_{GEN-ADA} = -\log( \mathcal{L}_{IM} + 1 ) $$
+  自适应生成器损失，通过对数变换稳定训练。</p>
                     
                     
-                    <div class="figure-placeholder">
+                    <div class="figure-stack">
                         
-                        <img src="figures/framework-small.png" alt="Framework of Data-Free Adversarial Distillation. We construct an upper bound for model discrepancy, under hard sample constraint." style="max-width:100%">
+                        <div class="figure-card full">
+                            
+                            <img src="figures/acc-curve.png" alt="Figure: acc-curve">
+                            
+                            
+                            <div class="figure-caption">Figure: acc-curve</div>
+                            
+                        </div>
                         
-                    </div>
-                    
-                    <div class="figure-placeholder">
+                        <div class="figure-card full">
+                            
+                            <img src="figures/accuracy-curve.png" alt="Figure: accuracy-curve">
+                            
+                            
+                            <div class="figure-caption">Figure: accuracy-curve</div>
+                            
+                        </div>
                         
-                        <img src="figures/generated-samples.png" alt="Generated samples on MNIST, CIFAR10 and CIFAR100. The images in the second row are sampled from real data." style="max-width:100%">
+                        <div class="figure-card full">
+                            
+                            <img src="figures/batch-size-results.png" alt="Figure: batch-size-results">
+                            
+                            
+                            <div class="figure-caption">Figure: batch-size-results</div>
+                            
+                        </div>
                         
-                    </div>
-                    
-                    <div class="figure-placeholder">
+                        <div class="figure-card full">
+                            
+                            <img src="figures/framework-small.png" alt="Figure: framework-small">
+                            
+                            
+                            <div class="figure-caption">Figure: framework-small</div>
+                            
+                        </div>
                         
-                        <img src="figures/seg-patterns.png" alt="The generated samples on CamVid, as well as their semantics predicted by the teacher model. The co-occurrence of traffic lights and poles, as in real samples, is captured by generator." style="max-width:100%">
+                        <div class="figure-card full">
+                            
+                            <img src="figures/generated-samples.png" alt="Figure: generated-samples">
+                            
+                            
+                            <div class="figure-caption">Figure: generated-samples</div>
+                            
+                        </div>
                         
-                    </div>
-                    
-                    <div class="figure-placeholder">
+                        <div class="figure-card full">
+                            
+                            <img src="figures/intoroduction-scc.png" alt="Figure: intoroduction-scc">
+                            
+                            
+                            <div class="figure-caption">Figure: intoroduction-scc</div>
+                            
+                        </div>
                         
-                        <img src="figures/seg-results.png" alt="Segmentation results on CamVid and NYUv2. All baseline methods in the figure are data-driven and our framework achieves the best performance when the original training data is not available." style="max-width:100%">
+                        <div class="figure-card full">
+                            
+                            <img src="figures/seg-patterns.png" alt="Figure: seg-patterns">
+                            
+                            
+                            <div class="figure-caption">Figure: seg-patterns</div>
+                            
+                        </div>
                         
-                    </div>
-                    
-                    <div class="figure-placeholder">
+                        <div class="figure-card full">
+                            
+                            <img src="figures/seg-results.png" alt="Figure: seg-results">
+                            
+                            
+                            <div class="figure-caption">Figure: seg-results</div>
+                            
+                        </div>
                         
-                        <img src="figures/acc-curve.png" alt="Figure: acc-curve" style="max-width:100%">
+                        <div class="figure-card full">
+                            
+                            <img src="figures/caltech101-vis.png" alt="Figure: caltech101-vis">
+                            
+                            
+                            <div class="figure-caption">Figure: caltech101-vis</div>
+                            
+                        </div>
                         
-                    </div>
-                    
-                    <div class="figure-placeholder">
+                        <div class="figure-card full">
+                            
+                            <img src="figures/CamVid-vis.png" alt="Figure: CamVid-vis">
+                            
+                            
+                            <div class="figure-caption">Figure: CamVid-vis</div>
+                            
+                        </div>
                         
-                        <img src="figures/accuracy-curve.png" alt="Figure: accuracy-curve" style="max-width:100%">
+                        <div class="figure-card full">
+                            
+                            <img src="figures/cifar10-vis.png" alt="Figure: cifar10-vis">
+                            
+                            
+                            <div class="figure-caption">Figure: cifar10-vis</div>
+                            
+                        </div>
                         
-                    </div>
-                    
-                    <div class="figure-placeholder">
+                        <div class="figure-card full">
+                            
+                            <img src="figures/cifar100-vis.png" alt="Figure: cifar100-vis">
+                            
+                            
+                            <div class="figure-caption">Figure: cifar100-vis</div>
+                            
+                        </div>
                         
-                        <img src="figures/batch-size-results.png" alt="Figure: batch-size-results" style="max-width:100%">
+                        <div class="figure-card full">
+                            
+                            <img src="figures/MNIST-vis.png" alt="Figure: MNIST-vis">
+                            
+                            
+                            <div class="figure-caption">Figure: MNIST-vis</div>
+                            
+                        </div>
                         
-                    </div>
-                    
-                    <div class="figure-placeholder">
+                        <div class="figure-card full">
+                            
+                            <img src="figures/nyuv2-vis.png" alt="Figure: nyuv2-vis">
+                            
+                            
+                            <div class="figure-caption">Figure: nyuv2-vis</div>
+                            
+                        </div>
                         
-                        <img src="figures/framework-small.png" alt="Figure: framework-small" style="max-width:100%">
+                        <div class="figure-card full">
+                            
+                            <img src="figures/results-batch-size.png" alt="Figure: results-batch-size">
+                            
+                            
+                            <div class="figure-caption">Figure: results-batch-size</div>
+                            
+                        </div>
                         
-                    </div>
-                    
-                    <div class="figure-placeholder">
+                        <div class="figure-card full">
+                            
+                            <img src="figures/seg-camvid.png" alt="Figure: seg-camvid">
+                            
+                            
+                            <div class="figure-caption">Figure: seg-camvid</div>
+                            
+                        </div>
                         
-                        <img src="figures/generated-samples.png" alt="Figure: generated-samples" style="max-width:100%">
+                        <div class="figure-card full">
+                            
+                            <img src="figures/seg-nyuv2.png" alt="Figure: seg-nyuv2">
+                            
+                            
+                            <div class="figure-caption">Figure: seg-nyuv2</div>
+                            
+                        </div>
                         
-                    </div>
-                    
-                    <div class="figure-placeholder">
+                        <div class="figure-card full">
+                            
+                            <img src="figures/seg-vis.png" alt="Figure: seg-vis">
+                            
+                            
+                            <div class="figure-caption">Figure: seg-vis</div>
+                            
+                        </div>
                         
-                        <img src="figures/intoroduction-scc.png" alt="Figure: intoroduction-scc" style="max-width:100%">
+                        <div class="figure-card full">
+                            
+                            <img src="figures/vis-cls.png" alt="Figure: vis-cls">
+                            
+                            
+                            <div class="figure-caption">Figure: vis-cls</div>
+                            
+                        </div>
                         
-                    </div>
-                    
-                    <div class="figure-placeholder">
-                        
-                        <img src="figures/seg-patterns.png" alt="Figure: seg-patterns" style="max-width:100%">
-                        
-                    </div>
-                    
-                    <div class="figure-placeholder">
-                        
-                        <img src="figures/seg-results.png" alt="Figure: seg-results" style="max-width:100%">
-                        
-                    </div>
-                    
-                    <div class="figure-placeholder">
-                        
-                        <img src="figures/caltech101-vis.png" alt="Figure: caltech101-vis" style="max-width:100%">
-                        
-                    </div>
-                    
-                    <div class="figure-placeholder">
-                        
-                        <img src="figures/CamVid-vis.png" alt="Figure: CamVid-vis" style="max-width:100%">
-                        
-                    </div>
-                    
-                    <div class="figure-placeholder">
-                        
-                        <img src="figures/cifar10-vis.png" alt="Figure: cifar10-vis" style="max-width:100%">
-                        
-                    </div>
-                    
-                    <div class="figure-placeholder">
-                        
-                        <img src="figures/cifar100-vis.png" alt="Figure: cifar100-vis" style="max-width:100%">
-                        
-                    </div>
-                    
-                    <div class="figure-placeholder">
-                        
-                        <img src="figures/MNIST-vis.png" alt="Figure: MNIST-vis" style="max-width:100%">
-                        
-                    </div>
-                    
-                    <div class="figure-placeholder">
-                        
-                        <img src="figures/nyuv2-vis.png" alt="Figure: nyuv2-vis" style="max-width:100%">
-                        
-                    </div>
-                    
-                    <div class="figure-placeholder">
-                        
-                        <img src="figures/results-batch-size.png" alt="Figure: results-batch-size" style="max-width:100%">
-                        
-                    </div>
-                    
-                    <div class="figure-placeholder">
-                        
-                        <img src="figures/seg-camvid.png" alt="Figure: seg-camvid" style="max-width:100%">
-                        
-                    </div>
-                    
-                    <div class="figure-placeholder">
-                        
-                        <img src="figures/seg-nyuv2.png" alt="Figure: seg-nyuv2" style="max-width:100%">
-                        
-                    </div>
-                    
-                    <div class="figure-placeholder">
-                        
-                        <img src="figures/seg-vis.png" alt="Figure: seg-vis" style="max-width:100%">
-                        
-                    </div>
-                    
-                    <div class="figure-placeholder">
-                        
-                        <img src="figures/vis-cls.png" alt="Figure: vis-cls" style="max-width:100%">
-                        
-                    </div>
-                    
-                    <div class="figure-placeholder">
-                        
-                        <img src="figures/vis-seg.png" alt="Figure: vis-seg" style="max-width:100%">
+                        <div class="figure-card full">
+                            
+                            <img src="figures/vis-seg.png" alt="Figure: vis-seg">
+                            
+                            
+                            <div class="figure-caption">Figure: vis-seg</div>
+                            
+                        </div>
                         
                     </div>
                     
@@ -308,12 +371,13 @@ tr:nth-child(even) { background: #f8f9fa; }.figure-placeholder {
 </tr>
 <tr>
 <td>Best Result</td>
-<td>在分类任务上，DFAD在CIFAR10上达到93.5%准确率，接近数据驱动方法；在语义分割任务上，DFAD在CamVid上达到58.3% mIoU，优于使用无关数据的KD-UNR。</td>
+<td>在分类任务上，DFAD在CIFAR10上达到93.68%准确率，接近数据驱动方法；在语义分割任务上，DFAD在CamVid上mIoU达到58.3%，优于使用无关数据的KD-UNR。</td>
 </tr>
 </tbody>
 </table>
 <p><strong>Takeaways:</strong>
-- 无数据对抗蒸馏在分类和分割任务上均有效，且性能与数据驱动方法相当；生成器能产生包含任务知识的样本；大batch size有助于稳定训练。</p>
+- DFAD在无数据情况下性能显著优于现有无数据方法，且与数据驱动方法相当；首次成功应用于语义分割；大batch size对性能至关重要。</p>
+<p><strong>Recommended visual focus:</strong></p>
                     
                     
                 </div>
@@ -332,7 +396,7 @@ tr:nth-child(even) { background: #f8f9fa; }.figure-placeholder {
                 <div class="section-body">
                     <ul>
 <li><strong>[method]</strong> 提出了一种用于无数据知识蒸馏的对抗训练框架，首次将其应用于语义分割任务。</li>
-<li><strong>[method]</strong> 引入了一种无需真实数据即可量化教师模型与学生模型之间差异的方法。</li>
+<li><strong>[method]</strong> 引入了一种无需真实数据即可定量衡量教师模型与学生模型之间差异的方法。</li>
 <li><strong>[application]</strong> 大量实验表明，该方法不仅显著优于现有无数据方法，而且与一些数据驱动方法性能相当。</li>
 </ul>
                     
@@ -348,7 +412,7 @@ tr:nth-child(even) { background: #f8f9fa; }.figure-placeholder {
                 <div class="section-header">Highlights</div>
                 <div class="section-body">
                     <ol>
-<li>无数据对抗蒸馏在分类和分割任务上均有效，且性能与数据驱动方法相当；生成器能产生包含任务知识的样本；大batch size有助于稳定训练。</li>
+<li>DFAD在无数据情况下性能显著优于现有无数据方法，且与数据驱动方法相当；首次成功应用于语义分割；大batch size对性能至关重要。</li>
 </ol>
                     
                     
@@ -362,7 +426,7 @@ tr:nth-child(even) { background: #f8f9fa; }.figure-placeholder {
             <div class="section">
                 <div class="section-header">Code / Project</div>
                 <div class="section-body">
-                    <p>Code will be available at paper project page (if applicable).</p>
+                    <p>Project / code: not found in the paper text.</p>
                     
                     
                 </div>

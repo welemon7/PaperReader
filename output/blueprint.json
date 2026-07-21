@@ -22,7 +22,7 @@
       "type": "motivation",
       "title": "Motivation",
       "content_md": "现有的知识蒸馏方法大多依赖原始训练数据或替代数据，但在实际场景中这些数据通常不可用。本文旨在解决无真实数据情况下的模型压缩问题。",
-      "content_html": "<p>现有的知识蒸馏方法大多依赖原始训练数据或替代数据，但在实际场景中这些数据通常不可用。本文旨在解决无真实数据情况下的模型压缩问题。</p>",
+      "content_html": "",
       "column": 1,
       "col_span": 1,
       "row": 1
@@ -31,8 +31,8 @@
       "section_id": "sec-method-overview",
       "type": "method_overview",
       "title": "Method Overview",
-      "content_md": "本文提出无数据对抗蒸馏（DFAD）框架，通过生成器与判别器（学生和教师联合）的对抗训练来估计并最小化模型差异。生成器产生“困难样本”以扩大差异，而学生和教师则作为判别器减少差异，从而在无真实数据的情况下训练学生模型。",
-      "content_html": "<p>本文提出无数据对抗蒸馏（DFAD）框架，通过生成器与判别器（学生和教师联合）的对抗训练来估计并最小化模型差异。生成器产生“困难样本”以扩大差异，而学生和教师则作为判别器减少差异，从而在无真实数据的情况下训练学生模型。</p>",
+      "content_md": "本文提出无数据对抗蒸馏（DFAD）框架，通过生成器与判别器（学生和教师联合）的对抗训练来估计并最小化模型差异。生成器产生“困难样本”以扩大差异，而学生和教师则共同作为判别器来减小差异，从而在无真实数据的情况下训练学生模型。",
+      "content_html": "",
       "column": 2,
       "col_span": 1,
       "row": 1
@@ -42,7 +42,7 @@
       "type": "key_idea",
       "title": "Key Idea",
       "content_md": "提出了一种用于无数据知识蒸馏的对抗训练框架，首次将其应用于语义分割任务。",
-      "content_html": "<p>提出了一种用于无数据知识蒸馏的对抗训练框架，首次将其应用于语义分割任务。</p>",
+      "content_html": "",
       "column": 3,
       "col_span": 1,
       "row": 1
@@ -51,8 +51,8 @@
       "section_id": "sec-main-method",
       "type": "main_method",
       "title": "Method",
-      "content_md": "本文提出无数据对抗蒸馏（DFAD）框架，通过生成器与判别器（学生和教师联合）的对抗训练来估计并最小化模型差异。生成器产生“困难样本”以扩大差异，而学生和教师则作为判别器减少差异，从而在无真实数据的情况下训练学生模型。\n\n**Key Formulas:**\n- $$ \\mathcal{S}^* = \\min_\\mathcal{S}\\mathcal{D}(\\mathcal{T}, \\mathcal{S}) $$\n  最优学生模型通过最小化教师与学生之间的模型差异得到。\n- $$ \\mathcal{D}(\\mathcal{T}, \\mathcal{S}; p) = \\mathbb{E}_{x\\sim p(x)} [ \\frac{1}{n} \\|\\mathcal{T}(x) - \\mathcal{S}(x) \\|_1 ] $$\n  模型差异定义为教师与学生输出之间的L1距离的期望。\n- $$ \\mathcal{D}(\\mathcal{T}, \\mathcal{S}; \\mathcal{G}) = \\mathbb{E}_{z\\sim p_z(z)} [ \\frac{1}{n} \\|\\mathcal{T}(\\mathcal{G}(z)) - \\mathcal{S}(\\mathcal{G}(z)) \\|_1 ] $$\n  使用生成器生成的样本近似计算模型差异。\n- $$ \\mathcal{L}_{IM} = \\mathcal{D}(\\mathcal{T}, \\mathcal{S}; \\mathcal{G}^h) = \\mathbb{E}_{z\\sim p_z(z)} [ \\frac{1}{n} \\|\\mathcal{T}(\\mathcal{G}^h(z)) - \\mathcal{S}(\\mathcal{G}^h(z)) \\|_1 ] $$\n  学生模型的损失函数，即使用硬样本生成器计算的模型差异。\n- $$ \\mathcal{L}_{GEN} = - \\mathcal{L}_{IM} = - \\mathbb{E}_{z\\sim p_z(z)} [ \\frac{1}{n} \\|\\mathcal{T}(\\mathcal{G}(z)) - \\mathcal{S}(\\mathcal{G}(z)) \\|_1 ] $$\n  生成器的损失函数，旨在最大化模型差异以产生困难样本。",
-      "content_html": "<p>本文提出无数据对抗蒸馏（DFAD）框架，通过生成器与判别器（学生和教师联合）的对抗训练来估计并最小化模型差异。生成器产生“困难样本”以扩大差异，而学生和教师则作为判别器减少差异，从而在无真实数据的情况下训练学生模型。</p>\n<p><strong>Key Formulas:</strong>\n- $$ \\mathcal{S}^* = \\min_\\mathcal{S}\\mathcal{D}(\\mathcal{T}, \\mathcal{S}) $$\n  最优学生模型通过最小化教师与学生之间的模型差异得到。\n- $$ \\mathcal{D}(\\mathcal{T}, \\mathcal{S}; p) = \\mathbb{E}_{x\\sim p(x)} [ \\frac{1}{n} \\|\\mathcal{T}(x) - \\mathcal{S}(x) \\|_1 ] $$\n  模型差异定义为教师与学生输出之间的L1距离的期望。\n- $$ \\mathcal{D}(\\mathcal{T}, \\mathcal{S}; \\mathcal{G}) = \\mathbb{E}_{z\\sim p_z(z)} [ \\frac{1}{n} \\|\\mathcal{T}(\\mathcal{G}(z)) - \\mathcal{S}(\\mathcal{G}(z)) \\|_1 ] $$\n  使用生成器生成的样本近似计算模型差异。\n- $$ \\mathcal{L}_{IM} = \\mathcal{D}(\\mathcal{T}, \\mathcal{S}; \\mathcal{G}^h) = \\mathbb{E}_{z\\sim p_z(z)} [ \\frac{1}{n} \\|\\mathcal{T}(\\mathcal{G}^h(z)) - \\mathcal{S}(\\mathcal{G}^h(z)) \\|_1 ] $$\n  学生模型的损失函数，即使用硬样本生成器计算的模型差异。\n- $$ \\mathcal{L}_{GEN} = - \\mathcal{L}_{IM} = - \\mathbb{E}_{z\\sim p_z(z)} [ \\frac{1}{n} \\|\\mathcal{T}(\\mathcal{G}(z)) - \\mathcal{S}(\\mathcal{G}(z)) \\|_1 ] $$\n  生成器的损失函数，旨在最大化模型差异以产生困难样本。</p>",
+      "content_md": "本文提出无数据对抗蒸馏（DFAD）框架，通过生成器与判别器（学生和教师联合）的对抗训练来估计并最小化模型差异。生成器产生“困难样本”以扩大差异，而学生和教师则共同作为判别器来减小差异，从而在无真实数据的情况下训练学生模型。\n\n**Key Formulas:**\n- $$ \\mathcal{S}^* = \\min_\\mathcal{S}\\mathcal{D}(\\mathcal{T}, \\mathcal{S}) $$\n  最优学生模型通过最小化教师与学生之间的模型差异得到。\n- $$ \\mathcal{D}(\\mathcal{T}, \\mathcal{S}; p) = \\mathbb{E}_{x\\sim p(x)} [ \\frac{1}{n} \\|\\mathcal{T}(x) - \\mathcal{S}(x) \\|_1 ] $$\n  模型差异定义为教师和学生输出之间的L1距离的期望。\n- $$ \\mathcal{L}_{IM} = \\mathbb{E}_{z\\sim p_z(z)} [ \\frac{1}{n} \\|\\mathcal{T}(\\mathcal{G}(z)) - \\mathcal{S}(\\mathcal{G}(z)) \\|_1 ] $$\n  学生模型的损失函数，即生成样本上的模型差异。\n- $$ \\mathcal{L}_{GEN} = - \\mathbb{E}_{z\\sim p_z(z)} [ \\frac{1}{n} \\|\\mathcal{T}(\\mathcal{G}(z)) - \\mathcal{S}(\\mathcal{G}(z)) \\|_1 ] $$\n  生成器的损失函数，旨在最大化模型差异以产生困难样本。\n- $$ \\mathcal{L}_{GEN-ADA} = -\\log( \\mathcal{L}_{IM} + 1 ) $$\n  自适应生成器损失，通过对数变换稳定训练。",
+      "content_html": "",
       "column": 1,
       "col_span": 2,
       "row": 2
@@ -61,8 +61,8 @@
       "section_id": "sec-experiments",
       "type": "experiments",
       "title": "Experiments",
-      "content_md": "| **Metric** | **Value** |\n|-----------|----------|\n| Datasets | MNIST, CIFAR10, CIFAR100, Caltech101, CamVid, NYUv2 |\n| Metrics | 分类准确率, 分割mIoU |\n| Best Result | 在分类任务上，DFAD在CIFAR10上达到93.5%准确率，接近数据驱动方法；在语义分割任务上，DFAD在CamVid上达到58.3% mIoU，优于使用无关数据的KD-UNR。 |\n\n**Takeaways:**\n- 无数据对抗蒸馏在分类和分割任务上均有效，且性能与数据驱动方法相当；生成器能产生包含任务知识的样本；大batch size有助于稳定训练。",
-      "content_html": "<table>\n<thead>\n<tr>\n<th><strong>Metric</strong></th>\n<th><strong>Value</strong></th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td>Datasets</td>\n<td>MNIST, CIFAR10, CIFAR100, Caltech101, CamVid, NYUv2</td>\n</tr>\n<tr>\n<td>Metrics</td>\n<td>分类准确率, 分割mIoU</td>\n</tr>\n<tr>\n<td>Best Result</td>\n<td>在分类任务上，DFAD在CIFAR10上达到93.5%准确率，接近数据驱动方法；在语义分割任务上，DFAD在CamVid上达到58.3% mIoU，优于使用无关数据的KD-UNR。</td>\n</tr>\n</tbody>\n</table>\n<p><strong>Takeaways:</strong>\n- 无数据对抗蒸馏在分类和分割任务上均有效，且性能与数据驱动方法相当；生成器能产生包含任务知识的样本；大batch size有助于稳定训练。</p>",
+      "content_md": "| **Metric** | **Value** |\n|-----------|----------|\n| Datasets | MNIST, CIFAR10, CIFAR100, Caltech101, CamVid, NYUv2 |\n| Metrics | 分类准确率, 分割mIoU |\n| Best Result | 在分类任务上，DFAD在CIFAR10上达到93.68%准确率，接近数据驱动方法；在语义分割任务上，DFAD在CamVid上mIoU达到58.3%，优于使用无关数据的KD-UNR。 |\n\n**Takeaways:**\n- DFAD在无数据情况下性能显著优于现有无数据方法，且与数据驱动方法相当；首次成功应用于语义分割；大batch size对性能至关重要。\n\n**Recommended visual focus:**",
+      "content_html": "",
       "column": 3,
       "col_span": 1,
       "row": 2
@@ -71,8 +71,8 @@
       "section_id": "sec-contributions",
       "type": "contributions",
       "title": "Contributions",
-      "content_md": "- **[method]** 提出了一种用于无数据知识蒸馏的对抗训练框架，首次将其应用于语义分割任务。\n- **[method]** 引入了一种无需真实数据即可量化教师模型与学生模型之间差异的方法。\n- **[application]** 大量实验表明，该方法不仅显著优于现有无数据方法，而且与一些数据驱动方法性能相当。",
-      "content_html": "<ul>\n<li><strong>[method]</strong> 提出了一种用于无数据知识蒸馏的对抗训练框架，首次将其应用于语义分割任务。</li>\n<li><strong>[method]</strong> 引入了一种无需真实数据即可量化教师模型与学生模型之间差异的方法。</li>\n<li><strong>[application]</strong> 大量实验表明，该方法不仅显著优于现有无数据方法，而且与一些数据驱动方法性能相当。</li>\n</ul>",
+      "content_md": "- **[method]** 提出了一种用于无数据知识蒸馏的对抗训练框架，首次将其应用于语义分割任务。\n- **[method]** 引入了一种无需真实数据即可定量衡量教师模型与学生模型之间差异的方法。\n- **[application]** 大量实验表明，该方法不仅显著优于现有无数据方法，而且与一些数据驱动方法性能相当。",
+      "content_html": "",
       "column": 1,
       "col_span": 1,
       "row": 3
@@ -81,8 +81,8 @@
       "section_id": "sec-highlights",
       "type": "highlights",
       "title": "Highlights",
-      "content_md": "1. 无数据对抗蒸馏在分类和分割任务上均有效，且性能与数据驱动方法相当；生成器能产生包含任务知识的样本；大batch size有助于稳定训练。",
-      "content_html": "<ol>\n<li>无数据对抗蒸馏在分类和分割任务上均有效，且性能与数据驱动方法相当；生成器能产生包含任务知识的样本；大batch size有助于稳定训练。</li>\n</ol>",
+      "content_md": "1. DFAD在无数据情况下性能显著优于现有无数据方法，且与数据驱动方法相当；首次成功应用于语义分割；大batch size对性能至关重要。",
+      "content_html": "",
       "column": 2,
       "col_span": 1,
       "row": 3
@@ -91,8 +91,8 @@
       "section_id": "sec-project-link",
       "type": "project_link",
       "title": "Code / Project",
-      "content_md": "Code will be available at paper project page (if applicable).",
-      "content_html": "<p>Code will be available at paper project page (if applicable).</p>",
+      "content_md": "Project / code: not found in the paper text.",
+      "content_html": "",
       "column": 3,
       "col_span": 1,
       "row": 3
@@ -101,27 +101,15 @@
   "figure_placements": [
     {
       "figure_id": "fig-002",
-      "section_id": "sec-main-method",
-      "width_ratio": 0.95,
-      "caption": "Framework of Data-Free Adversarial Distillation. We construct an upper bound for model discrepancy, under hard sample constraint."
-    },
-    {
-      "figure_id": "fig-003",
-      "section_id": "sec-main-method",
-      "width_ratio": 0.95,
-      "caption": "Generated samples on MNIST, CIFAR10 and CIFAR100. The images in the second row are sampled from real data."
+      "section_id": "Key Idea",
+      "width_ratio": 1.0,
+      "caption": "Figure 2: The DFAD Framework. The Generator creates hard samples to maximize discrepancy, while the Teacher and Student jointly minimize it."
     },
     {
       "figure_id": "fig-005",
-      "section_id": "sec-main-method",
-      "width_ratio": 0.95,
-      "caption": "The generated samples on CamVid, as well as their semantics predicted by the teacher model. The co-occurrence of traffic lights and poles, as in real samples, is captured by generator."
-    },
-    {
-      "figure_id": "fig-007",
-      "section_id": "sec-main-method",
-      "width_ratio": 0.95,
-      "caption": "Segmentation results on CamVid and NYUv2. All baseline methods in the figure are data-driven and our framework achieves the best performance when the original training data is not available."
+      "section_id": "Experiments",
+      "width_ratio": 0.5,
+      "caption": "Figure 5: Qualitative Results on CamVid. Generated samples preserve semantic co-occurrence (e.g., traffic lights and poles)."
     },
     {
       "figure_id": "fig-cache-acc-curve",
@@ -255,25 +243,25 @@
       "formula_id": "f-002",
       "section_id": "sec-main-method",
       "latex": "\\mathcal{D}(\\mathcal{T}, \\mathcal{S}; p) = \\mathbb{E}_{x\\sim p(x)} [ \\frac{1}{n} \\|\\mathcal{T}(x) - \\mathcal{S}(x) \\|_1 ]",
-      "semantic_desc": "模型差异定义为教师与学生输出之间的L1距离的期望。"
-    },
-    {
-      "formula_id": "f-003",
-      "section_id": "sec-main-method",
-      "latex": "\\mathcal{D}(\\mathcal{T}, \\mathcal{S}; \\mathcal{G}) = \\mathbb{E}_{z\\sim p_z(z)} [ \\frac{1}{n} \\|\\mathcal{T}(\\mathcal{G}(z)) - \\mathcal{S}(\\mathcal{G}(z)) \\|_1 ]",
-      "semantic_desc": "使用生成器生成的样本近似计算模型差异。"
+      "semantic_desc": "模型差异定义为教师和学生输出之间的L1距离的期望。"
     },
     {
       "formula_id": "f-005",
       "section_id": "sec-main-method",
-      "latex": "\\mathcal{L}_{IM} = \\mathcal{D}(\\mathcal{T}, \\mathcal{S}; \\mathcal{G}^h) = \\mathbb{E}_{z\\sim p_z(z)} [ \\frac{1}{n} \\|\\mathcal{T}(\\mathcal{G}^h(z)) - \\mathcal{S}(\\mathcal{G}^h(z)) \\|_1 ]",
-      "semantic_desc": "学生模型的损失函数，即使用硬样本生成器计算的模型差异。"
+      "latex": "\\mathcal{L}_{IM} = \\mathbb{E}_{z\\sim p_z(z)} [ \\frac{1}{n} \\|\\mathcal{T}(\\mathcal{G}(z)) - \\mathcal{S}(\\mathcal{G}(z)) \\|_1 ]",
+      "semantic_desc": "学生模型的损失函数，即生成样本上的模型差异。"
     },
     {
       "formula_id": "f-007",
       "section_id": "sec-main-method",
-      "latex": "\\mathcal{L}_{GEN} = - \\mathcal{L}_{IM} = - \\mathbb{E}_{z\\sim p_z(z)} [ \\frac{1}{n} \\|\\mathcal{T}(\\mathcal{G}(z)) - \\mathcal{S}(\\mathcal{G}(z)) \\|_1 ]",
+      "latex": "\\mathcal{L}_{GEN} = - \\mathbb{E}_{z\\sim p_z(z)} [ \\frac{1}{n} \\|\\mathcal{T}(\\mathcal{G}(z)) - \\mathcal{S}(\\mathcal{G}(z)) \\|_1 ]",
       "semantic_desc": "生成器的损失函数，旨在最大化模型差异以产生困难样本。"
+    },
+    {
+      "formula_id": "f-008",
+      "section_id": "sec-main-method",
+      "latex": "\\mathcal{L}_{GEN-ADA} = -\\log( \\mathcal{L}_{IM} + 1 )",
+      "semantic_desc": "自适应生成器损失，通过对数变换稳定训练。"
     }
   ],
   "color_scheme": {
