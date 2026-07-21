@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Any, Optional
 
@@ -12,20 +13,49 @@ from src.config import settings
 
 logger = logging.getLogger(__name__)
 
+_IMAGE_MIME_TYPES = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+    ".gif": "image/gif",
+    ".bmp": "image/bmp",
+    ".tif": "image/tiff",
+    ".tiff": "image/tiff",
+    ".pdf": "application/pdf",
+}
+
 
 def multimodal_analyze(
     system_prompt: str,
     image_paths: list[str],
     user_text: str = "",
+    provider: str | None = None,
 ) -> Optional[dict[str, Any]]:
-    """Send images + text to Gemini multimodal (vision) API."""
-    api_key = settings.gemini_api_key
-    if not api_key or api_key in ("", "sk-your-key-here"):
-        logger.warning("Gemini API key not configured for multimodal")
-        return None
+    """Send images + text to a multimodal vision provider.
 
-    base_url = settings.gemini_base_url.rstrip("/")
-    model = settings.gemini_model
+    The current default provider is Gemini-compatible, but this wrapper keeps
+    the caller side stable so other providers (for example Agnes-compatible
+    endpoints) can be introduced through configuration without changing the
+    poster workflow.
+    """
+    provider = (provider or os.getenv("POSTER_VISION_PROVIDER") or "gemini").lower()
+    if provider not in {"gemini", "agnes"}:
+        logger.warning("Unsupported multimodal provider '%s', falling back to gemini", provider)
+        provider = "gemini"
+
+    if provider == "agnes":
+        api_key = os.getenv("AGNES_API_KEY") or settings.agnes_api_key or settings.gemini_api_key
+        base_url = (os.getenv("AGNES_BASE_URL") or settings.agnes_base_url or settings.gemini_base_url).rstrip("/")
+        model = os.getenv("AGNES_MODEL") or settings.agnes_model or settings.gemini_model
+    else:
+        api_key = settings.gemini_api_key
+        base_url = settings.gemini_base_url.rstrip("/")
+        model = settings.gemini_model
+
+    if not api_key or api_key in ("", "sk-your-key-here"):
+        logger.warning("Multimodal API key not configured for provider=%s", provider)
+        return None
 
     content: list[dict] = [
         {"type": "text", "text": system_prompt + "\n\n" + user_text}
@@ -36,10 +66,11 @@ def multimodal_analyze(
             logger.warning("Image not found: %s", img_path)
             continue
         try:
+            mime_type = _IMAGE_MIME_TYPES.get(p.suffix.lower(), "image/png")
             b64 = base64.b64encode(p.read_bytes()).decode("utf-8")
             content.append({
                 "type": "image_url",
-                "image_url": {"url": f"data:image/png;base64,{b64}"},
+                "image_url": {"url": f"data:{mime_type};base64,{b64}"},
             })
         except Exception as e:
             logger.warning("Failed to encode %s: %s", img_path, e)
@@ -90,7 +121,7 @@ def capture_poster(html_path: Path, png_path: Path, width: int = 1200, height: i
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             page = browser.new_page(viewport={"width": width, "height": height}, device_scale_factor=1)
-            page.goto(html_path.as_uri())
+            page.goto(_as_file_uri(html_path))
             page.wait_for_timeout(5000)
             page.screenshot(path=str(png_path), full_page=True)
             browser.close()
@@ -99,3 +130,8 @@ def capture_poster(html_path: Path, png_path: Path, width: int = 1200, height: i
     except Exception as e:
         logger.warning("Poster capture failed: %s. Run: playwright install chromium", e)
         return None
+
+
+def _as_file_uri(path: Path) -> str:
+    resolved = path.resolve()
+    return resolved.as_uri()

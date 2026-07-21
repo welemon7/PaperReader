@@ -6,127 +6,298 @@
 <title>{{ poster_title }} - Poster</title>
 <style>
 :root {
+    --bg: {{ color_scheme.background }};
+    --panel: #ffffff;
+    --panel-weak: #f7f9fc;
+    --ink: {{ color_scheme.text }};
+    --muted: #5f6b7a;
+    --border: {{ color_scheme.border }};
     --primary: {{ color_scheme.primary }};
     --accent: {{ color_scheme.accent }};
-    --bg: {{ color_scheme.background }};
-    --text: {{ color_scheme.text }};
-    --header-bg: {{ color_scheme.section_header_bg }};
-    --header-text: {{ color_scheme.section_header_text }};
-    --border: {{ color_scheme.border }};
     --highlight: {{ color_scheme.highlight }};
 }
-* { margin: 0; padding: 0; box-sizing: border-box; }
+* { box-sizing: border-box; }
 html, body { min-height: 100%; }
 body {
-    background: #e0e0e0; display: flex; justify-content: center; padding: 24px;
-    font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 14px; line-height: 1.6;
-    color: var(--text);
+    margin: 0;
+    background:
+        radial-gradient(circle at top left, rgba(25, 45, 74, 0.08), transparent 28%),
+        radial-gradient(circle at top right, rgba(102, 151, 198, 0.08), transparent 24%),
+        var(--bg);
+    color: var(--ink);
+    font-family: Inter, "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.5;
+}
+.page {
+    width: min({{ poster_width }}px, calc(100vw - 32px));
+    margin: 16px auto 24px;
 }
 .poster {
-    width: min({{ poster_width }}px, calc(100vw - 48px));
-    min-height: min({{ poster_height }}px, calc(100vh - 48px));
-    background: var(--bg);
-    box-shadow: 0 4px 20px rgba(0,0,0,0.2); padding: 0;
+    background: linear-gradient(180deg, rgba(255,255,255,0.95), #ffffff 120px);
+    border: 1px solid rgba(18, 32, 49, 0.08);
+    box-shadow: 0 18px 60px rgba(18, 32, 49, 0.14);
+    overflow: hidden;
 }
-.title-bar {
-    background: var(--primary); color: white; padding: 30px 40px; text-align: center;
+.hero {
+    padding: 32px 34px 24px;
+    background:
+        linear-gradient(135deg, rgba(22, 50, 79, 0.98), rgba(22, 50, 79, 0.92)),
+        linear-gradient(90deg, rgba(90, 125, 154, 0.8), rgba(143, 179, 217, 0.55));
+    color: white;
+    border-bottom: 1px solid rgba(255,255,255,0.12);
 }
-.title-bar h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
-.title-bar .authors { font-size: 16px; opacity: 0.9; }
-.row { display: flex; }
-.col { flex: 1; padding: 8px; min-width: 0; }
-.col-span-2 { flex: 2; }
-.col-span-3 { flex: 3; }
+.hero-top {
+    display: flex;
+    justify-content: space-between;
+    gap: 24px;
+    align-items: flex-start;
+}
+.hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 999px;
+    font-size: 12px;
+    letter-spacing: 0;
+    opacity: 0.95;
+}
+.hero h1 {
+    margin: 16px 0 8px;
+    font-size: 30px;
+    line-height: 1.1;
+    letter-spacing: 0;
+    font-weight: 800;
+    max-width: 12.5em;
+}
+.authors {
+    max-width: 70ch;
+    color: rgba(255,255,255,0.88);
+    font-size: 15px;
+}
+.hero-meta {
+    min-width: 250px;
+    text-align: right;
+    color: rgba(255,255,255,0.84);
+    font-size: 12px;
+    line-height: 1.4;
+}
+.hero-meta strong { color: white; font-weight: 700; }
+.hero-strip {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 20px;
+}
+.stat {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 8px;
+    padding: 10px 12px;
+    min-height: 66px;
+}
+.stat .label { display: block; color: rgba(255,255,255,0.7); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+.stat .value { display: block; margin-top: 6px; font-size: 14px; font-weight: 700; line-height: 1.25; }
+.content {
+    padding: 16px;
+}
+.row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    margin-bottom: 14px;
+}
 .section {
-    background: #fafafa; border: 1px solid var(--border); border-radius: 4px;
-    margin-bottom: 8px; height: 100%; overflow: hidden;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    min-height: 100%;
 }
 .section-header {
-    background: var(--header-bg); color: var(--header-text); padding: 8px 14px;
-    font-size: 16px; font-weight: 600; letter-spacing: 0.3px;
+    background: linear-gradient(180deg, rgba(232, 238, 244, 0.95), rgba(245, 248, 251, 0.95));
+    padding: 10px 14px;
+    color: var(--primary);
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
 }
-.section-body { padding: 12px 14px; font-size: 13px; }
-.section-body ul, .section-body ol { padding-left: 20px; margin: 6px 0; }
-.section-body li { margin-bottom: 4px; }
-.section-body p { margin-bottom: 6px; }
+.section-body {
+    padding: 14px 14px 15px;
+    font-size: 13px;
+    color: var(--ink);
+}
+.section-body p { margin: 0 0 8px; }
+.section-body p:last-child { margin-bottom: 0; }
+.section-body ul, .section-body ol { margin: 8px 0; padding-left: 18px; }
+.section-body li { margin-bottom: 5px; }
 .section-body strong { color: var(--primary); }
-table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 12px; }
-th, td { border: 1px solid #d5dbdb; padding: 6px 10px; text-align: center; }
-th { background: #1a5276; color: white; font-weight: 600; }
-tr:nth-child(even) { background: #f8f9fa; }
+.section-body blockquote {
+    margin: 10px 0;
+    padding: 10px 12px;
+    border-left: 3px solid var(--accent);
+    background: var(--panel-weak);
+    color: var(--muted);
+}
+.section-body table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 8px 0;
+    font-size: 12px;
+}
+.section-body th, .section-body td {
+    border: 1px solid #d8e1ea;
+    padding: 7px 8px;
+    text-align: left;
+    vertical-align: top;
+}
+.section-body th {
+    background: #edf3f8;
+    color: var(--primary);
+    font-weight: 700;
+}
 .figure-stack {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-    margin-top: 8px;
+    gap: 10px;
+    margin-top: 12px;
 }
 .figure-card {
+    border: 1px solid #d8e0ea;
+    border-radius: 8px;
     background: #fff;
-    border: 1px solid #e3e8ee;
-    border-radius: 4px;
     padding: 8px;
 }
 .figure-card.full { grid-column: 1 / -1; }
+.figure-card img {
+    width: 100%;
+    height: auto;
+    display: block;
+    border-radius: 4px;
+}
 .figure-caption {
+    margin-top: 8px;
     font-size: 12px;
     line-height: 1.35;
-    margin-top: 6px;
-    color: #4f5d73;
+    color: var(--muted);
 }
-.figure-card img { width: 100%; height: auto; display: block; border-radius: 2px; }
 .figure-placeholder {
-    background: #eef2f7; border: 1px dashed var(--border); border-radius: 4px;
-    padding: 20px; text-align: center; margin: 8px 0; color: #888;
-    min-height: 80px; display: flex; align-items: center; justify-content: center;
+    min-height: 110px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 16px;
+    background: #f6f8fb;
+    color: #748191;
+    border: 1px dashed #c6d3df;
+    border-radius: 6px;
+}
+.footer {
+    padding: 0 16px 16px;
+}
+.footer-band {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: center;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: linear-gradient(180deg, #fbfdff, #f4f8fc);
+    color: var(--muted);
+    font-size: 12px;
+}
+.footer-band strong { color: var(--primary); }
+@media (max-width: 1100px) {
+    .hero-top { flex-direction: column; }
+    .hero-meta { text-align: left; min-width: 0; }
+    .hero-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .row { grid-template-columns: 1fr; }
 }
 @media print {
-    body { background: white; padding: 0; }
-    .poster { box-shadow: none; }
+    body { background: white; }
+    .page { width: 100%; margin: 0; }
+    .poster { box-shadow: none; border: none; }
 }
 </style>
 </head>
 <body>
-<div class="poster">
-    <div class="title-bar">
-        <h1>{{ poster_title }}</h1>
-        {% if authors_str %}
-        <div class="authors">{{ authors_str }}</div>
-        {% endif %}
-    </div>
+<div class="page">
+  <div class="poster">
+    <header class="hero">
+      <div class="hero-top">
+        <div>
+          <div class="hero-badge">Paper-to-Poster Research Reader</div>
+          <h1>{{ poster_title }}</h1>
+          {% if authors_str %}
+          <div class="authors">{{ authors_str }}</div>
+          {% endif %}
+        </div>
+        <div class="hero-meta">
+          <div><strong>Format:</strong> A0 portrait poster</div>
+          <div><strong>Focus:</strong> problem, method, results, and takeaways</div>
+          <div><strong>Figures:</strong> rasterized locally for browser rendering</div>
+        </div>
+      </div>
+      <div class="hero-strip">
+        {% for row_data in rows[:1] %}
+          {% for sec in row_data.sections[:3] %}
+          <div class="stat">
+            <span class="label">{{ sec.title }}</span>
+            <span class="value">{{ sec.content_html|striptags|truncate(90, True, '...') }}</span>
+          </div>
+          {% endfor %}
+        {% endfor %}
+        <div class="stat">
+          <span class="label">Poster intent</span>
+          <span class="value">English, faithful, poster-ready reading aid</span>
+        </div>
+      </div>
+    </header>
 
-    {% for row_data in rows %}
-    <div class="row">
+    <main class="content">
+      {% for row_data in rows %}
+      <section class="row">
         {% for sec in row_data.sections %}
-        <div class="col col-span-{{ sec.col_span }}">
-            {% if sec.type != 'title' %}
-            <div class="section">
-                <div class="section-header">{{ sec.title }}</div>
-                <div class="section-body">
-                    {{ sec.content_html|safe }}
-                    {% set section_figs = figure_map.get(sec.section_id, []) %}
-                    {% if section_figs %}
-                    <div class="figure-stack">
-                        {% for fig in section_figs %}
-                        <div class="figure-card {% if fig.width_ratio >= 0.8 %}full{% endif %}">
-                            {% if fig.src %}
-                            <img src="{{ fig.src }}" alt="{{ fig.caption }}">
-                            {% else %}
-                            <div class="figure-placeholder">[Figure: {{ fig.caption }}]</div>
-                            {% endif %}
-                            {% if fig.caption %}
-                            <div class="figure-caption">{{ fig.caption }}</div>
-                            {% endif %}
-                        </div>
-                        {% endfor %}
-                    </div>
-                    {% endif %}
-                </div>
+        <article class="section" style="grid-column: span {{ sec.col_span }};">
+          <div class="section-header">{{ sec.title }}</div>
+          <div class="section-body">
+            {{ sec.content_html|safe }}
+            {% set section_figs = figure_map.get(sec.section_id, []) %}
+            {% if section_figs %}
+            <div class="figure-stack">
+              {% for fig in section_figs %}
+              <div class="figure-card {% if fig.width_ratio >= 0.8 %}full{% endif %}">
+                {% if fig.src %}
+                <img src="{{ fig.src }}" alt="{{ fig.caption }}">
+                {% else %}
+                <div class="figure-placeholder">Figure unavailable: {{ fig.caption }}</div>
+                {% endif %}
+                {% if fig.caption %}
+                <div class="figure-caption">{{ fig.caption }}</div>
+                {% endif %}
+              </div>
+              {% endfor %}
             </div>
             {% endif %}
-        </div>
+          </div>
+        </article>
         {% endfor %}
-    </div>
-    {% endfor %}
+      </section>
+      {% endfor %}
+    </main>
+
+    <footer class="footer">
+      <div class="footer-band">
+        <div><strong>Reader mode:</strong> optimized for quick paper comprehension and poster export.</div>
+        <div><strong>Validation:</strong> render, inspect, refine.</div>
+      </div>
+    </footer>
+  </div>
 </div>
 <script>
 MathJax = { tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] } };

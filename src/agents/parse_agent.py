@@ -175,7 +175,8 @@ def store_node(state: ParseState) -> dict:
             image_map = {}
             for fig in doc.figures:
                 if fig.local_path:
-                    full_path = str(Path(source_dir) / fig.local_path)
+                    local_path = Path(fig.local_path)
+                    full_path = str(local_path if local_path.is_absolute() else Path(source_dir) / local_path)
                     image_map[fig.figure_id] = full_path
 
             if image_map:

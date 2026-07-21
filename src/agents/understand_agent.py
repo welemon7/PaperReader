@@ -141,12 +141,12 @@ _SYSTEM_PROMPT = (
     "\n\n"
     "Analyze the paper thoroughly and output a JSON object "
     "with the following fields:"
-    "\n- title_zh: Chinese translation of the paper title"
-    "\n- problem_statement: The core problem this paper solves (1-2 sentences)"
+    "\n- title_zh: Chinese translation of the paper title for internal reference only"
+    "\n- problem_statement: The core problem this paper solves, in English, using wording close to the paper (1-2 sentences)"
     "\n- contributions: List of contributions, each with:"
     "\n  - text: contribution description"
     "\n  - category: method/theory/system/dataset/application/other"
-    "\n- method_overview: High-level method description (2-4 sentences)"
+    "\n- method_overview: High-level method description, in English and faithful to the paper (2-4 sentences)"
     "\n- key_formulas: List of most important formulas (max 5), each with:"
     "\n  - formula_id: the formula ID from the paper"
     "\n  - latex: the LaTeX source"
@@ -159,7 +159,7 @@ _SYSTEM_PROMPT = (
     "\n- conclusion: Summary of the paper conclusion"
     "\n- code_url: Project code repository URL extracted from the paper body (e.g. GitHub link). Leave empty string if not found."
     "\n- full_analysis_md: Complete markdown analysis of the paper"
-    "\n\nBe precise and concise."
+    "\n\nAll narrative fields that will appear in the poster must be in English only. Do not mix Chinese into problem_statement, contributions, method_overview, key_figures, experiments, or conclusion. Be precise, concise, and faithful to the source text."
 )
 
 def _build_analysis_prompt(doc: PaperDocument) -> str:

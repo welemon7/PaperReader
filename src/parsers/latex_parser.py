@@ -13,6 +13,7 @@ class ParseResult:
 
     def __init__(self) -> None:
         self.merged_latex: str = ""
+        self.source_dir: str = ""
         self.title: str = ""
         self.authors: list[dict] = []
         self.abstract: str = ""
@@ -62,6 +63,7 @@ class LatexParser:
 
         result = ParseResult()
         result.merged_latex = merged
+        result.source_dir = str(self.source_dir)
 
         result.title = self._extract_title(merged)
         result.authors = self._extract_authors(merged)
@@ -148,14 +150,16 @@ class LatexParser:
         if not m:
             return []
         author_text = m.group(1)
-        # Split by \\and
         names = re.split(r"\\and", author_text)
         authors = []
         for name in names:
             name = name.strip()
-            # Remove \thanks, \footnote etc.
             name = re.sub(r"\\(?:thanks|footnote)\{.*?\}", "", name, flags=re.DOTALL)
+            name = re.sub(r"\\textsuperscript\s*\{.*?\}", "", name, flags=re.DOTALL)
+            name = re.sub(r"\\(?:inst|email|correspondingauthor)\b", "", name)
+            name = re.sub(r"\\[a-zA-Z]+", "", name)
             name = re.sub(r"\{|\}", "", name)
+            name = re.sub(r"\s+", " ", name)
             name = name.strip()
             if name:
                 authors.append({"name": name, "affiliation": None})

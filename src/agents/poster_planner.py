@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 
 from src.schemas.analysis import PaperAnalysis
 from src.schemas.paper import PaperDocument
@@ -38,10 +39,11 @@ def generate_blueprint(
     sections.extend(_build_row3(analysis))
     figure_placements = _place_figures(analysis, sections)
     formula_displays = _place_formulas(analysis)
+    _tighten_layout(sections, figure_placements)
     return PosterBlueprint(
         paper_id=doc.paper_id,
         poster_title=doc.title,
-        authors_str="; ".join(a.name for a in doc.authors),
+        authors_str=_format_authors(doc.authors),
         width_px=POSTER_WIDTH_PX, height_px=POSTER_HEIGHT_PX,
         width_mm=POSTER_WIDTH_MM, height_mm=POSTER_HEIGHT_MM,
         sections=sections,
@@ -51,13 +53,32 @@ def generate_blueprint(
     )
 
 
+def normalize_analysis_for_poster(analysis: PaperAnalysis) -> PaperAnalysis:
+    """Keep poster-facing analysis in English and close to the source paper."""
+    for field_name in ("problem_statement", "method_overview", "conclusion", "full_analysis_md"):
+        value = getattr(analysis, field_name, "") or ""
+        setattr(analysis, field_name, _english_clean(value))
+
+    cleaned_contribs = []
+    for contrib in analysis.contributions:
+        contrib.text = _english_clean(contrib.text)
+        cleaned_contribs.append(contrib)
+    analysis.contributions = cleaned_contribs
+
+    if analysis.experiments:
+        analysis.experiments.main_results = _english_clean(analysis.experiments.main_results)
+        analysis.experiments.takeaways = [_english_clean(x) for x in analysis.experiments.takeaways]
+        analysis.experiments.datasets = [_english_clean(x) for x in analysis.experiments.datasets]
+        analysis.experiments.metrics = [_english_clean(x) for x in analysis.experiments.metrics]
+
+    return analysis
+
+
 def _build_title_section(doc: PaperDocument, analysis: PaperAnalysis) -> PosterSection:
-    authors_line = "; ".join(a.name for a in doc.authors)
+    authors_line = _format_authors(doc.authors)
     content = doc.title
     if authors_line:
         content = content + "\n\n" + authors_line
-    if analysis.title_zh and analysis.title_zh != doc.title:
-        content = content + "\n\n" + analysis.title_zh
     return PosterSection(
         section_id="sec-title", type="title",
         title=doc.title,
@@ -69,13 +90,13 @@ def _build_title_section(doc: PaperDocument, analysis: PaperAnalysis) -> PosterS
 def _build_row1(analysis: PaperAnalysis) -> list[PosterSection]:
     motiv = PosterSection(
         section_id="sec-motivation", type="motivation",
-        title="Motivation",
+        title="Problem",
         content_md=analysis.problem_statement or "(not provided)",
         column=1, col_span=1, row=1,
     )
     method_ov = PosterSection(
         section_id="sec-method-overview", type="method_overview",
-        title="Method Overview",
+        title="Core Idea",
         content_md=analysis.method_overview or "(not provided)",
         column=2, col_span=1, row=1,
     )
@@ -86,7 +107,7 @@ def _build_row1(analysis: PaperAnalysis) -> list[PosterSection]:
     )
     key_idea = PosterSection(
         section_id="sec-key-idea", type="key_idea",
-        title="Key Idea",
+        title="Why It Matters",
         content_md=key_idea_text,
         column=3, col_span=1, row=1,
     )
@@ -140,7 +161,7 @@ def _build_row2(analysis: PaperAnalysis) -> list[PosterSection]:
 
     experiments = PosterSection(
         section_id="sec-experiments", type="experiments",
-        title="Experiments",
+        title="Results",
         content_md=exp_content,
         column=3, col_span=1, row=2,
     )
@@ -163,16 +184,11 @@ def _build_row3(analysis: PaperAnalysis) -> list[PosterSection]:
         column=1, col_span=1, row=3,
     )
 
-    hl_lines = []
-    if analysis.experiments and analysis.experiments.takeaways:
-        for i, t in enumerate(analysis.experiments.takeaways, 1):
-            hl_lines.append(str(i) + ". " + t)
-    else:
-        hl_lines.append("See paper for details.")
+    hl_lines = _build_highlights(analysis)
 
     highlights = PosterSection(
         section_id="sec-highlights", type="highlights",
-        title="Highlights",
+        title="Key Takeaways",
         content_md="\n".join(hl_lines),
         column=2, col_span=1, row=3,
     )
@@ -192,19 +208,29 @@ def _build_row3(analysis: PaperAnalysis) -> list[PosterSection]:
 
 def _place_figures(analysis: PaperAnalysis, sections: list[PosterSection]) -> list[FigurePlacement]:
     placements = []
-    for fig in analysis.key_figures:
+    prioritized = sorted(
+        analysis.key_figures,
+        key=lambda f: _figure_priority(f.caption, f.role),
+    )
+    seen_signatures: set[str] = set()
+    for fig in prioritized:
+        signature = _figure_signature(fig.caption, fig.role)
+        if signature in seen_signatures:
+            continue
+        seen_signatures.add(signature)
         if fig.role in ("result", "qualitative", "comparison"):
             target = "sec-experiments"
             width_ratio = 0.48
-        elif fig.role in ("overview", "architecture"):
+        elif fig.role in ("overview", "architecture", "pipeline", "illustration"):
             target = "sec-main-method"
             width_ratio = 0.92
-        elif fig.role in ("pipeline", "illustration"):
-            target = "sec-method-overview"
-            width_ratio = 0.82
         else:
+            if len(placements) >= 3:
+                continue
             target = "sec-main-method"
             width_ratio = 0.72
+        if len(placements) >= 4:
+            break
         placements.append(FigurePlacement(
             figure_id=fig.figure_id, section_id=target,
             width_ratio=width_ratio, caption=fig.caption,
@@ -220,6 +246,96 @@ def _place_formulas(analysis: PaperAnalysis) -> list[FormulaDisplay]:
             latex=f.latex, semantic_desc=f.semantic_desc,
         ))
     return displays
+
+
+def _tighten_layout(sections: list[PosterSection], figure_placements: list[FigurePlacement]) -> None:
+    """Slightly rebalance the static layout toward denser sections.
+
+    The goal is to reduce large empty columns/rows while keeping the existing
+    reading order and section semantics unchanged.
+    """
+    fig_count_by_section: dict[str, int] = {}
+    for fp in figure_placements:
+        fig_count_by_section[fp.section_id] = fig_count_by_section.get(fp.section_id, 0) + 1
+
+    for sec in sections:
+        if sec.type == "title":
+            continue
+        text_len = len((sec.content_md or "").strip())
+        figure_bonus = fig_count_by_section.get(sec.section_id, 0)
+        density = text_len // 280 + figure_bonus * 2
+
+        if sec.type in {"method_overview", "main_method"} and density >= 3:
+            sec.col_span = max(sec.col_span, 2)
+        elif sec.type in {"experiments", "contributions"} and density <= 2:
+            sec.col_span = min(sec.col_span, 1)
+
+        if sec.type in {"highlights", "project_link"} and text_len < 180:
+            sec.col_span = 1
+
+        if sec.type in {"motivation", "key_idea"} and density >= 2:
+            sec.col_span = max(sec.col_span, 1)
+
+
+def _figure_priority(caption: str, role: str) -> tuple[int, int]:
+    text = f"{caption} {role}".lower()
+    if any(k in text for k in ("framework", "overview", "architecture", "pipeline")):
+        return (0, 0)
+    if any(k in text for k in ("introduction", "intro", "motivation")):
+        return (1, 0)
+    if any(k in text for k in ("result", "comparison", "qualitative", "experiment", "accuracy", "seg")):
+        return (2, 0)
+    return (3, 0)
+
+
+def _figure_signature(caption: str, role: str) -> str:
+    text = f"{caption} {role}".lower()
+    text = re.sub(r"[^a-z0-9]+", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text[:120]
+
+
+def _format_authors(authors) -> str:
+    names = []
+    for author in authors or []:
+        name = getattr(author, "name", "") or ""
+        name = re.sub(r"\\textsuperscript\s*\{.*?\}", "", name, flags=re.DOTALL)
+        name = re.sub(r"\\(?:thanks|footnote)\{.*?\}", "", name, flags=re.DOTALL)
+        name = re.sub(r"\\(?:inst|email|correspondingauthor)\b", "", name)
+        name = re.sub(r"\\[a-zA-Z]+", "", name)
+        name = name.replace("{", "").replace("}", "")
+        name = re.sub(r"\s+", " ", name).strip()
+        if name:
+            names.append(name)
+    return "; ".join(names)
+
+
+def _english_clean(text: str) -> str:
+    text = (text or "").strip()
+    if not text:
+        return text
+    text = re.sub(r"[\u4e00-\u9fff]+", "", text)
+    text = re.sub(r"\s+", " ", text).strip(" -;,")
+    return text
+
+
+def _build_highlights(analysis: PaperAnalysis) -> list[str]:
+    lines: list[str] = []
+    if analysis.contributions:
+        for i, c in enumerate(analysis.contributions[:3], 1):
+            lines.append(f"{i}. {c.text}")
+    if analysis.experiments and analysis.experiments.takeaways:
+        start = len(lines)
+        for i, t in enumerate(analysis.experiments.takeaways[:3], start + 1):
+            lines.append(f"{i}. {t}")
+    if not lines:
+        if analysis.problem_statement:
+            lines.append(f"1. {analysis.problem_statement}")
+        elif analysis.method_overview:
+            lines.append(f"1. {analysis.method_overview[:180]}")
+        else:
+            lines.append("1. See paper for details.")
+    return lines
 
 _GEMINI_LAYOUT_PROMPT = (
     "You are a scientific poster layout designer. "
@@ -359,12 +475,12 @@ def _static_layout(
 
 def _default_colors() -> dict:
     return {
-        "primary": "#1a5276",
-        "accent": "#2980b9",
-        "background": "#ffffff",
-        "text": "#2c3e50",
-        "section_header_bg": "#1a5276",
-        "section_header_text": "#ffffff",
-        "border": "#d5dbdb",
-        "highlight": "#f39c12",
+        "primary": "#16324f",
+        "accent": "#5a7d9a",
+        "background": "#fbfcfe",
+        "text": "#182433",
+        "section_header_bg": "#e8eef4",
+        "section_header_text": "#16324f",
+        "border": "#cfd8e3",
+        "highlight": "#8fb3d9",
     }

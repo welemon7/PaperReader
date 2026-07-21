@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import copy
 import json
 import logging
+import os
+import re
 from pathlib import Path
 from typing import Any, Optional
 
@@ -14,13 +17,16 @@ from src.schemas.analysis import PaperAnalysis
 from src.schemas.paper import PaperDocument
 from src.schemas.poster import PosterBlueprint, PosterSection
 from src.storage.sqlite import PaperDatabase
+from src.utils.figure_assets import copy_or_rasterize_asset, resolve_figure_source, sanitize_asset_name
 
 logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = (
     "You are a scientific poster optimization expert. "
-    "Review a research poster blueprint and suggest specific improvements. "
-    "Evaluate on: coverage, clarity, completeness, accuracy.\n\n"
+    "Review a research poster blueprint and its rendered screenshot. "
+    "Think like a strict scientific reviewer: inspect the poster content, layout, figure coverage, and factual alignment with the paper. "
+    "Evaluate on: coverage, clarity, completeness, accuracy, visual hierarchy, and paper fidelity. "
+    "Treat the screenshot as the primary source of truth for layout issues.\n\n"
     "Return JSON with:\n"
     '- "quality_score": int (1-10)\n'
     '- "issues": list of {"severity": str, "description": str}\n'
@@ -28,62 +34,64 @@ _SYSTEM_PROMPT = (
     '- "layout": dict of section_id -> {"row": int, "column": int, "col_span": int}\n'
     '- "figure_selection": list of {"keep": bool, "figure_id": str, "section_id": str, "width_ratio": float, "caption": str}\n'
     '- "needs_improvement": bool (false if quality >= 8)\n\n'
-    "For each section, suggest specific content improvements "
-    "that are more concise, accurate, and impactful."
+    "Rules:\n"
+    "- Keep core method/overview figures, especially framework and introduction figures.\n"
+    "- Keep result/comparison figures in Experiments only.\n"
+    "- Prefer at most 4 figures total.\n"
+    "- Do not invent facts not supported by the paper.\n"
+    "- Keep poster-facing text in English and close to the paper wording.\n"
+    "- If Highlights are weak, rewrite them from contributions and experiment takeaways.\n"
+    "- If the poster is already strong, return minimal changes and set needs_improvement=false."
 )
 
 
 def _regenerate_figures(blueprint, doc, output_dir):
-    """Scan arXiv cache for PDF figures, convert to PNG, add to blueprint."""
-    from pathlib import Path
-    if not doc.source_dir:
-        return blueprint, []
-    try:
-        import fitz
-    except ImportError:
-        return blueprint, []
-    src = Path(doc.source_dir)
-    fig_dir = Path(output_dir) / "figures"
+    """Keep the figure set stable during optimization.
+
+    The earlier version added every cached PDF as a new placement, which made the
+    poster noisy and inconsistent across render passes. Optimization should only
+    refine the existing figure plan.
+    """
+    return blueprint, doc, []
+
+
+def _extract_numbers(text: str) -> set[str]:
+    return set(re.findall(r"(?<![A-Za-z])(?:\d+\.\d+|\d+)(?:%|x)?", text or ""))
+
+
+def _extract_formula_tokens(text: str) -> set[str]:
+    tokens = set()
+    for match in re.findall(r"\$\$(.+?)\$\$|\\\((.+?)\\\)|\\\[(.+?)\\\]", text or "", flags=re.DOTALL):
+        expr = next((m for m in match if m), "")
+        if expr:
+            tokens.add(re.sub(r"\s+", " ", expr).strip())
+    return tokens
+
+
+def _build_core_figure_assets(doc: PaperDocument, analysis: PaperAnalysis, output_dir: Path, limit: int = 4) -> list[Path]:
+    fig_dir = output_dir / "figures"
     fig_dir.mkdir(parents=True, exist_ok=True)
-    new_placements = []
-    existing_ids = {fp.figure_id for fp in blueprint.figure_placements}
-    from src.schemas.poster import FigurePlacement
-    for pdf in sorted(src.rglob("*.pdf")):
-        stem = pdf.stem
-        if len(stem) > 30 or stem.startswith("page_"):
+    assets: list[Path] = []
+    seen: set[str] = set()
+    figures = list(doc.figures)
+    if analysis.key_figures:
+        wanted = {f.figure_id for f in analysis.key_figures}
+        figures = [f for f in figures if f.figure_id in wanted] + [f for f in figures if f.figure_id not in wanted]
+
+    for fig in figures:
+        if len(assets) >= limit:
+            break
+        src = resolve_figure_source(fig.local_path or fig.minio_path, doc.source_dir)
+        if not src:
             continue
-        png_path = fig_dir / (stem + ".png")
-        if not png_path.exists():
-            try:
-                with fitz.open(str(pdf)) as pdf_doc:
-                    page = pdf_doc[0]
-                    pix = page.get_pixmap(dpi=200)
-                    pix.save(str(png_path))
-            except:
-                continue
-        fig_id = "fig-cache-" + stem
-        if fig_id not in existing_ids:
-            new_placements.append(FigurePlacement(
-                figure_id=fig_id, section_id="sec-main-method",
-                width_ratio=0.9, caption="Figure: " + stem,
-            ))
-    from src.schemas.paper import Figure as PaperFigure
-    from src.schemas.poster import FigurePlacement
-    new_paper_figs = []
-    existing_fig_ids = {f.figure_id for f in doc.figures}
-    for fig_id in [p.figure_id for p in new_placements]:
-        if fig_id not in existing_fig_ids:
-            png = fig_dir / (fig_id.replace("fig-cache-", "") + ".png")
-            if png.exists():
-                new_paper_figs.append(PaperFigure(
-                    figure_id=fig_id, local_path=str(png),
-                    caption="", section_id="sec-main-method",
-                ))
-    if new_paper_figs:
-        doc.figures.extend(new_paper_figs)
-    if new_placements:
-        blueprint.figure_placements.extend(new_placements)
-    return blueprint, doc, new_placements
+        key = fig.figure_id or sanitize_asset_name(src.stem)
+        if key in seen:
+            continue
+        prepared = copy_or_rasterize_asset(src, fig_dir, key)
+        if prepared and prepared.exists():
+            assets.append(prepared)
+            seen.add(key)
+    return assets
 
 
 def _generate_result_chart(analysis, output_dir, chart_data=None):
@@ -126,7 +134,14 @@ _VISION_PROMPT = (
     '- "layout_feedback": list of {"section": str, "suggestion": str}\n'
     '- "issues": list of {"severity": str, "description": str}\n'
     '- "needs_improvement": bool\n'
-    "Be critical: 2-4 figures max. Remove redundant ones."
+    "Be critical: 2-4 figures max. Remove redundant ones. Keep the visual hierarchy clean and poster-like."
+)
+
+_AGNES_REVIEW_PROMPT = (
+    "You are a strict scientific poster reviewer. Compare the poster screenshot and core figures against the paper summary. "
+    "Reject any suggestion that changes formulas, numeric results, or factual claims without exact evidence. "
+    "Output JSON with: quality_score, issues, figure_selection, layout_feedback, and needs_improvement. "
+    "For each issue include severity and description. Treat the screenshot as the primary layout source."
 )
 
 
@@ -154,6 +169,41 @@ def _apply_vision_feedback(blueprint, doc, vision_result, output_dir):
         logger.info("Vision issue [%s]: %s", iss.get("severity", "?"), iss.get("description", ""))
 
 
+def _apply_structured_quality_gate(
+    blueprint: PosterBlueprint,
+    doc: PaperDocument,
+    analysis: PaperAnalysis,
+    review: dict[str, Any],
+) -> dict[str, Any]:
+    safe_review = dict(review or {})
+    suggestions = safe_review.get("suggestions", {}) if isinstance(safe_review, dict) else {}
+    if isinstance(suggestions, dict):
+        numeric_sources = [doc.raw_markdown, analysis.problem_statement, analysis.method_overview, analysis.conclusion]
+        numeric_sources.extend([c.text for c in analysis.contributions])
+        if analysis.experiments:
+            numeric_sources.append(analysis.experiments.main_results)
+            numeric_sources.extend(analysis.experiments.takeaways)
+        source_numbers = set().union(*(_extract_numbers(x) for x in numeric_sources if x)) if numeric_sources else set()
+        source_formulas = set().union(*(_extract_formula_tokens(x) for x in numeric_sources if x)) if numeric_sources else set()
+
+        section_lookup = {s.section_id: s for s in blueprint.sections}
+        for sec_id, payload in list(suggestions.items()):
+            if sec_id not in section_lookup or not isinstance(payload, dict):
+                continue
+            text = payload.get("content_md") or ""
+            if text and source_numbers and not _extract_numbers(text).issubset(source_numbers):
+                logger.info("Dropped suggestion for %s due to unmatched numeric content", sec_id)
+                payload.pop("content_md", None)
+            if text and source_formulas and not _extract_formula_tokens(text).issubset(source_formulas):
+                logger.info("Dropped suggestion for %s due to unmatched formula content", sec_id)
+                payload.pop("content_md", None)
+            if not payload:
+                suggestions.pop(sec_id, None)
+
+    safe_review["suggestions"] = suggestions
+    return safe_review
+
+
 def _create_gemini_client() -> LLMClient:
     return LLMClient(
         api_key=settings.gemini_api_key,
@@ -166,6 +216,7 @@ def _build_optimize_prompt(
     blueprint: PosterBlueprint,
     doc: PaperDocument,
     analysis: PaperAnalysis,
+    screenshot_note: str = "",
 ) -> str:
     parts: list[str] = []
     parts.append(f"## Paper\nTitle: {doc.title}")
@@ -200,6 +251,9 @@ def _build_optimize_prompt(
         parts.append(f"### {sec.title} (Row {sec.row}, Col {sec.column})")
         text = sec.content_md[:400] if sec.content_md else "(empty)"
         parts.append(text + "\n")
+    if screenshot_note:
+        parts.append("\n## Screenshot Review\n")
+        parts.append(screenshot_note)
     parts.append("\n## Task\n")
     parts.append("Review each section and suggest improved content_md. "
                  "You may also adjust layout and figure selection for better balance. "
@@ -227,6 +281,22 @@ def _apply_suggestions(
     return blueprint
 
 
+def _build_harness_prompt(blueprint: PosterBlueprint, analysis: PaperAnalysis, doc: PaperDocument) -> str:
+    highlights = []
+    for c in analysis.contributions[:3]:
+        highlights.append(c.text)
+    if analysis.experiments and analysis.experiments.takeaways:
+        highlights.extend(analysis.experiments.takeaways[:3])
+    figure_lines = [f"- {fp.figure_id}: {fp.section_id} / {fp.width_ratio:.2f}" for fp in blueprint.figure_placements]
+    section_lines = [f"- {s.section_id}: {s.title} @ r{s.row} c{s.column} span{s.col_span}" for s in blueprint.sections]
+    return (
+        f"Title: {doc.title}\n"
+        f"Core contributions: {chr(10).join('- ' + x for x in highlights) if highlights else 'none'}\n"
+        f"Sections:\n{chr(10).join(section_lines)}\n"
+        f"Figures:\n{chr(10).join(figure_lines) if figure_lines else 'none'}\n"
+    )
+
+
 def optimize_poster(
     arxiv_id: str,
     output_dir: str = "output",
@@ -248,6 +318,7 @@ def optimize_poster(
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
     bp_path = out / "blueprint.json"
+    review_path = out / "poster_review.json"
 
     if bp_path.exists():
         blueprint = PosterBlueprint.model_validate_json(bp_path.read_text(encoding="utf-8"))
@@ -256,14 +327,44 @@ def optimize_poster(
 
     renderer = HtmlPosterRenderer()
     html_path = out / "poster.html"
+    screenshot_path = out / "poster.png"
     history: list[dict] = []
     latest_response: dict[str, Any] = {}
+    latest_review: dict[str, Any] = {}
+    best_quality = -1
+    best_blueprint = copy.deepcopy(blueprint)
 
     try:
         for iteration in range(max_iterations):
             logger.info("--- Iteration %d/%d ---", iteration + 1, max_iterations)
 
-            prompt = _build_optimize_prompt(blueprint, doc, analysis)
+            renderer.render_to_file(blueprint, doc, html_path)
+            capture_poster(html_path, screenshot_path)
+
+            core_assets = _build_core_figure_assets(doc, analysis, out)
+
+            screenshot_note = []
+            if screenshot_path.exists():
+                screenshot_note.append(f"Screenshot path: {screenshot_path.as_posix()}")
+            if core_assets:
+                screenshot_note.append("Core figures: " + ", ".join(p.as_posix() for p in core_assets))
+
+            provider = (os.getenv("POSTER_VISION_PROVIDER") or settings.poster_vision_provider or "agnes").lower()
+            screenshot_review = multimodal_analyze(
+                system_prompt=_AGNES_REVIEW_PROMPT if provider == "agnes" else _VISION_PROMPT,
+                image_paths=([str(screenshot_path)] if screenshot_path.exists() else []) + [str(p) for p in core_assets],
+                user_text=_build_harness_prompt(blueprint, analysis, doc),
+                provider=provider,
+            )
+            if screenshot_review is not None:
+                latest_review = _apply_structured_quality_gate(blueprint, doc, analysis, screenshot_review)
+                screenshot_note.append(json.dumps(latest_review, ensure_ascii=False))
+            prompt = _build_optimize_prompt(
+                blueprint,
+                doc,
+                analysis,
+                screenshot_note="\n".join(screenshot_note),
+            )
             response = gemini.chat_json(system=_SYSTEM_PROMPT, user=prompt)
             latest_response = response
 
@@ -330,22 +431,24 @@ def optimize_poster(
                         ))
                     logger.info("  Result chart generated: %s", chart_path)
 
-            # Regenerate PDF figures from cache
-            blueprint, doc, new_figs = _regenerate_figures(blueprint, doc, output_dir)
-            if new_figs:
-                logger.info("  Added %d figures from cache", len(new_figs))
-
             if suggestions:
                 blueprint = _apply_suggestions(blueprint, suggestions)
+            if quality > best_quality:
+                best_quality = quality
+                best_blueprint = copy.deepcopy(blueprint)
             bp_path.write_text(blueprint.model_dump_json(indent=2), encoding="utf-8")
 
             renderer.render_to_file(blueprint, doc, html_path)
-            break
+            if not needs or quality >= 8:
+                break
 
     except Exception as e:
         logger.exception("Optimization error: %s", e)
 
+    blueprint = best_blueprint
     renderer.render_to_file(blueprint, doc, html_path)
+    capture_poster(html_path, screenshot_path)
+    review_path.write_text(json.dumps(latest_review or latest_response, ensure_ascii=False, indent=2), encoding="utf-8")
 
     final_q = history[-1]["quality"] if history else 0
     logger.info("=== Optimization complete: quality %d/10, %d iterations ===",
@@ -356,4 +459,5 @@ def optimize_poster(
         "final_quality": final_q,
         "iterations": len(history),
         "response": latest_response,
+        "review": latest_review,
     }

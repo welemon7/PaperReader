@@ -5,8 +5,6 @@ import logging
 from pathlib import Path
 from typing import Any, Optional, TypedDict
 
-from langgraph.graph import END, StateGraph
-
 from src.llm.client import LLMClient, LLMError
 from src.config import settings
 from src.schemas.poster import PosterBlueprint
@@ -23,6 +21,7 @@ ValidationState = TypedDict("ValidationState", {
     "llm_response": Optional[dict[str, Any]],
     "validation": Optional[PosterValidation],
     "error": Optional[str],
+    "validation_prompt": Optional[str],
 })
 
 
@@ -52,45 +51,8 @@ def _build_validation_prompt(paper_md: str, bp: PosterBlueprint) -> str:
     return "\n".join(parts)
 
 
-# ---------- Nodes ----------
-
-
-def load_paper_node(state: ValidationState) -> dict:
-    arxiv_id = state.get("arxiv_id", "")
-    if not arxiv_id:
-        return {"error": "No arxiv_id"}
-    try:
-        db = PaperDatabase()
-        doc = db.get_paper_by_arxiv(arxiv_id)
-        db.close()
-        if not doc:
-            return {"error": f"Paper {arxiv_id} not found. Run parse first."}
-        return {"paper_markdown": doc.raw_markdown or doc.title}
-    except Exception as e:
-        return {"error": f"Load paper failed: {e}"}
-
-
-def load_blueprint_node(state: ValidationState) -> dict:
-    bp_path = state.get("blueprint_path")
-    if not bp_path:
-        return {"error": "No blueprint path"}
-    try:
-        bp = PosterBlueprint.model_validate_json(Path(bp_path).read_text(encoding="utf-8"))
-        return {"blueprint": bp}
-    except Exception as e:
-        return {"error": f"Load blueprint failed: {e}"}
-
-
-def build_prompt_node(state: ValidationState) -> dict:
-    md = state.get("paper_markdown")
-    bp = state.get("blueprint")
-    if not md or not bp:
-        return {"error": "Missing paper or blueprint"}
-    prompt = _build_validation_prompt(md, bp)
-    return {"validation_prompt": prompt}
-
-
 def call_llm_node(state: ValidationState) -> dict:
+    """Backward-compatible helper used by tests and older callers."""
     prompt = state.get("validation_prompt", "")
     if not prompt:
         return {"error": "No prompt"}
@@ -111,54 +73,7 @@ def call_llm_node(state: ValidationState) -> dict:
         return {"error": f"LLM call failed: {e}"}
 
 
-def parse_validation_node(state: ValidationState) -> dict:
-    llm_resp = state.get("llm_response")
-    arxiv_id = state.get("arxiv_id", "")
-    blueprint = state.get("blueprint")
-    if not llm_resp or not blueprint:
-        return {"error": "Missing LLM response or blueprint"}
-    try:
-        issues_data = llm_resp.get("issues", [])
-        issues = [ValidationIssue(**i) for i in issues_data]
-        scores = llm_resp.get("scores", {})
-        validation = PosterValidation(
-            paper_id=blueprint.paper_id,
-            arxiv_id=arxiv_id,
-            scores=scores,
-            issues=issues,
-            summary=llm_resp.get("summary", ""),
-        )
-        return {"validation": validation}
-    except Exception as e:
-        return {"error": f"Parse failed: {e}"}
-
-
-# ---------- Graph ----------
-
-
-def build_validation_graph():
-    workflow = StateGraph(ValidationState)
-    workflow.add_node("load_paper", load_paper_node)
-    workflow.add_node("load_blueprint", load_blueprint_node)
-    workflow.add_node("build_prompt", build_prompt_node)
-    workflow.add_node("call_llm", call_llm_node)
-    workflow.add_node("parse", parse_validation_node)
-    workflow.set_entry_point("load_paper")
-    workflow.add_edge("load_paper", "load_blueprint")
-    workflow.add_edge("load_blueprint", "build_prompt")
-    workflow.add_edge("build_prompt", "call_llm")
-    workflow.add_edge("call_llm", "parse")
-    workflow.add_edge("parse", END)
-    return workflow.compile()
-
-
-_compiled_graph = None
-
-
 def validate_poster(arxiv_id: str, blueprint_path: str) -> PosterValidation:
-    global _compiled_graph
-    if _compiled_graph is None:
-        _compiled_graph = build_validation_graph()
     state: ValidationState = {
         "arxiv_id": arxiv_id,
         "blueprint_path": blueprint_path,
@@ -169,10 +84,41 @@ def validate_poster(arxiv_id: str, blueprint_path: str) -> PosterValidation:
         "error": None,
         "validation_prompt": None,
     }
-    result = _compiled_graph.invoke(state)
-    if result.get("error"):
-        raise RuntimeError(f"Validation failed: {result['error']}")
-    v = result.get("validation")
-    if not v:
-        raise RuntimeError("No validation result")
-    return v
+    try:
+        db = PaperDatabase()
+        doc = db.get_paper_by_arxiv(arxiv_id)
+        db.close()
+        if not doc:
+            raise RuntimeError(f"Paper {arxiv_id} not found. Run parse first.")
+        bp = PosterBlueprint.model_validate_json(Path(blueprint_path).read_text(encoding="utf-8"))
+        state["paper_markdown"] = doc.raw_markdown or doc.title
+        state["blueprint"] = bp
+        state["validation_prompt"] = _build_validation_prompt(state["paper_markdown"] or "", bp)
+
+        if settings.gemini_api_key:
+            client = LLMClient(
+                api_key=settings.gemini_api_key,
+                base_url=settings.gemini_base_url,
+                model=settings.gemini_model,
+            )
+        elif LLMClient.is_configured():
+            client = LLMClient()
+        else:
+            raise RuntimeError("LLM API key not configured")
+
+        llm_resp = client.chat_json(system=_SYSTEM_PROMPT, user=state["validation_prompt"] or "")
+        state["llm_response"] = llm_resp
+        issues_data = llm_resp.get("issues", [])
+        issues = [ValidationIssue(**i) for i in issues_data]
+        scores = llm_resp.get("scores", {})
+        validation = PosterValidation(
+            paper_id=bp.paper_id,
+            arxiv_id=arxiv_id,
+            scores=scores,
+            issues=issues,
+            summary=llm_resp.get("summary", ""),
+        )
+        state["validation"] = validation
+        return validation
+    except Exception as e:
+        raise RuntimeError(f"Validation failed: {e}") from e

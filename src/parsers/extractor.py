@@ -4,6 +4,7 @@ import logging
 import re
 
 from .latex_parser import ParseResult
+from src.utils.figure_assets import resolve_figure_source
 
 logger = logging.getLogger(__name__)
 
@@ -164,6 +165,14 @@ class ComponentExtractor:
                     "width": width or None,
                     "section_id": sec_id,
                 })
+
+        # Resolve common arXiv figure path variants early so downstream stages
+        # can copy/rasterize a real asset instead of carrying a bare LaTeX stem.
+        if getattr(result, "source_dir", None):
+            for fig in figures:
+                resolved = resolve_figure_source(fig.get("local_path"), result.source_dir)
+                if resolved:
+                    fig["local_path"] = str(resolved)
 
         return figures
 

@@ -6,7 +6,7 @@ from typing import Optional
 
 from src.agents.parse_agent import run_parse_paper
 from src.agents.understand_agent import run_understand_paper
-from src.agents.poster_planner import generate_blueprint
+from src.agents.poster_planner import generate_blueprint, normalize_analysis_for_poster
 from src.agents.validation_agent import validate_poster
 from src.renderers.html_renderer import HtmlPosterRenderer
 from src.storage.sqlite import PaperDatabase
@@ -93,6 +93,8 @@ def run_pipeline(
         "Phase 2 complete: %d contributions, %d formulas",
         len(analysis.contributions), len(analysis.key_formulas),
     )
+    analysis = normalize_analysis_for_poster(analysis)
+    analysis_path.write_text(analysis.model_dump_json(indent=2), encoding="utf-8")
 
     # ---- Phase 3: Plan ----
     logger.info("=== Phase 3: Plan ===")
@@ -127,7 +129,7 @@ def run_pipeline(
         logger.info("=== Phase 6: Optimize with Gemini ====")
         try:
             from src.agents.optimizer_agent import optimize_poster
-            opt = optimize_poster(arxiv_id, output_dir=str(output_dir), max_iterations=1)
+            opt = optimize_poster(arxiv_id, output_dir=str(output_dir), max_iterations=max_retries)
             results["optimization"] = opt
             logger.info("Phase 6: quality %d/10, %d iterations", opt["final_quality"], opt["iterations"])
         except Exception as e:

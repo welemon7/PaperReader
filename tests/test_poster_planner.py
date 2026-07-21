@@ -78,3 +78,40 @@ class TestPosterBlueprint:
         bp = generate_blueprint(_make_doc(), _make_analysis())
         assert 'primary' in bp.color_scheme
         assert 'accent' in bp.color_scheme
+
+    def test_highlights_use_contributions_when_no_takeaways(self):
+        analysis = _make_analysis()
+        analysis.experiments.takeaways = []
+        bp = generate_blueprint(_make_doc(), analysis)
+        highlights = next(s for s in bp.sections if s.section_id == 'sec-highlights')
+        assert 'First contribution' in highlights.content_md
+
+    def test_author_cleaning(self):
+        doc = _make_doc()
+        doc.authors[0].name = r'Gongfan Fang\textsuperscript{1}'
+        bp = generate_blueprint(doc, _make_analysis())
+        assert '\\textsuperscript' not in bp.authors_str
+        assert 'Gongfan Fang' in bp.authors_str
+
+    def test_author_cleaning_from_parser_style_input(self):
+        doc = _make_doc()
+        doc.authors[0].name = r'Gongfan Fang\thanks{Equal contribution}'
+        bp = generate_blueprint(doc, _make_analysis())
+        assert 'thanks' not in bp.authors_str.lower()
+
+    def test_figure_limit_is_bounded(self):
+        analysis = _make_analysis()
+        analysis.key_figures.extend([
+            KeyFigure(figure_id='fig-003', caption='Intro figure', role='overview'),
+            KeyFigure(figure_id='fig-004', caption='Another result', role='result'),
+            KeyFigure(figure_id='fig-005', caption='Yet another result', role='comparison'),
+        ])
+        bp = generate_blueprint(_make_doc(), analysis)
+        assert len(bp.figure_placements) <= 4
+
+    def test_dense_layout_tightens_method_section(self):
+        analysis = _make_analysis()
+        analysis.method_overview = ' '.join(['Dense method text'] * 120)
+        bp = generate_blueprint(_make_doc(), analysis)
+        method = next(s for s in bp.sections if s.section_id == 'sec-main-method')
+        assert method.col_span >= 2
