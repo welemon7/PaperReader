@@ -25,6 +25,8 @@ _SYSTEM_PROMPT = (
     '- "quality_score": int (1-10)\n'
     '- "issues": list of {"severity": str, "description": str}\n'
     '- "suggestions": dict of section_id -> {"content_md": "improved text"}\n'
+    '- "layout": dict of section_id -> {"row": int, "column": int, "col_span": int}\n'
+    '- "figure_selection": list of {"keep": bool, "figure_id": str, "section_id": str, "width_ratio": float, "caption": str}\n'
     '- "needs_improvement": bool (false if quality >= 8)\n\n'
     "For each section, suggest specific content improvements "
     "that are more concise, accurate, and impactful."
@@ -173,6 +175,24 @@ def _build_optimize_prompt(
         parts.append("\n## Contributions")
         for c in analysis.contributions:
             parts.append(f"- {c.text}")
+    if analysis.code_url:
+        parts.append(f"\n## Code / Project URL\n{analysis.code_url}")
+    if analysis.experiments:
+        parts.append("\n## Experiment Summary")
+        if analysis.experiments.datasets:
+            parts.append(f"Datasets: {', '.join(analysis.experiments.datasets)}")
+        if analysis.experiments.metrics:
+            parts.append(f"Metrics: {', '.join(analysis.experiments.metrics)}")
+        if analysis.experiments.main_results:
+            parts.append(f"Main results: {analysis.experiments.main_results}")
+        if analysis.experiments.takeaways:
+            parts.append("Takeaways:")
+            for takeaway in analysis.experiments.takeaways:
+                parts.append(f"- {takeaway}")
+    if analysis.key_figures:
+        parts.append("\n## Key Figures")
+        for fig in analysis.key_figures:
+            parts.append(f"- {fig.figure_id}: {fig.caption} [{fig.role}]")
     parts.append("\n## Current Poster Sections\n")
     for sec in blueprint.sections:
         if sec.type == "title":
@@ -182,8 +202,8 @@ def _build_optimize_prompt(
         parts.append(text + "\n")
     parts.append("\n## Task\n")
     parts.append("Review each section and suggest improved content_md. "
-                 "Keep the same section structure and section_id. "
-                 "Return JSON with suggestions keyed by section_id.")
+                 "You may also adjust layout and figure selection for better balance. "
+                 "Keep the same section_id set. Return JSON with suggestions keyed by section_id.")
     return "\n".join(parts)
 
 
@@ -237,6 +257,7 @@ def optimize_poster(
     renderer = HtmlPosterRenderer()
     html_path = out / "poster.html"
     history: list[dict] = []
+    latest_response: dict[str, Any] = {}
 
     try:
         for iteration in range(max_iterations):
@@ -244,6 +265,7 @@ def optimize_poster(
 
             prompt = _build_optimize_prompt(blueprint, doc, analysis)
             response = gemini.chat_json(system=_SYSTEM_PROMPT, user=prompt)
+            latest_response = response
 
             quality = response.get("quality_score", 0)
             issues = response.get("issues", [])
@@ -269,6 +291,22 @@ def optimize_poster(
                         if "col_span" in ls: sec.col_span = ls["col_span"]
                         logger.info("  Layout updated: %s -> row=%s col=%s span=%s",
                                     sec.section_id, sec.row, sec.column, sec.col_span)
+
+            figure_selection = response.get("figure_selection", [])
+            if isinstance(figure_selection, list) and figure_selection:
+                from src.schemas.poster import FigurePlacement
+                selection_map = {f.get("figure_id"): f for f in figure_selection if f.get("figure_id")}
+                kept_ids = {fid for fid, sel in selection_map.items() if sel.get("keep")}
+                if kept_ids:
+                    before = len(blueprint.figure_placements)
+                    blueprint.figure_placements = [fp for fp in blueprint.figure_placements if fp.figure_id in kept_ids]
+                    for fp in blueprint.figure_placements:
+                        sel = selection_map.get(fp.figure_id, {})
+                        fp.section_id = sel.get("section_id", fp.section_id)
+                        fp.width_ratio = sel.get("width_ratio", fp.width_ratio)
+                        if sel.get("caption"):
+                            fp.caption = sel["caption"]
+                    logger.info("  Figure selection updated: %d -> %d", before, len(blueprint.figure_placements))
 
             # Generate chart from experiment data
             chart_data = response.get("chart_data")
@@ -297,15 +335,12 @@ def optimize_poster(
             if new_figs:
                 logger.info("  Added %d figures from cache", len(new_figs))
 
-            if not needs or quality >= 8:
-                logger.info("Quality threshold met, stopping")
-                break
-
             if suggestions:
                 blueprint = _apply_suggestions(blueprint, suggestions)
-                bp_path.write_text(blueprint.model_dump_json(indent=2), encoding="utf-8")
+            bp_path.write_text(blueprint.model_dump_json(indent=2), encoding="utf-8")
 
             renderer.render_to_file(blueprint, doc, html_path)
+            break
 
     except Exception as e:
         logger.exception("Optimization error: %s", e)
@@ -320,4 +355,5 @@ def optimize_poster(
         "history": history,
         "final_quality": final_q,
         "iterations": len(history),
+        "response": latest_response,
     }

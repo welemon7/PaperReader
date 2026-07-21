@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>OmniaBench: Benchmarking General AI Agents Across Diverse Scenarios - Poster</title>
+<title>Data-Free Adversarial Distillation - Poster</title>
 <style>
 :root {
     --primary: #1a5276;
@@ -22,7 +22,7 @@ body {
     color: var(--text);
 }
 .poster {
-    width: 1200px; min-height: 1680px; background: var(--bg);
+    width: 1200px; background: var(--bg);
     box-shadow: 0 4px 20px rgba(0,0,0,0.2); padding: 0;
 }
 .title-bar {
@@ -65,7 +65,9 @@ tr:nth-child(even) { background: #f8f9fa; }.figure-placeholder {
 <body>
 <div class="poster">
     <div class="title-bar">
-        <h1>OmniaBench: Benchmarking General AI Agents Across Diverse Scenarios</h1>
+        <h1>Data-Free Adversarial Distillation</h1>
+        
+        <div class="authors">Gongfan Fang\textsuperscript1</div>
         
     </div>
 
@@ -77,7 +79,7 @@ tr:nth-child(even) { background: #f8f9fa; }.figure-placeholder {
             <div class="section">
                 <div class="section-header">Motivation</div>
                 <div class="section-body">
-                    <p>现有智能体基准测试通常局限于有限的场景、工具生态或任务格式，缺乏对真实世界通用智能体应用多样性的覆盖，难以全面评估智能体在多领域、多轮交互、状态跟踪和工具执行等方面的综合能力。</p>
+                    <p>现有的知识蒸馏方法大多依赖原始训练数据或替代数据，但在实际场景中这些数据通常不可用。本文旨在解决无真实数据情况下的模型压缩问题。</p>
                     
                     
                 </div>
@@ -90,7 +92,7 @@ tr:nth-child(even) { background: #f8f9fa; }.figure-placeholder {
             <div class="section">
                 <div class="section-header">Method Overview</div>
                 <div class="section-body">
-                    <p>OmniaBench从应用商店、产品需求文档、网络搜索和人工精炼中收集场景知识，构建层次化的ToC、ToB和ToE场景分类体系，并实例化为包含工具、实体、状态和初始化配置的可执行交互环境。任务通过四种路线（DAG、Solver、Program、DAG-S）构建，支持单轮和多轮交互模式，并采用基于rubric和VerifyCode的评估协议。</p>
+                    <p>本文提出无数据对抗蒸馏（DFAD）框架，通过生成器与判别器（学生和教师联合）的对抗训练来估计并最小化模型差异。生成器产生“困难样本”以扩大差异，而学生和教师则作为判别器减少差异，从而在无真实数据的情况下训练学生模型。</p>
                     
                     
                 </div>
@@ -103,7 +105,7 @@ tr:nth-child(even) { background: #f8f9fa; }.figure-placeholder {
             <div class="section">
                 <div class="section-header">Key Idea</div>
                 <div class="section-body">
-                    <p>提出OmniaBench，一个场景丰富且具有挑战性的通用智能体基准测试，覆盖90个一级领域和354个二级领域，基于真实应用生态系统构建可执行任务环境。</p>
+                    <p>提出了一种用于无数据知识蒸馏的对抗训练框架，首次将其应用于语义分割任务。</p>
                     
                     
                 </div>
@@ -120,83 +122,161 @@ tr:nth-child(even) { background: #f8f9fa; }.figure-placeholder {
             <div class="section">
                 <div class="section-header">Method</div>
                 <div class="section-body">
-                    <p>OmniaBench从应用商店、产品需求文档、网络搜索和人工精炼中收集场景知识，构建层次化的ToC、ToB和ToE场景分类体系，并实例化为包含工具、实体、状态和初始化配置的可执行交互环境。任务通过四种路线（DAG、Solver、Program、DAG-S）构建，支持单轮和多轮交互模式，并采用基于rubric和VerifyCode的评估协议。</p>
+                    <p>本文提出无数据对抗蒸馏（DFAD）框架，通过生成器与判别器（学生和教师联合）的对抗训练来估计并最小化模型差异。生成器产生“困难样本”以扩大差异，而学生和教师则作为判别器减少差异，从而在无真实数据的情况下训练学生模型。</p>
 <p><strong>Key Formulas:</strong>
-- $$ \mathcal{P} = (\mathcal{S}, \mathcal{O}, \mathcal{A}, \mathcal{T}, \Omega, \rho_0), $$
-  将智能体任务形式化为部分可观测马尔可夫决策过程，包含状态空间、观测空间、动作空间、转移函数、观测函数和初始状态分布。
-- $$ h_t = (o_0, a_0, o_1, a_1, \ldots, o_t), $$
-  定义智能体在时间步t的历史为观测和动作的交替序列。
-- $$ a_t \sim \pi_\theta(\cdot \mid h_t). $$
-  智能体的策略根据历史选择动作。
-- $$ \mathcal{A} = \mathcal{A}_{\mathrm{msg}} \cup \mathcal{A}_{\mathrm{tool}} \cup \mathcal{A}_{\mathrm{final}}, $$
-  动作空间由消息动作、工具调用动作和最终回答动作三部分组成。
-- $$ \textsc{User Prompt} = \textsc{Persona} \oplus \textsc{Environment Summary} \oplus \textsc{Task Description}. $$
-  用户提示由角色卡片、环境摘要和任务描述三部分拼接而成。</p>
+- $$ \mathcal{S}^* = \min_\mathcal{S}\mathcal{D}(\mathcal{T}, \mathcal{S}) $$
+  最优学生模型通过最小化教师与学生之间的模型差异得到。
+- $$ \mathcal{D}(\mathcal{T}, \mathcal{S}; p) = \mathbb{E}_{x\sim p(x)} [ \frac{1}{n} \|\mathcal{T}(x) - \mathcal{S}(x) \|_1 ] $$
+  模型差异定义为教师与学生输出之间的L1距离的期望。
+- $$ \mathcal{D}(\mathcal{T}, \mathcal{S}; \mathcal{G}) = \mathbb{E}_{z\sim p_z(z)} [ \frac{1}{n} \|\mathcal{T}(\mathcal{G}(z)) - \mathcal{S}(\mathcal{G}(z)) \|_1 ] $$
+  使用生成器生成的样本近似计算模型差异。
+- $$ \mathcal{L}_{IM} = \mathcal{D}(\mathcal{T}, \mathcal{S}; \mathcal{G}^h) = \mathbb{E}_{z\sim p_z(z)} [ \frac{1}{n} \|\mathcal{T}(\mathcal{G}^h(z)) - \mathcal{S}(\mathcal{G}^h(z)) \|_1 ] $$
+  学生模型的损失函数，即使用硬样本生成器计算的模型差异。
+- $$ \mathcal{L}_{GEN} = - \mathcal{L}_{IM} = - \mathbb{E}_{z\sim p_z(z)} [ \frac{1}{n} \|\mathcal{T}(\mathcal{G}(z)) - \mathcal{S}(\mathcal{G}(z)) \|_1 ] $$
+  生成器的损失函数，旨在最大化模型差异以产生困难样本。</p>
                     
                     
                     <div class="figure-placeholder">
                         
-                        <img src="figures/pipeline.png" alt="OmniaBench的概念概览。该图总结了基准测试的关键组成部分，包括数据源、可执行任务环境、交互式智能体轨迹和评估协议。OmniaBench旨在覆盖多样化的ToC、ToB和ToE领域，并通过基于rubric和代码的标准以及聚合性能指标来评估通用智能体。" style="max-width:100%">
+                        <img src="figures/framework-small.png" alt="Framework of Data-Free Adversarial Distillation. We construct an upper bound for model discrepancy, under hard sample constraint." style="max-width:100%">
                         
                     </div>
                     
                     <div class="figure-placeholder">
                         
-                        <img src="figures/v12_micro_22models.png" alt="OmniaBench排行榜。" style="max-width:100%">
+                        <img src="figures/generated-samples.png" alt="Generated samples on MNIST, CIFAR10 and CIFAR100. The images in the second row are sampled from real data." style="max-width:100%">
                         
                     </div>
                     
                     <div class="figure-placeholder">
                         
-                        <img src="figures/fig1_domain_performance.png" alt="代表性智能体场景上的性能。" style="max-width:100%">
+                        <img src="figures/seg-patterns.png" alt="The generated samples on CamVid, as well as their semantics predicted by the teacher model. The co-occurrence of traffic lights and poles, as in real samples, is captured by generator." style="max-width:100%">
                         
                     </div>
                     
                     <div class="figure-placeholder">
                         
-                        <img src="figures/capability_radar_micro_bg_outeronly.png" alt="能力轮廓。" style="max-width:100%">
+                        <img src="figures/seg-results.png" alt="Segmentation results on CamVid and NYUv2. All baseline methods in the figure are data-driven and our framework achieves the best performance when the original training data is not available." style="max-width:100%">
                         
                     </div>
                     
                     <div class="figure-placeholder">
                         
-                        <img src="figures/fig3_tob_toc_toe.png" alt="Figure: fig3_tob_toc_toe" style="max-width:100%">
+                        <img src="figures/acc-curve.png" alt="Figure: acc-curve" style="max-width:100%">
                         
                     </div>
                     
                     <div class="figure-placeholder">
                         
-                        <img src="figures/figure_env_statics.png" alt="Figure: figure_env_statics" style="max-width:100%">
+                        <img src="figures/accuracy-curve.png" alt="Figure: accuracy-curve" style="max-width:100%">
                         
                     </div>
                     
                     <div class="figure-placeholder">
                         
-                        <img src="figures/pipeline.png" alt="Figure: pipeline" style="max-width:100%">
+                        <img src="figures/batch-size-results.png" alt="Figure: batch-size-results" style="max-width:100%">
                         
                     </div>
                     
                     <div class="figure-placeholder">
                         
-                        <img src="figures/synthesis_pipeline.png" alt="Figure: synthesis_pipeline" style="max-width:100%">
+                        <img src="figures/framework-small.png" alt="Figure: framework-small" style="max-width:100%">
                         
                     </div>
                     
                     <div class="figure-placeholder">
                         
-                        <img src="figures/T-SNE-domain.png" alt="Figure: T-SNE-domain" style="max-width:100%">
+                        <img src="figures/generated-samples.png" alt="Figure: generated-samples" style="max-width:100%">
                         
                     </div>
                     
                     <div class="figure-placeholder">
                         
-                        <img src="figures/taxonomy.png" alt="Figure: taxonomy" style="max-width:100%">
+                        <img src="figures/intoroduction-scc.png" alt="Figure: intoroduction-scc" style="max-width:100%">
                         
                     </div>
                     
                     <div class="figure-placeholder">
                         
-                        <img src="figures/v12_micro_22models.png" alt="Figure: v12_micro_22models" style="max-width:100%">
+                        <img src="figures/seg-patterns.png" alt="Figure: seg-patterns" style="max-width:100%">
+                        
+                    </div>
+                    
+                    <div class="figure-placeholder">
+                        
+                        <img src="figures/seg-results.png" alt="Figure: seg-results" style="max-width:100%">
+                        
+                    </div>
+                    
+                    <div class="figure-placeholder">
+                        
+                        <img src="figures/caltech101-vis.png" alt="Figure: caltech101-vis" style="max-width:100%">
+                        
+                    </div>
+                    
+                    <div class="figure-placeholder">
+                        
+                        <img src="figures/CamVid-vis.png" alt="Figure: CamVid-vis" style="max-width:100%">
+                        
+                    </div>
+                    
+                    <div class="figure-placeholder">
+                        
+                        <img src="figures/cifar10-vis.png" alt="Figure: cifar10-vis" style="max-width:100%">
+                        
+                    </div>
+                    
+                    <div class="figure-placeholder">
+                        
+                        <img src="figures/cifar100-vis.png" alt="Figure: cifar100-vis" style="max-width:100%">
+                        
+                    </div>
+                    
+                    <div class="figure-placeholder">
+                        
+                        <img src="figures/MNIST-vis.png" alt="Figure: MNIST-vis" style="max-width:100%">
+                        
+                    </div>
+                    
+                    <div class="figure-placeholder">
+                        
+                        <img src="figures/nyuv2-vis.png" alt="Figure: nyuv2-vis" style="max-width:100%">
+                        
+                    </div>
+                    
+                    <div class="figure-placeholder">
+                        
+                        <img src="figures/results-batch-size.png" alt="Figure: results-batch-size" style="max-width:100%">
+                        
+                    </div>
+                    
+                    <div class="figure-placeholder">
+                        
+                        <img src="figures/seg-camvid.png" alt="Figure: seg-camvid" style="max-width:100%">
+                        
+                    </div>
+                    
+                    <div class="figure-placeholder">
+                        
+                        <img src="figures/seg-nyuv2.png" alt="Figure: seg-nyuv2" style="max-width:100%">
+                        
+                    </div>
+                    
+                    <div class="figure-placeholder">
+                        
+                        <img src="figures/seg-vis.png" alt="Figure: seg-vis" style="max-width:100%">
+                        
+                    </div>
+                    
+                    <div class="figure-placeholder">
+                        
+                        <img src="figures/vis-cls.png" alt="Figure: vis-cls" style="max-width:100%">
+                        
+                    </div>
+                    
+                    <div class="figure-placeholder">
+                        
+                        <img src="figures/vis-seg.png" alt="Figure: vis-seg" style="max-width:100%">
                         
                     </div>
                     
@@ -220,23 +300,20 @@ tr:nth-child(even) { background: #f8f9fa; }.figure-placeholder {
 <tbody>
 <tr>
 <td>Datasets</td>
-<td>OmniaBench包含1431个任务（完整集）, 其中挑战集644个任务, 覆盖DAG, Solver, Program, DAG-S四种路线。</td>
+<td>MNIST, CIFAR10, CIFAR100, Caltech101, CamVid, NYUv2</td>
 </tr>
 <tr>
 <td>Metrics</td>
-<td>主要指标为Pass@1（任务完成率）, 此外还报告了用户轮次, 各领域得分, 能力维度得分等。</td>
+<td>分类准确率, 分割mIoU</td>
 </tr>
 <tr>
 <td>Best Result</td>
-<td>最佳闭源模型Claude-Sonnet-5总体得分58.54，最佳开源模型GLM-5.2得分56.83，表明OmniaBench对当前前沿模型具有显著挑战性。</td>
+<td>在分类任务上，DFAD在CIFAR10上达到93.5%准确率，接近数据驱动方法；在语义分割任务上，DFAD在CamVid上达到58.3% mIoU，优于使用无关数据的KD-UNR。</td>
 </tr>
 </tbody>
 </table>
 <p><strong>Takeaways:</strong>
-- 不同模型在领域和能力维度上表现出明显的专业化差异
-- 工具使用效率和错误模式分析揭示了模型在状态管理
-- 多轮交互等方面的不足
-- 评估稳定性分析表明rubric-based评估具有良好的一致性。</p>
+- 无数据对抗蒸馏在分类和分割任务上均有效，且性能与数据驱动方法相当；生成器能产生包含任务知识的样本；大batch size有助于稳定训练。</p>
                     
                     
                 </div>
@@ -254,10 +331,9 @@ tr:nth-child(even) { background: #f8f9fa; }.figure-placeholder {
                 <div class="section-header">Contributions</div>
                 <div class="section-body">
                     <ul>
-<li><strong>[dataset]</strong> 提出OmniaBench，一个场景丰富且具有挑战性的通用智能体基准测试，覆盖90个一级领域和354个二级领域，基于真实应用生态系统构建可执行任务环境。</li>
-<li><strong>[method]</strong> 开发了十维能力分类体系（任务理解、信息收集、规划与决策、状态管理、工具使用、代码与编程操作、数据分析、办公与文档处理、交互协作、可靠性与安全性），支持细粒度诊断分析。</li>
-<li><strong>[method]</strong> 设计了组合式原子难度框架，涵盖用户意图、角色约束、目标分解、环境状态变化、工具执行、多轮交互、错误恢复和结果验证，用于刻画通用智能体任务中的细粒度挑战。</li>
-<li><strong>[application]</strong> 对闭源和开源模型进行了系统评估与分析，从总体结果、领域类别、能力维度、任务复杂度、交互轮次、错误分布和评估稳定性等多个角度揭示了当前通用智能体的能力边界。</li>
+<li><strong>[method]</strong> 提出了一种用于无数据知识蒸馏的对抗训练框架，首次将其应用于语义分割任务。</li>
+<li><strong>[method]</strong> 引入了一种无需真实数据即可量化教师模型与学生模型之间差异的方法。</li>
+<li><strong>[application]</strong> 大量实验表明，该方法不仅显著优于现有无数据方法，而且与一些数据驱动方法性能相当。</li>
 </ul>
                     
                     
@@ -272,10 +348,7 @@ tr:nth-child(even) { background: #f8f9fa; }.figure-placeholder {
                 <div class="section-header">Highlights</div>
                 <div class="section-body">
                     <ol>
-<li>不同模型在领域和能力维度上表现出明显的专业化差异</li>
-<li>工具使用效率和错误模式分析揭示了模型在状态管理</li>
-<li>多轮交互等方面的不足</li>
-<li>评估稳定性分析表明rubric-based评估具有良好的一致性。</li>
+<li>无数据对抗蒸馏在分类和分割任务上均有效，且性能与数据驱动方法相当；生成器能产生包含任务知识的样本；大batch size有助于稳定训练。</li>
 </ol>
                     
                     

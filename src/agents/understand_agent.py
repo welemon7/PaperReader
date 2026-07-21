@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import Any, Optional
 
 from langgraph.graph import END, StateGraph
@@ -19,6 +20,44 @@ from src.schemas.paper import PaperDocument
 from src.storage.sqlite import PaperDatabase
 
 logger = logging.getLogger(__name__)
+
+_CODE_URL_PATTERN = re.compile(
+    r"https?://(?:www\.)?(?:github\.com|gitlab\.com|bitbucket\.org|codeberg\.org|huggingface\.co)/[^\s\)\]\}<>\"']+",
+    re.IGNORECASE,
+)
+
+_URL_PATTERN = re.compile(r"https?://[^\s\)\]\}<>\"']+", re.IGNORECASE)
+
+
+def _clean_url(url: str) -> str:
+    return url.rstrip(".,;:")
+
+
+def _extract_code_url(doc: PaperDocument) -> str:
+    """Best-effort deterministic code-link extraction from paper text."""
+    text_parts = [doc.abstract or "", doc.raw_markdown or ""]
+    for sec in doc.sections:
+        text_parts.append(sec.raw_latex or "")
+        text_parts.append(sec.text or "")
+    text = "\n".join(text_parts)
+
+    for match in _CODE_URL_PATTERN.findall(text):
+        return _clean_url(match)
+
+    # Fall back to any URL mentioned near code/project keywords.
+    lowered = text.lower()
+    for keyword in ("code", "project", "github", "gitlab", "bitbucket", "repository", "repo"):
+        idx = lowered.find(keyword)
+        if idx < 0:
+            continue
+        window = text[max(0, idx - 220): idx + 420]
+        urls = [_clean_url(u) for u in _URL_PATTERN.findall(window)]
+        for url in urls:
+            if any(host in url.lower() for host in ("github.com", "gitlab.com", "bitbucket.org", "codeberg.org", "huggingface.co")):
+                return url
+        if urls:
+            return urls[0]
+    return ""
 
 class UnderstandState(TypedDict):
     arxiv_id: str
@@ -171,6 +210,7 @@ def _safe_parse_list(items, model_cls):
                 pass
     return result
 def _parse_analysis(doc: PaperDocument, llm_resp: dict) -> PaperAnalysis:
+    code_url = llm_resp.get("code_url", "") or _extract_code_url(doc)
     return PaperAnalysis(
         paper_id=doc.paper_id,
         arxiv_id=doc.arxiv_id,
@@ -186,7 +226,7 @@ def _parse_analysis(doc: PaperDocument, llm_resp: dict) -> PaperAnalysis:
             else None
         ),
         conclusion=llm_resp.get("conclusion", ""),
-        code_url=llm_resp.get("code_url", ""),
+        code_url=code_url,
         full_analysis_md=llm_resp.get("full_analysis_md", ""),
     )
 

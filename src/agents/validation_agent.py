@@ -8,6 +8,7 @@ from typing import Any, Optional, TypedDict
 from langgraph.graph import END, StateGraph
 
 from src.llm.client import LLMClient, LLMError
+from src.config import settings
 from src.schemas.poster import PosterBlueprint
 from src.schemas.validation import PosterValidation, ValidationIssue
 from src.storage.sqlite import PaperDatabase
@@ -93,10 +94,17 @@ def call_llm_node(state: ValidationState) -> dict:
     prompt = state.get("validation_prompt", "")
     if not prompt:
         return {"error": "No prompt"}
-    if not LLMClient.is_configured():
-        return {"error": "LLM API key not configured"}
     try:
-        client = LLMClient()
+        if settings.gemini_api_key:
+            client = LLMClient(
+                api_key=settings.gemini_api_key,
+                base_url=settings.gemini_base_url,
+                model=settings.gemini_model,
+            )
+        elif LLMClient.is_configured():
+            client = LLMClient()
+        else:
+            return {"error": "LLM API key not configured"}
         result = client.chat_json(system=_SYSTEM_PROMPT, user=prompt)
         return {"llm_response": result}
     except LLMError as e:

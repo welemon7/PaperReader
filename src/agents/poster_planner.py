@@ -13,6 +13,11 @@ from src.schemas.poster import (
 
 logger = logging.getLogger(__name__)
 
+POSTER_WIDTH_MM = 841
+POSTER_HEIGHT_MM = 1189
+POSTER_WIDTH_PX = 1200
+POSTER_HEIGHT_PX = 1697
+
 
 def generate_blueprint(
     doc: PaperDocument,
@@ -37,8 +42,8 @@ def generate_blueprint(
         paper_id=doc.paper_id,
         poster_title=doc.title,
         authors_str="; ".join(a.name for a in doc.authors),
-        width_px=1200, height_px=1697,
-        width_mm=841, height_mm=1189,
+        width_px=POSTER_WIDTH_PX, height_px=POSTER_HEIGHT_PX,
+        width_mm=POSTER_WIDTH_MM, height_mm=POSTER_HEIGHT_MM,
         sections=sections,
         figure_placements=figure_placements,
         formula_displays=formula_displays,
@@ -125,6 +130,12 @@ def _build_row2(analysis: PaperAnalysis) -> list[PosterSection]:
             exp_lines.append("**Takeaways:**")
             for t in exp.takeaways:
                 exp_lines.append("- " + t)
+        if analysis.key_figures:
+            exp_lines.append("")
+            exp_lines.append("**Recommended visual focus:**")
+            for fig in analysis.key_figures:
+                if fig.role in ("result", "qualitative", "comparison"):
+                    exp_lines.append(f"- {fig.caption}")
     exp_content = "\n".join(exp_lines) if exp_lines else "(experimental results not available)"
 
     experiments = PosterSection(
@@ -166,11 +177,10 @@ def _build_row3(analysis: PaperAnalysis) -> list[PosterSection]:
         column=2, col_span=1, row=3,
     )
 
-    code_link_text = analysis.code_url if analysis.code_url else "Code will be available at paper project page (if applicable)."
     if analysis.code_url:
-        code_link_md = f"[{analysis.code_url}]({analysis.code_url})"
+        code_link_md = f"Project / code: [{analysis.code_url}]({analysis.code_url})"
     else:
-        code_link_md = code_link_text
+        code_link_md = "Project / code: not found in the paper text."
     proj_link = PosterSection(
         section_id="sec-project-link", type="project_link",
         title="Code / Project",
@@ -185,15 +195,19 @@ def _place_figures(analysis: PaperAnalysis, sections: list[PosterSection]) -> li
     for fig in analysis.key_figures:
         if fig.role in ("result", "qualitative", "comparison"):
             target = "sec-experiments"
+            width_ratio = 0.48
         elif fig.role in ("overview", "architecture"):
             target = "sec-main-method"
+            width_ratio = 0.92
         elif fig.role in ("pipeline", "illustration"):
             target = "sec-method-overview"
+            width_ratio = 0.82
         else:
             target = "sec-main-method"
+            width_ratio = 0.72
         placements.append(FigurePlacement(
             figure_id=fig.figure_id, section_id=target,
-            width_ratio=0.95, caption=fig.caption,
+            width_ratio=width_ratio, caption=fig.caption,
         ))
     return placements
 
@@ -218,6 +232,7 @@ _GEMINI_LAYOUT_PROMPT = (
     '- "color_scheme": dict with primary, accent, background, text, '
     "section_header_bg, section_header_text, border, highlight\n\n"
     "Layout rules:\n"
+    f"- Poster size is fixed to A0 portrait: {POSTER_WIDTH_MM}mm x {POSTER_HEIGHT_MM}mm ({POSTER_WIDTH_PX}px x {POSTER_HEIGHT_PX}px)\n"
     "- Core architecture/overview figures: place in method section, "
     "width_ratio >= 0.8\n"
     "- Result/comparison figures: group in experiments section, "
@@ -250,6 +265,8 @@ def _gemini_layout(
     for contrib in analysis.contributions:
         prompt_parts.append(f"- {contrib.text}")
     prompt_parts.append(f"\nMethod: {analysis.method_overview}")
+    if analysis.code_url:
+        prompt_parts.append(f"\nCode / Project URL: {analysis.code_url}")
     prompt_parts.append("\nKey Figures:")
     for fig in analysis.key_figures:
         prompt_parts.append(f"- [{fig.figure_id}] {fig.caption} ({fig.role})")
@@ -279,6 +296,17 @@ def _gemini_layout(
             row=s.get("row", 0),
         ))
 
+    if sections and not any(sec.section_id == "sec-project-link" for sec in sections):
+        sections.append(PosterSection(
+            section_id="sec-project-link",
+            type="project_link",
+            title="Code / Project",
+            content_md=(f"Project / code: [{analysis.code_url}]({analysis.code_url})" if analysis.code_url else "Project / code: not found in the paper text."),
+            column=3,
+            col_span=1,
+            row=3,
+        ))
+
     figure_placements = []
     for fp in result.get("figure_placements", []):
         figure_placements.append(FigurePlacement(
@@ -295,8 +323,8 @@ def _gemini_layout(
         paper_id=doc.paper_id,
         poster_title=doc.title,
         authors_str="; ".join(a.name for a in doc.authors),
-        width_px=1200, height_px=1697,
-        width_mm=841, height_mm=1189,
+        width_px=POSTER_WIDTH_PX, height_px=POSTER_HEIGHT_PX,
+        width_mm=POSTER_WIDTH_MM, height_mm=POSTER_HEIGHT_MM,
         sections=sections,
         figure_placements=figure_placements,
         formula_displays=formula_displays,
@@ -320,8 +348,8 @@ def _static_layout(
         paper_id=doc.paper_id,
         poster_title=doc.title,
         authors_str="; ".join(a.name for a in doc.authors),
-        width_px=1200, height_px=1697,
-        width_mm=841, height_mm=1189,
+        width_px=POSTER_WIDTH_PX, height_px=POSTER_HEIGHT_PX,
+        width_mm=POSTER_WIDTH_MM, height_mm=POSTER_HEIGHT_MM,
         sections=sections,
         figure_placements=figure_placements,
         formula_displays=formula_displays,

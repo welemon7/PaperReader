@@ -16,13 +16,16 @@
     --highlight: {{ color_scheme.highlight }};
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { min-height: 100%; }
 body {
-    background: #e0e0e0; display: flex; justify-content: center; padding: 40px;
+    background: #e0e0e0; display: flex; justify-content: center; padding: 24px;
     font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 14px; line-height: 1.6;
     color: var(--text);
 }
 .poster {
-    width: {{ poster_width }}px; background: var(--bg);
+    width: min({{ poster_width }}px, calc(100vw - 48px));
+    min-height: min({{ poster_height }}px, calc(100vh - 48px));
+    background: var(--bg);
     box-shadow: 0 4px 20px rgba(0,0,0,0.2); padding: 0;
 }
 .title-bar {
@@ -50,12 +53,32 @@ body {
 table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 12px; }
 th, td { border: 1px solid #d5dbdb; padding: 6px 10px; text-align: center; }
 th { background: #1a5276; color: white; font-weight: 600; }
-tr:nth-child(even) { background: #f8f9fa; }.figure-placeholder {
+tr:nth-child(even) { background: #f8f9fa; }
+.figure-stack {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 8px;
+}
+.figure-card {
+    background: #fff;
+    border: 1px solid #e3e8ee;
+    border-radius: 4px;
+    padding: 8px;
+}
+.figure-card.full { grid-column: 1 / -1; }
+.figure-caption {
+    font-size: 12px;
+    line-height: 1.35;
+    margin-top: 6px;
+    color: #4f5d73;
+}
+.figure-card img { width: 100%; height: auto; display: block; border-radius: 2px; }
+.figure-placeholder {
     background: #eef2f7; border: 1px dashed var(--border); border-radius: 4px;
     padding: 20px; text-align: center; margin: 8px 0; color: #888;
     min-height: 80px; display: flex; align-items: center; justify-content: center;
 }
-.figure-placeholder img { max-width: 100%; height: auto; border-radius: 2px; }
 @media print {
     body { background: white; padding: 0; }
     .poster { box-shadow: none; }
@@ -81,15 +104,22 @@ tr:nth-child(even) { background: #f8f9fa; }.figure-placeholder {
                 <div class="section-body">
                     {{ sec.content_html|safe }}
                     {% set section_figs = figure_map.get(sec.section_id, []) %}
-                    {% for fig in section_figs %}
-                    <div class="figure-placeholder">
-                        {% if fig.src %}
-                        {% if fig.src and fig.src.strip() %}<img src="{{ fig.src }}" alt="{{ fig.caption }}" style="max-width:100%">{% else %}<div style="min-height:80px;display:flex;align-items:center;justify-content:center;color:#999;font-style:italic;border:1px dashed #ddd;border-radius:4px;padding:10px;margin:8px 0">[Figure: {{ fig.caption }}]</div>{% endif %}
-                        {% else %}
-                        <em>[Figure: {{ fig.caption }}]</em>
-                        {% endif %}
+                    {% if section_figs %}
+                    <div class="figure-stack">
+                        {% for fig in section_figs %}
+                        <div class="figure-card {% if fig.width_ratio >= 0.8 %}full{% endif %}">
+                            {% if fig.src %}
+                            <img src="{{ fig.src }}" alt="{{ fig.caption }}">
+                            {% else %}
+                            <div class="figure-placeholder">[Figure: {{ fig.caption }}]</div>
+                            {% endif %}
+                            {% if fig.caption %}
+                            <div class="figure-caption">{{ fig.caption }}</div>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
                     </div>
-                    {% endfor %}
+                    {% endif %}
                 </div>
             </div>
             {% endif %}

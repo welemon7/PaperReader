@@ -63,6 +63,7 @@ class HtmlPosterRenderer:
             poster_title=blueprint.poster_title,
             authors_str=blueprint.authors_str,
             poster_width=blueprint.width_px,
+            poster_height=blueprint.height_px,
             color_scheme=blueprint.color_scheme,
             rows=rows,
             figure_map=figure_map,

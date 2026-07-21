@@ -14,7 +14,7 @@ from src.schemas.paper import PaperDocument
 from src.schemas.analysis import PaperAnalysis
 from src.schemas.poster import PosterBlueprint
 from src.schemas.validation import PosterValidation
-
+from src.config import settings
 logger = logging.getLogger(__name__)
 
 
@@ -127,7 +127,7 @@ def run_pipeline(
         logger.info("=== Phase 6: Optimize with Gemini ====")
         try:
             from src.agents.optimizer_agent import optimize_poster
-            opt = optimize_poster(arxiv_id, output_dir=str(output_dir), max_iterations=3)
+            opt = optimize_poster(arxiv_id, output_dir=str(output_dir), max_iterations=1)
             results["optimization"] = opt
             logger.info("Phase 6: quality %d/10, %d iterations", opt["final_quality"], opt["iterations"])
         except Exception as e:
