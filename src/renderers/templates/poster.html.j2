@@ -83,13 +83,15 @@ body {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 14px;
     margin-bottom: 14px;
+    align-items: start;
 }
 .section {
     background: var(--panel);
     border: 1px solid var(--border);
     border-radius: 8px;
     overflow: hidden;
-    min-height: 100%;
+    min-height: 0;
+    align-self: start;
 }
 .section-header {
     background: linear-gradient(180deg, rgba(232, 238, 244, 0.95), rgba(245, 248, 251, 0.95));
@@ -105,6 +107,9 @@ body {
     padding: 14px 14px 15px;
     font-size: 13px;
     color: var(--ink);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
 }
 .section-body p { margin: 0 0 8px; }
 .section-body p:last-child { margin-bottom: 0; }
@@ -139,7 +144,8 @@ body {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
-    margin-top: 12px;
+    align-content: start;
+    justify-items: stretch;
 }
 .figure-stack.method-hero {
     grid-template-columns: minmax(0, 1fr);
@@ -148,18 +154,22 @@ body {
 .figure-stack.results-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
 }
+.figure-stack.results-single {
+    grid-template-columns: minmax(0, 1fr);
+}
 .figure-card {
     border: 1px solid #d8e0ea;
     border-radius: 8px;
     background: #fff;
     padding: 8px;
+    align-self: start;
 }
 .figure-card.full { grid-column: 1 / -1; }
 .figure-card.method-hero-card {
     width: min(100%, 680px);
 }
 .figure-card.result-card {
-    min-height: 100%;
+    min-height: 0;
 }
 .figure-card img {
     width: 100%;
@@ -243,7 +253,7 @@ body {
             {{ sec.content_html|safe }}
             {% set section_figs = figure_map.get(sec.section_id, []) %}
             {% if section_figs %}
-            <div class="figure-stack {% if sec.type == 'main_method' %}method-hero{% elif sec.type == 'experiments' %}results-grid{% endif %}">
+            <div class="figure-stack {% if sec.type == 'main_method' %}method-hero{% elif sec.type == 'experiments' %}{% if section_figs|length > 1 %}results-grid{% else %}results-single{% endif %}{% endif %}">
               {% for fig in section_figs %}
               <div class="figure-card {% if sec.type == 'main_method' and loop.first %}method-hero-card{% elif sec.type == 'experiments' %}result-card{% endif %} {% if fig.width_ratio >= 0.8 %}full{% endif %}">
                 {% if fig.src %}
