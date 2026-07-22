@@ -61,7 +61,7 @@
       "section_id": "sec-experiments",
       "type": "experiments",
       "title": "Results",
-      "content_md": "| **Metric** | **Value** |\n|-----------|----------|\n| Datasets | ISTD, ISTD+, SRD |\n| Metrics | PSNR, Model Parameters, Computational Cost (FLOPs) |\n| Best Result | ShadowFormer achieves state-of-the-art performance on all three datasets while using up to 150x fewer model parameters compared to existing methods. |\n\n**Takeaways:**\n- The proposed method effectively alleviates contour artifacts and improves illumination/color consistency by leveraging global context from non-shadow regions\n- proving that a lightweight\n- single-stage transformer can outperform complex\n- multi-module approaches.\n\n**Recommended visual focus:**\n- The PSNR performance, v.s., the number of model parameters of shadow removal models on ISTD dataset.\n- Visual examples of the results, the zoom-in regions, and the zoom-in error maps for ablation study, including shadow input, and results of four ablation experiments corresponding to the No. in Table~\\ref{tab:ablation\n- Examples of shadow removal results on the ISTD~\\cite{wang2018stacked",
+      "content_md": "| **Metric** | **Value** |\n|-----------|----------|\n| Datasets | ISTD, ISTD+, SRD |\n| Metrics | PSNR, Model Parameters, Computational Cost (FLOPs) |\n| Best Result | ShadowFormer achieves state-of-the-art performance on all three datasets while using up to 150x fewer model parameters compared to existing methods. |\n\n**Takeaways:**\n- The proposed method effectively alleviates contour artifacts and improves illumination/color consistency by leveraging global context from non-shadow regions\n- proving that a lightweight\n- single-stage transformer can outperform complex\n- multi-module approaches.\n\n**Recommended visual focus:**\n- The PSNR performance, v.s., the number of model parameters of shadow removal models on ISTD dataset.\n- Visual examples of the results, the zoom-in regions, and the zoom-in error maps for ablation study, including shadow input, and results of four ablation experiments corresponding to the No. in Table\n- Examples of shadow removal results on the ISTD",
       "content_html": "",
       "column": 3,
       "col_span": 1,
@@ -121,7 +121,7 @@
       "figure_id": "fig-002",
       "section_id": "sec-experiments",
       "width_ratio": 0.96,
-      "caption": "Visual examples of the results, the zoom-in regions, and the zoom-in error maps for ablation study, including shadow input, and results of four ablation experiments corresponding to the No. in Table~\\ref{tab:ablation"
+      "caption": "Visual examples of the results, the zoom-in regions, and the zoom-in error maps for ablation study, including shadow input, and results of four ablation experiments corresponding to the No. in Table"
     }
   ],
   "formula_displays": [

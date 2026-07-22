@@ -11,6 +11,7 @@ from src.schemas.poster import (
     PosterBlueprint,
     PosterSection,
 )
+from src.schemas.analysis import KeyFigure
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +19,59 @@ POSTER_WIDTH_MM = 841
 POSTER_HEIGHT_MM = 1189
 POSTER_WIDTH_PX = 1200
 POSTER_HEIGHT_PX = 1697
+
+
+def _clean_poster_text(text: str) -> str:
+    text = (text or "").strip()
+    if not text:
+        return text
+
+    text = re.sub(r"\\protect\s*", "", text)
+    text = _strip_latex_commands(text, {"cite", "ref", "eqref", "autoref", "label"})
+    text = re.sub(r"\s+([,.;:!?])", r"\1", text)
+    text = re.sub(r"\s+", " ", text).strip(" -;,")
+    return text
+
+
+def _strip_latex_commands(text: str, commands: set[str]) -> str:
+    """Remove citation/reference-style LaTeX commands while preserving nearby text."""
+    result: list[str] = []
+    i = 0
+    n = len(text)
+    while i < n:
+        ch = text[i]
+        if ch == "\\":
+            j = i + 1
+            while j < n and text[j].isalpha():
+                j += 1
+            cmd = text[i + 1 : j]
+            if cmd in commands:
+                k = j
+                while k < n and text[k] in " \t*":
+                    k += 1
+                if k < n and text[k] == "{":
+                    depth = 1
+                    k += 1
+                    while k < n and depth > 0:
+                        if text[k] == "{":
+                            depth += 1
+                        elif text[k] == "}":
+                            depth -= 1
+                        elif text[k] in "\r\n" and depth == 1:
+                            break
+                        k += 1
+                else:
+                    while k < n and text[k] not in " \t\r\n,.;:!?)]}":
+                        k += 1
+                while result and result[-1].isspace():
+                    result.pop()
+                if result and result[-1] == "~":
+                    result.pop()
+                i = k
+                continue
+        result.append(ch)
+        i += 1
+    return "".join(result)
 
 
 def generate_blueprint(
@@ -70,6 +124,15 @@ def normalize_analysis_for_poster(analysis: PaperAnalysis) -> PaperAnalysis:
         analysis.experiments.takeaways = [_english_clean(x) for x in analysis.experiments.takeaways]
         analysis.experiments.datasets = [_english_clean(x) for x in analysis.experiments.datasets]
         analysis.experiments.metrics = [_english_clean(x) for x in analysis.experiments.metrics]
+
+    analysis.key_figures = [
+        KeyFigure(
+            figure_id=fig.figure_id,
+            caption=_clean_poster_text(fig.caption),
+            role=fig.role,
+        )
+        for fig in analysis.key_figures
+    ]
 
     return analysis
 
@@ -319,7 +382,7 @@ def _result_visual_candidates(doc: PaperDocument, analysis: PaperAnalysis) -> li
 
 
 def _figure_caption(fig) -> str:
-    return getattr(fig, "caption", "") or ""
+    return _clean_poster_text(getattr(fig, "caption", "") or "")
 
 
 def _figure_role(fig) -> str:
@@ -362,7 +425,7 @@ def _format_authors(authors) -> str:
 
 
 def _english_clean(text: str) -> str:
-    text = (text or "").strip()
+    text = _clean_poster_text(text)
     if not text:
         return text
     text = re.sub(r"[\u4e00-\u9fff]+", "", text)
