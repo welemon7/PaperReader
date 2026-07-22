@@ -93,13 +93,24 @@ class HtmlPosterRenderer:
                 lines.append("")
         return "\n".join(lines).strip()
 
-    def render(self, blueprint: PosterBlueprint, doc: PaperDocument) -> str:
+    def render(
+        self,
+        blueprint: PosterBlueprint,
+        doc: PaperDocument,
+        output_dir: Path | None = None,
+    ) -> str:
+        if output_dir is None:
+            from src.utils.output_paths import sanitize_output_name
+
+            output_dir = Path("output") / sanitize_output_name(doc.arxiv_id or doc.paper_id)
+        else:
+            output_dir = Path(output_dir)
         try:
-            self._prepare_figure_assets(blueprint, doc)
+            self._prepare_figure_assets(blueprint, doc, output_dir)
         except Exception:
             pass
         rows = self._organize_rows(blueprint)
-        figure_map = self._build_figure_map(blueprint, doc)
+        figure_map = self._build_figure_map(blueprint, doc, output_dir)
         cleaned_formulas = []
         for formula in blueprint.formula_displays:
             cleaned_latex = self._clean_formula_latex(formula.latex)
@@ -133,18 +144,18 @@ class HtmlPosterRenderer:
         doc: PaperDocument,
         output_path: Path,
     ) -> Path:
-        html = self.render(blueprint, doc)
+        html = self.render(blueprint, doc, output_path.parent)
         output_path.write_text(html, encoding="utf-8")
         logger.info("Poster HTML saved to %s", output_path)
         return output_path
 
-    def _prepare_figure_assets(self, blueprint: PosterBlueprint, doc: PaperDocument) -> None:
+    def _prepare_figure_assets(self, blueprint: PosterBlueprint, doc: PaperDocument, output_dir: Path) -> None:
         """Normalize all poster figures to browser-friendly local assets.
 
         The HTML poster is rendered in a browser, so PDF figures are rasterized
-        to PNG first and copied into output/figures for predictable relative URLs.
+        to PNG first and copied into the poster-local figures directory.
         """
-        fig_dir = Path("output/figures")
+        fig_dir = output_dir / "figures"
         fig_dir.mkdir(parents=True, exist_ok=True)
         for fp, fig in self._iter_placement_figures(blueprint, doc):
             if not fig:
@@ -279,7 +290,9 @@ class HtmlPosterRenderer:
 
     @staticmethod
     def _build_figure_map(
-        blueprint: PosterBlueprint, doc: PaperDocument
+        blueprint: PosterBlueprint,
+        doc: PaperDocument,
+        output_dir: Path,
     ) -> dict[str, list[dict]]:
         fig_map: dict[str, list[dict]] = {}
         for fp, fig in HtmlPosterRenderer._iter_placement_figures(blueprint, doc):
@@ -300,18 +313,21 @@ class HtmlPosterRenderer:
                 if src:
                     resolved = HtmlPosterRenderer._resolve_figure_path(src, doc.source_dir)
                     if resolved and resolved.suffix.lower() == ".pdf":
-                        resolved = copy_or_rasterize_asset(resolved, Path("output/figures"), fig.figure_id) or resolved
+                        resolved = copy_or_rasterize_asset(resolved, output_dir / "figures", fig.figure_id) or resolved
                     if resolved:
-                        entry["src"] = HtmlPosterRenderer._browser_asset_uri(resolved)
+                        entry["src"] = HtmlPosterRenderer._browser_asset_uri(resolved, output_dir)
                     else:
                         entry["src"] = src if src.startswith("file:") else Path(src).resolve().as_uri() if Path(src).exists() else src
             fig_map.setdefault(fp.section_id, []).append(entry)
         return fig_map
 
     @staticmethod
-    def _browser_asset_uri(path: Path) -> str:
+    def _browser_asset_uri(path: Path, output_dir: Path | None = None) -> str:
         resolved = path.resolve()
-        output_root = Path("output").resolve()
+        if output_dir is None:
+            output_root = resolved.parent.parent.resolve() if resolved.parent.name == "figures" else resolved.parent.resolve()
+        else:
+            output_root = Path(output_dir).resolve()
         try:
             return resolved.relative_to(output_root).as_posix()
         except ValueError:

@@ -14,6 +14,7 @@ if str(_root) not in sys.path:
 from src.agents.parse_agent import run_parse_paper
 from src.agents.understand_agent import run_understand_paper
 from src.agents.poster_planner import generate_blueprint
+from src.utils.output_paths import resolve_paper_output_dir
 
 logging.basicConfig(
     level=logging.INFO,
@@ -127,9 +128,10 @@ def _run(args: argparse.Namespace) -> None:
         from src.agents.pipeline_agent import run_pipeline
         logger.info("Starting full pipeline for %s", args.arxiv_id)
         try:
+            output_dir = resolve_paper_output_dir(args.output_dir, args.arxiv_id)
             results = run_pipeline(
                 args.arxiv_id,
-                output_dir=args.output_dir,
+                output_dir=output_dir,
                 force=args.force,
                 with_optimize=args.optimize,
             )

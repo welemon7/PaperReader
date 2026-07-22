@@ -15,6 +15,7 @@ from src.schemas.analysis import PaperAnalysis
 from src.schemas.poster import PosterBlueprint
 from src.schemas.validation import PosterValidation
 from src.config import settings
+from src.utils.output_paths import resolve_paper_output_dir
 logger = logging.getLogger(__name__)
 
 
@@ -50,7 +51,7 @@ def run_pipeline(
     with_optimize: bool = False,
 ) -> dict:
     """Run all 5 phases sequentially with validation and retry loops."""
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = resolve_paper_output_dir(output_dir, arxiv_id)
     results: dict = {}
 
     # ---- Phase 1: Parse ----

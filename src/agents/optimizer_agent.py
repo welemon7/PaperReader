@@ -18,6 +18,7 @@ from src.schemas.paper import PaperDocument
 from src.schemas.poster import PosterBlueprint, PosterSection
 from src.storage.sqlite import PaperDatabase
 from src.utils.figure_assets import copy_or_rasterize_asset, resolve_figure_source, sanitize_asset_name
+from src.utils.output_paths import resolve_paper_output_dir
 
 logger = logging.getLogger(__name__)
 
@@ -315,8 +316,7 @@ def optimize_poster(
     if not gemini.api_key or gemini.api_key == settings.gemini_api_key and not gemini.api_key:
         logger.warning("Gemini API key not configured, using DeepSeek fallback")
 
-    out = Path(output_dir)
-    out.mkdir(parents=True, exist_ok=True)
+    out = resolve_paper_output_dir(output_dir, arxiv_id)
     bp_path = out / "blueprint.json"
     review_path = out / "poster_review.json"
 
@@ -412,7 +412,7 @@ def optimize_poster(
             # Generate chart from experiment data
             chart_data = response.get("chart_data")
             if chart_data:
-                chart_path = _generate_result_chart(analysis, output_dir, chart_data)
+                chart_path = _generate_result_chart(analysis, out, chart_data)
                 if chart_path:
                     from src.schemas.paper import Figure as PaperFigure
                     from src.schemas.poster import FigurePlacement
