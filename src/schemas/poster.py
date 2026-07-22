@@ -31,6 +31,7 @@ class PosterBlueprint(BaseModel):
     paper_id: str
     poster_title: str = ''
     authors_str: str = ''
+    code_url: str = ''
     width_px: int = 1200
     height_px: int = 1697
     width_mm: int = 841

@@ -12,6 +12,7 @@ def _make_blueprint() -> PosterBlueprint:
     return PosterBlueprint(
         paper_id="test-999", poster_title="Test Poster",
         authors_str="Alice, Bob",
+        code_url="",
         sections=[
             PosterSection(section_id="s1", type="motivation", title="Motivation",
                         content_md="Our problem is **important**.", column=1, col_span=1, row=1),
@@ -38,6 +39,23 @@ class TestHtmlPosterRenderer:
         assert "Motivation" in html
         assert "Our problem is" in html
         assert "<strong>" in html
+
+    def test_render_shows_code_pill(self):
+        doc = PaperDocument(paper_id="test-999", arxiv_id="9999.99999", title="Test", raw_markdown=".")
+        bp = _make_blueprint()
+        bp.code_url = "https://github.com/example/repo"
+        renderer = HtmlPosterRenderer()
+        html = renderer.render(bp, doc, Path("output") / "9999.99999")
+        assert "https://github.com/example/repo" in html
+        assert html.count("hero-pill") >= 1
+
+    def test_render_hides_code_pill_when_missing(self):
+        doc = PaperDocument(paper_id="test-999", arxiv_id="9999.99999", title="Test", raw_markdown=".")
+        bp = _make_blueprint()
+        renderer = HtmlPosterRenderer()
+        html = renderer.render(bp, doc, Path("output") / "9999.99999")
+        assert "https://github.com/example/repo" not in html
+        assert 'href="https://github.com/example/repo"' not in html
 
     def test_render_cleans_reference_fragments(self):
         doc = PaperDocument(paper_id="test-999", arxiv_id="9999.99999", title="Test", raw_markdown=".")

@@ -135,6 +135,7 @@ class HtmlPosterRenderer:
         return self.template.render(
             poster_title=blueprint.poster_title,
             authors_str=blueprint.authors_str,
+            code_url=blueprint.code_url,
             poster_width=blueprint.width_px,
             poster_height=blueprint.height_px,
             color_scheme=blueprint.color_scheme,

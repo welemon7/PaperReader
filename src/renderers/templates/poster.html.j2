@@ -47,7 +47,20 @@ body {
     border-bottom: 1px solid rgba(255,255,255,0.12);
 }
 .hero-top {
-    display: block;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+}
+.hero-title-group {
+    min-width: 0;
+    flex: 1 1 auto;
+}
+.hero-badge-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
 }
 .hero-badge {
     display: inline-flex;
@@ -60,6 +73,28 @@ body {
     letter-spacing: 0;
     opacity: 0.95;
 }
+.hero-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 28px;
+    padding: 5px 10px;
+    border: 1px solid rgba(255,255,255,0.22);
+    border-radius: 999px;
+    color: rgba(255,255,255,0.96);
+    background: rgba(255,255,255,0.08);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+    text-decoration: none;
+    white-space: nowrap;
+}
+.hero-link {
+    background: rgba(255,255,255,0.12);
+}
+.hero-link:hover {
+    background: rgba(255,255,255,0.18);
+}
 .hero h1 {
     margin: 16px 0 8px;
     font-size: 30px;
@@ -68,7 +103,10 @@ body {
     font-weight: 800;
     max-width: none;
     width: 100%;
+    display: block;
     text-wrap: balance;
+    overflow-wrap: normal;
+    word-break: normal;
 }
 .authors {
     max-width: 70ch;
@@ -81,6 +119,7 @@ body {
 .row {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-auto-rows: minmax(0, auto);
     gap: 14px;
     margin-bottom: 14px;
     align-items: start;
@@ -91,7 +130,10 @@ body {
     border-radius: 8px;
     overflow: hidden;
     min-height: 0;
-    align-self: start;
+    align-self: stretch;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
 }
 .section-header {
     background: linear-gradient(180deg, rgba(232, 238, 244, 0.95), rgba(245, 248, 251, 0.95));
@@ -110,6 +152,7 @@ body {
     display: flex;
     flex-direction: column;
     gap: 12px;
+    flex: 1 1 auto;
 }
 .section-body p { margin: 0 0 8px; }
 .section-body p:last-child { margin-bottom: 0; }
@@ -218,6 +261,14 @@ body {
     font-size: 12px;
 }
 .footer-band strong { color: var(--primary); }
+@media (min-width: 1101px) {
+    .row:nth-of-type(2) .section {
+        min-height: 100%;
+    }
+    .row:nth-of-type(3) .section {
+        min-height: 100%;
+    }
+}
 @media (max-width: 1100px) {
     .row { grid-template-columns: 1fr; }
 }
@@ -233,8 +284,13 @@ body {
   <div class="poster">
     <header class="hero">
       <div class="hero-top">
-        <div>
-          <div class="hero-badge">Paper-to-Poster Research Reader</div>
+        <div class="hero-title-group">
+          <div class="hero-badge-row">
+            <div class="hero-badge">Paper-to-Poster Research Reader</div>
+            {% if code_url %}
+            <a class="hero-pill hero-link" href="{{ code_url }}" target="_blank" rel="noreferrer noopener">{{ code_url }}</a>
+            {% endif %}
+          </div>
           <h1>{{ poster_title }}</h1>
           {% if authors_str %}
           <div class="authors">{{ authors_str }}</div>

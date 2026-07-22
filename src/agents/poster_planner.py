@@ -21,7 +21,6 @@ POSTER_HEIGHT_MM = 1189
 POSTER_WIDTH_PX = 1200
 POSTER_HEIGHT_PX = 1697
 
-
 def _clean_poster_text(text: str) -> str:
     text = (text or "").strip()
     if not text:
@@ -162,6 +161,7 @@ def generate_blueprint(
         paper_id=doc.paper_id,
         poster_title=doc.title,
         authors_str=_format_authors(doc.authors),
+        code_url=analysis.code_url,
         width_px=POSTER_WIDTH_PX, height_px=POSTER_HEIGHT_PX,
         width_mm=POSTER_WIDTH_MM, height_mm=POSTER_HEIGHT_MM,
         sections=sections,
@@ -326,6 +326,7 @@ def _build_row3(analysis: PaperAnalysis) -> list[PosterSection]:
         content_md=contrib_content,
         column=1, col_span=1, row=3,
     )
+    contributions.col_span = 2
 
     hl_lines = _build_highlights(analysis)
 
@@ -335,18 +336,8 @@ def _build_row3(analysis: PaperAnalysis) -> list[PosterSection]:
         content_md="\n".join(hl_lines),
         column=2, col_span=1, row=3,
     )
-
-    if analysis.code_url:
-        code_link_md = f"Project / code: [{analysis.code_url}]({analysis.code_url})"
-    else:
-        code_link_md = "Project / code: not found in the paper text."
-    proj_link = PosterSection(
-        section_id="sec-project-link", type="project_link",
-        title="Code / Project",
-        content_md=code_link_md,
-        column=3, col_span=1, row=3,
-    )
-    return [contributions, highlights, proj_link]
+    highlights.col_span = 1
+    return [contributions, highlights]
 
 
 def _place_figures(doc: PaperDocument, analysis: PaperAnalysis, sections: list[PosterSection]) -> list[FigurePlacement]:
@@ -468,7 +459,7 @@ def _tighten_layout(sections: list[PosterSection], figure_placements: list[Figur
         elif sec.type in {"experiments", "contributions"} and density <= 2:
             sec.col_span = min(sec.col_span, 1)
 
-        if sec.type in {"highlights", "project_link"} and text_len < 180:
+        if sec.type == "highlights" and text_len < 180:
             sec.col_span = 1
 
         if sec.type in {"motivation", "key_idea"} and density >= 2:
@@ -669,17 +660,6 @@ def _gemini_layout(
             row=s.get("row", 0),
         ))
 
-    if sections and not any(sec.section_id == "sec-project-link" for sec in sections):
-        sections.append(PosterSection(
-            section_id="sec-project-link",
-            type="project_link",
-            title="Code / Project",
-            content_md=(f"Project / code: [{analysis.code_url}]({analysis.code_url})" if analysis.code_url else "Project / code: not found in the paper text."),
-            column=3,
-            col_span=1,
-            row=3,
-        ))
-
     figure_placements = []
     for fp in result.get("figure_placements", []):
         figure_placements.append(FigurePlacement(
@@ -696,6 +676,7 @@ def _gemini_layout(
         paper_id=doc.paper_id,
         poster_title=doc.title,
         authors_str="; ".join(a.name for a in doc.authors),
+        code_url=analysis.code_url,
         width_px=POSTER_WIDTH_PX, height_px=POSTER_HEIGHT_PX,
         width_mm=POSTER_WIDTH_MM, height_mm=POSTER_HEIGHT_MM,
         sections=sections,
@@ -721,6 +702,7 @@ def _static_layout(
         paper_id=doc.paper_id,
         poster_title=doc.title,
         authors_str="; ".join(a.name for a in doc.authors),
+        code_url=analysis.code_url,
         width_px=POSTER_WIDTH_PX, height_px=POSTER_HEIGHT_PX,
         width_mm=POSTER_WIDTH_MM, height_mm=POSTER_HEIGHT_MM,
         sections=sections,
