@@ -165,6 +165,13 @@ body {
     gap: 10px;
     margin-top: 12px;
 }
+.figure-stack.method-hero {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+}
+.figure-stack.results-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
 .figure-card {
     border: 1px solid #d8e0ea;
     border-radius: 8px;
@@ -172,11 +179,24 @@ body {
     padding: 8px;
 }
 .figure-card.full { grid-column: 1 / -1; }
+.figure-card.method-hero-card {
+    width: min(100%, 680px);
+}
+.figure-card.result-card {
+    min-height: 100%;
+}
 .figure-card img {
     width: 100%;
     height: auto;
     display: block;
     border-radius: 4px;
+}
+.figure-card.method-hero-card img,
+.figure-card.result-card img {
+    width: 100%;
+    max-height: 280px;
+    object-fit: contain;
+    background: #fbfcfe;
 }
 .figure-caption {
     margin-top: 8px;
@@ -269,9 +289,9 @@ body {
             {{ sec.content_html|safe }}
             {% set section_figs = figure_map.get(sec.section_id, []) %}
             {% if section_figs %}
-            <div class="figure-stack">
+            <div class="figure-stack {% if sec.type == 'main_method' %}method-hero{% elif sec.type == 'experiments' %}results-grid{% endif %}">
               {% for fig in section_figs %}
-              <div class="figure-card {% if fig.width_ratio >= 0.8 %}full{% endif %}">
+              <div class="figure-card {% if sec.type == 'main_method' and loop.first %}method-hero-card{% elif sec.type == 'experiments' %}result-card{% endif %} {% if fig.width_ratio >= 0.8 %}full{% endif %}">
                 {% if fig.src %}
                 <img src="{{ fig.src }}" alt="{{ fig.caption }}">
                 {% else %}

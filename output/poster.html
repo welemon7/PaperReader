@@ -165,6 +165,13 @@ body {
     gap: 10px;
     margin-top: 12px;
 }
+.figure-stack.method-hero {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+}
+.figure-stack.results-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
 .figure-card {
     border: 1px solid #d8e0ea;
     border-radius: 8px;
@@ -172,11 +179,24 @@ body {
     padding: 8px;
 }
 .figure-card.full { grid-column: 1 / -1; }
+.figure-card.method-hero-card {
+    width: min(100%, 680px);
+}
+.figure-card.result-card {
+    min-height: 100%;
+}
 .figure-card img {
     width: 100%;
     height: auto;
     display: block;
     border-radius: 4px;
+}
+.figure-card.method-hero-card img,
+.figure-card.result-card img {
+    width: 100%;
+    max-height: 280px;
+    object-fit: contain;
+    background: #fbfcfe;
 }
 .figure-caption {
     margin-top: 8px;
@@ -248,17 +268,17 @@ body {
           
           <div class="stat">
             <span class="label">Problem</span>
-            <span class="value">Existing deep shadow removal methods often suffer from severe artifacts around shadow b...</span>
+            <span class="value">Existing deep learning methods for image shadow removal often suffer from severe artifa...</span>
           </div>
           
           <div class="stat">
             <span class="label">Core Idea</span>
-            <span class="value">ShadowFormer is a transformer-based network derived from a Retinex-based shadow model, ...</span>
+            <span class="value">ShadowFormer is a lightweight, single-stage transformer-based network designed for end-...</span>
           </div>
           
           <div class="stat">
             <span class="label">Why It Matters</span>
-            <span class="value">We introduce a Retinex-based shadow model that formulates the degradation and motivates...</span>
+            <span class="value">We introduce a Retinex-based shadow model, which formulates the degradation of shadow a...</span>
           </div>
           
         
@@ -276,7 +296,7 @@ body {
         <article class="section" style="grid-column: span 1;">
           <div class="section-header">Problem</div>
           <div class="section-body">
-            <p>Existing deep shadow removal methods often suffer from severe artifacts around shadow boundaries and inconsistent illumination because they focus locally and ignore the global contextual correlation between shadow and non-shadow regions.</p>
+            <p>Existing deep learning methods for image shadow removal often suffer from severe artifacts around shadow boundaries and inconsistent illumination because they focus locally and ignore the global contextual correlation between shadow and non-shadow regions.</p>
             
             
           </div>
@@ -285,7 +305,7 @@ body {
         <article class="section" style="grid-column: span 1;">
           <div class="section-header">Core Idea</div>
           <div class="section-body">
-            <p>ShadowFormer is a transformer-based network derived from a Retinex-based shadow model, designed to restore shadow-free images by leveraging global context. It employs a multi-scale encoder-decoder architecture using Channel Attention (CA) modules to efficiently capture hierarchical information. At the bottleneck stage, a Shadow-Interaction Module (SIM) utilizes Shadow-Interaction Attention (SIA) to model the correlation between shadow and non-shadow regions, allowing uncorrupted non-shadow areas to guide the restoration of shadowed areas for better illumination consistency and boundary artifact reduction.</p>
+            <p>ShadowFormer is a lightweight, single-stage transformer-based network designed for end-to-end image shadow removal. It employs a multi-scale channel attention encoder-decoder architecture to efficiently capture hierarchical global information. At the bottleneck stage, a novel Shadow-Interaction Module (SIM) utilizes Shadow-Interaction Attention (SIA) to model the contextual correlation between shadow and non-shadow regions, leveraging the non-shadow areas to guide the restoration of shadow regions for improved illumination and color consistency.</p>
             
             
           </div>
@@ -294,7 +314,7 @@ body {
         <article class="section" style="grid-column: span 1;">
           <div class="section-header">Why It Matters</div>
           <div class="section-body">
-            <p>We introduce a Retinex-based shadow model that formulates the degradation and motivates exploiting global contexts for shadow removal.</p>
+            <p>We introduce a Retinex-based shadow model, which formulates the degradation of shadow and motivates us to exploit the global contexts for shadow removal.</p>
             
             
           </div>
@@ -307,44 +327,33 @@ body {
         <article class="section" style="grid-column: span 2;">
           <div class="section-header">Method</div>
           <div class="section-body">
-            <p>ShadowFormer is a transformer-based network derived from a Retinex-based shadow model, designed to restore shadow-free images by leveraging global context. It employs a multi-scale encoder-decoder architecture using Channel Attention (CA) modules to efficiently capture hierarchical information. At the bottleneck stage, a Shadow-Interaction Module (SIM) utilizes Shadow-Interaction Attention (SIA) to model the correlation between shadow and non-shadow regions, allowing uncorrupted non-shadow areas to guide the restoration of shadowed areas for better illumination consistency and boundary artifact reduction.</p>
+            <p>ShadowFormer is a lightweight, single-stage transformer-based network designed for end-to-end image shadow removal. It employs a multi-scale channel attention encoder-decoder architecture to efficiently capture hierarchical global information. At the bottleneck stage, a novel Shadow-Interaction Module (SIM) utilizes Shadow-Interaction Attention (SIA) to model the contextual correlation between shadow and non-shadow regions, leveraging the non-shadow areas to guide the restoration of shadow regions for improved illumination and color consistency.</p>
 <p><strong>Key Formulas:</strong>
 - $$ \mathbf{I}_{s} = \mathbf{I}_m \odot \mathbf{L}_{s} \odot \mathbf{R} + (1-\mathbf{I}_m) \odot \mathbf{L}_{ns} \odot \mathbf{R} $$
-  The Retinex-based shadow model decomposing the shadow image into shadow/non-shadow regions based on illumination and reflectance.
-- $$ \mathbf{I}_{s}= \mathbf{I}_m \odot \mathbf{I}_{s} + (1-\mathbf{I}_m) \odot \mathbf{I}_{ns} $$
-  The basic decomposition of a shadow image into shadow and non-shadow regions using a mask.
+  The Retinex-based shadow model decomposing the shadow image into shadow and non-shadow regions based on illumination and reflectance.
 - $$ \text{SIA}(\mathbf{X}, \mathbf{\Sigma}) = \text{softmax}(\frac{\mathbf{Q}\mathbf{K}^T}{d})\mathbf{V} $$
-  The core attention mechanism in the Shadow-Interaction Module, modified by correlation maps to emphasize context between shadow and non-shadow patches.
-- $$ \tilde{\mathbf{X}}= \text{SIA}(\text{CA}(\text{LN}(\mathbf{X})),\mathbf{\Sigma})+ \mathbf{X} $$
-  The residual connection formulation within the Shadow-Interaction Module combining Channel Attention and SIA.</p>
+  The Shadow-Interaction Attention mechanism that reweights attention maps using correlation maps to emphasize context between shadow and non-shadow patches.
+- $$ \mathcal{L}(\mathbf{I}_{gt},\; \hat{\mathbf{I}})=\left\|\mathbf{I}_{gt}-\hat{\mathbf{I}}\right\| $$
+  The loss function used to train the network, measuring the difference between the ground truth and the predicted shadow-free image.</p>
             
             
-            <div class="figure-stack">
+            <div class="figure-stack method-hero">
               
-              <div class="figure-card ">
+              <div class="figure-card method-hero-card full">
                 
-                <img src="figures/fig-004.png" alt="Overview of the ShadowFormer network showing the encoder-decoder structure with Channel Attention and the Shadow-Interaction Module at the bottleneck.">
+                <img src="figures/fig-004.png" alt="Overview of the ShadowFormer network. The channel attention transformer-based encoder and decoder are to extract hierarchical information from the input shadow image, and to reconstruct the shadow-free image, respectively, using a series of channel attention (CA) modules. In the bottleneck stage, we adopt a Shadow-Interaction Module (SIM) to exploit the context information across both spatial and channel dimensions from non-shadow region to help shadow region restoration.">
                 
                 
-                <div class="figure-caption">Overview of the ShadowFormer network showing the encoder-decoder structure with Channel Attention and the Shadow-Interaction Module at the bottleneck.</div>
+                <div class="figure-caption">Overview of the ShadowFormer network. The channel attention transformer-based encoder and decoder are to extract hierarchical information from the input shadow image, and to reconstruct the shadow-free image, respectively, using a series of channel attention (CA) modules. In the bottleneck stage, we adopt a Shadow-Interaction Module (SIM) to exploit the context information across both spatial and channel dimensions from non-shadow region to help shadow region restoration.</div>
                 
               </div>
               
-              <div class="figure-card ">
+              <div class="figure-card  ">
                 
-                <img src="figures/fig-005.png" alt="Detailed architectures of ShadowFormer components: (a) Channel Attention Module and (b) Shadow-Interaction Module with Shadow-Interaction Attention.">
-                
-                
-                <div class="figure-caption">Detailed architectures of ShadowFormer components: (a) Channel Attention Module and (b) Shadow-Interaction Module with Shadow-Interaction Attention.</div>
-                
-              </div>
-              
-              <div class="figure-card ">
-                
-                <img src="figures/fig-001.png" alt="PSNR performance versus the number of model parameters on the ISTD dataset.">
+                <img src="figures/fig-005.png" alt="The detailed architectures of ShadowFormer model components. (a) Channel Attention (CA) Module in the encoder and decoder. (b) Shadow-Interaction Module (SIM), as well as an illustration of Shadow-Interaction Attention (SIA). Reweighting the attention map by the correlation map between shadow and non-shadow patches to emphasize the contextual correlation between shadow and non-shadow regions.">
                 
                 
-                <div class="figure-caption">PSNR performance versus the number of model parameters on the ISTD dataset.</div>
+                <div class="figure-caption">The detailed architectures of ShadowFormer model components. (a) Channel Attention (CA) Module in the encoder and decoder. (b) Shadow-Interaction Module (SIM), as well as an illustration of Shadow-Interaction Attention (SIA). Reweighting the attention map by the correlation map between shadow and non-shadow patches to emphasize the contextual correlation between shadow and non-shadow regions.</div>
                 
               </div>
               
@@ -370,19 +379,46 @@ body {
 </tr>
 <tr>
 <td>Metrics</td>
-<td>PSNR, SSIM, Model Parameters, FLOPs</td>
+<td>PSNR, Model Parameters, Computational Cost (FLOPs)</td>
 </tr>
 <tr>
 <td>Best Result</td>
-<td>ShadowFormer achieves state-of-the-art performance on all three datasets while using 5x to 150x fewer model parameters than competing methods.</td>
+<td>ShadowFormer achieves state-of-the-art performance on all three datasets while using up to 150x fewer model parameters compared to existing methods.</td>
 </tr>
 </tbody>
 </table>
 <p><strong>Takeaways:</strong>
-- The proposed method effectively addresses boundary artifacts and illumination inconsistency by leveraging global context from non-shadow regions
-- proving that transformer-based architectures with specific interaction modules are highly efficient for partial corruption tasks like shadow removal.</p>
-<p><strong>Recommended visual focus:</strong></p>
+- The proposed method effectively alleviates contour artifacts and improves illumination/color consistency by leveraging global context from non-shadow regions
+- proving that a lightweight
+- single-stage transformer can outperform complex
+- multi-module approaches.</p>
+<p><strong>Recommended visual focus:</strong>
+- The PSNR performance, v.s., the number of model parameters of shadow removal models on ISTD dataset.
+- Visual examples of the results, the zoom-in regions, and the zoom-in error maps for ablation study, including shadow input, and results of four ablation experiments corresponding to the No. in Table~\ref{tab:ablation
+- Examples of shadow removal results on the ISTD~\cite{wang2018stacked</p>
             
+            
+            <div class="figure-stack results-grid">
+              
+              <div class="figure-card result-card full">
+                
+                <img src="figures/fig-001.png" alt="The PSNR performance, v.s., the number of model parameters of shadow removal models on ISTD dataset.">
+                
+                
+                <div class="figure-caption">The PSNR performance, v.s., the number of model parameters of shadow removal models on ISTD dataset.</div>
+                
+              </div>
+              
+              <div class="figure-card result-card full">
+                
+                <img src="figures/fig-002.png" alt="Visual examples of the results, the zoom-in regions, and the zoom-in error maps for ablation study, including shadow input, and results of four ablation experiments corresponding to the No. in Table~\ref{tab:ablation">
+                
+                
+                <div class="figure-caption">Visual examples of the results, the zoom-in regions, and the zoom-in error maps for ablation study, including shadow input, and results of four ablation experiments corresponding to the No. in Table~\ref{tab:ablation</div>
+                
+              </div>
+              
+            </div>
             
           </div>
         </article>
@@ -395,10 +431,10 @@ body {
           <div class="section-header">Contributions</div>
           <div class="section-body">
             <ul>
-<li><strong>[theory]</strong> We introduce a Retinex-based shadow model that formulates the degradation and motivates exploiting global contexts for shadow removal.</li>
-<li><strong>[method]</strong> We propose ShadowFormer, a lightweight single-stage transformer network built on a multi-scale channel attention framework for end-to-end shadow removal.</li>
-<li><strong>[method]</strong> We design a Shadow-Interaction Module (SIM) with Shadow-Interaction Attention (SIA) in the bottleneck stage to exploit global contextual correlations between shadow and non-shadow regions across spatial and channel dimensions.</li>
-<li><strong>[application]</strong> We achieve state-of-the-art performance on ISTD, ISTD+, and SRD datasets using up to 150x fewer model parameters compared to existing methods.</li>
+<li><strong>[theory]</strong> We introduce a Retinex-based shadow model, which formulates the degradation of shadow and motivates us to exploit the global contexts for shadow removal.</li>
+<li><strong>[method]</strong> We propose a new single-stage transformer for shadow removal (ShadowFormer) based on the multi-scale channel attention framework.</li>
+<li><strong>[method]</strong> We propose a Shadow-Interaction Module with Shadow-Interaction Attention in the ShadowFormer to exploit the global contextual correlation between shadow and non-shadow regions.</li>
+<li><strong>[application]</strong> The comprehensive experimental results on the public ISTD, ISTD+, and SRD datasets show that the proposed ShadowFormer achieved a new state-of-the-art performance with a very lightweight network, i.e., using up to 150x fewer model parameters.</li>
 </ul>
             
             
@@ -409,11 +445,12 @@ body {
           <div class="section-header">Key Takeaways</div>
           <div class="section-body">
             <ol>
-<li>We introduce a Retinex-based shadow model that formulates the degradation and motivates exploiting global contexts for shadow removal.</li>
-<li>We propose ShadowFormer, a lightweight single-stage transformer network built on a multi-scale channel attention framework for end-to-end shadow removal.</li>
-<li>We design a Shadow-Interaction Module (SIM) with Shadow-Interaction Attention (SIA) in the bottleneck stage to exploit global contextual correlations between shadow and non-shadow regions across spatial and channel dimensions.</li>
-<li>The proposed method effectively addresses boundary artifacts and illumination inconsistency by leveraging global context from non-shadow regions</li>
-<li>proving that transformer-based architectures with specific interaction modules are highly efficient for partial corruption tasks like shadow removal.</li>
+<li>We introduce a Retinex-based shadow model, which formulates the degradation of shadow and motivates us to exploit the global contexts for shadow removal.</li>
+<li>We propose a new single-stage transformer for shadow removal (ShadowFormer) based on the multi-scale channel attention framework.</li>
+<li>We propose a Shadow-Interaction Module with Shadow-Interaction Attention in the ShadowFormer to exploit the global contextual correlation between shadow and non-shadow regions.</li>
+<li>The proposed method effectively alleviates contour artifacts and improves illumination/color consistency by leveraging global context from non-shadow regions</li>
+<li>proving that a lightweight</li>
+<li>single-stage transformer can outperform complex</li>
 </ol>
             
             

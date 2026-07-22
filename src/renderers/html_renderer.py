@@ -226,11 +226,17 @@ class HtmlPosterRenderer:
     ) -> dict[str, list[dict]]:
         fig_map: dict[str, list[dict]] = {}
         for fp, fig in HtmlPosterRenderer._iter_placement_figures(blueprint, doc):
+            section_type = ""
+            for sec in blueprint.sections:
+                if sec.section_id == fp.section_id:
+                    section_type = sec.type
+                    break
             entry = {
                 "figure_id": fp.figure_id,
                 "caption": fp.caption or (fig.caption if fig else ""),
                 "src": None,
                 "width_ratio": fp.width_ratio,
+                "section_type": section_type,
             }
             if fig:
                 src = fig.local_path or fig.minio_path

@@ -35,9 +35,9 @@ def generate_blueprint(
     sections = []
     sections.append(_build_title_section(doc, analysis))
     sections.extend(_build_row1(analysis))
-    sections.extend(_build_row2(analysis))
+    sections.extend(_build_row2(doc, analysis))
     sections.extend(_build_row3(analysis))
-    figure_placements = _place_figures(analysis, sections)
+    figure_placements = _place_figures(doc, analysis, sections)
     formula_displays = _place_formulas(analysis)
     _tighten_layout(sections, figure_placements)
     return PosterBlueprint(
@@ -114,7 +114,7 @@ def _build_row1(analysis: PaperAnalysis) -> list[PosterSection]:
     return [motiv, method_ov, key_idea]
 
 
-def _build_row2(analysis: PaperAnalysis) -> list[PosterSection]:
+def _build_row2(doc: PaperDocument, analysis: PaperAnalysis) -> list[PosterSection]:
     formulas_text = ""
     if analysis.key_formulas:
         lines = []
@@ -151,12 +151,11 @@ def _build_row2(analysis: PaperAnalysis) -> list[PosterSection]:
             exp_lines.append("**Takeaways:**")
             for t in exp.takeaways:
                 exp_lines.append("- " + t)
-        if analysis.key_figures:
+        if analysis.key_figures or doc.figures:
             exp_lines.append("")
             exp_lines.append("**Recommended visual focus:**")
-            for fig in analysis.key_figures:
-                if fig.role in ("result", "qualitative", "comparison"):
-                    exp_lines.append(f"- {fig.caption}")
+            for fig in _result_visual_candidates(doc, analysis)[:3]:
+                exp_lines.append(f"- {_figure_caption(fig)}")
     exp_content = "\n".join(exp_lines) if exp_lines else "(experimental results not available)"
 
     experiments = PosterSection(
@@ -206,34 +205,39 @@ def _build_row3(analysis: PaperAnalysis) -> list[PosterSection]:
     return [contributions, highlights, proj_link]
 
 
-def _place_figures(analysis: PaperAnalysis, sections: list[PosterSection]) -> list[FigurePlacement]:
+def _place_figures(doc: PaperDocument, analysis: PaperAnalysis, sections: list[PosterSection]) -> list[FigurePlacement]:
     placements = []
+    method_hero_taken = False
     prioritized = sorted(
-        analysis.key_figures,
-        key=lambda f: _figure_priority(f.caption, f.role),
+        _figure_candidates(doc, analysis),
+        key=lambda f: _figure_priority(_figure_caption(f), _figure_role(f)),
     )
     seen_signatures: set[str] = set()
     for fig in prioritized:
-        signature = _figure_signature(fig.caption, fig.role)
+        caption = _figure_caption(fig)
+        role = _figure_role(fig)
+        signature = _figure_signature(caption, role, getattr(fig, "figure_id", ""))
         if signature in seen_signatures:
             continue
         seen_signatures.add(signature)
-        if fig.role in ("result", "qualitative", "comparison"):
+        if _is_result_figure(caption, role):
             target = "sec-experiments"
-            width_ratio = 0.48
-        elif fig.role in ("overview", "architecture", "pipeline", "illustration"):
+            width_ratio = 0.96
+        elif _is_method_figure(caption, role):
             target = "sec-main-method"
-            width_ratio = 0.92
+            width_ratio = 0.98 if not method_hero_taken else 0.72
+            method_hero_taken = True
         else:
             if len(placements) >= 3:
                 continue
             target = "sec-main-method"
-            width_ratio = 0.72
+            width_ratio = 0.76 if not method_hero_taken else 0.64
+            method_hero_taken = True
         if len(placements) >= 4:
             break
         placements.append(FigurePlacement(
-            figure_id=fig.figure_id, section_id=target,
-            width_ratio=width_ratio, caption=fig.caption,
+            figure_id=getattr(fig, "figure_id", ""), section_id=target,
+            width_ratio=width_ratio, caption=caption,
         ))
     return placements
 
@@ -279,20 +283,67 @@ def _tighten_layout(sections: list[PosterSection], figure_placements: list[Figur
 
 def _figure_priority(caption: str, role: str) -> tuple[int, int]:
     text = f"{caption} {role}".lower()
-    if any(k in text for k in ("framework", "overview", "architecture", "pipeline")):
+    if any(k in text for k in ("framework", "overview", "architecture", "pipeline", "model overview", "main architecture")):
         return (0, 0)
     if any(k in text for k in ("introduction", "intro", "motivation")):
         return (1, 0)
-    if any(k in text for k in ("result", "comparison", "qualitative", "experiment", "accuracy", "seg")):
+    if any(k in text for k in ("result", "comparison", "qualitative", "experiment", "accuracy", "ablation", "benchmark", "performance", "table", "metric", "seg")):
         return (2, 0)
     return (3, 0)
 
 
-def _figure_signature(caption: str, role: str) -> str:
+def _figure_signature(caption: str, role: str, figure_id: str = "") -> str:
     text = f"{caption} {role}".lower()
     text = re.sub(r"[^a-z0-9]+", " ", text)
     text = re.sub(r"\s+", " ", text).strip()
+    if figure_id:
+        return f"{figure_id.lower()}::{text[:120]}"
     return text[:120]
+
+
+def _figure_candidates(doc: PaperDocument, analysis: PaperAnalysis) -> list:
+    candidates = []
+    seen_ids: set[str] = set()
+    for fig in list(analysis.key_figures) + list(doc.figures):
+        fig_id = getattr(fig, "figure_id", "") or ""
+        if fig_id and fig_id in seen_ids:
+            continue
+        if fig_id:
+            seen_ids.add(fig_id)
+        candidates.append(fig)
+    return candidates
+
+
+def _result_visual_candidates(doc: PaperDocument, analysis: PaperAnalysis) -> list:
+    return [fig for fig in _figure_candidates(doc, analysis) if _is_result_figure(_figure_caption(fig), _figure_role(fig))]
+
+
+def _figure_caption(fig) -> str:
+    return getattr(fig, "caption", "") or ""
+
+
+def _figure_role(fig) -> str:
+    role = getattr(fig, "role", "") or ""
+    if role:
+        return role
+    caption = _figure_caption(fig).lower()
+    section_id = (getattr(fig, "section_id", "") or "").lower()
+    text = f"{caption} {section_id}"
+    if any(k in text for k in ("framework", "overview", "architecture", "pipeline", "method overview", "main architecture")):
+        return "architecture"
+    if any(k in text for k in ("result", "comparison", "qualitative", "experiment", "accuracy", "ablation", "benchmark", "performance", "table", "metric", "seg")):
+        return "result"
+    return ""
+
+
+def _is_method_figure(caption: str, role: str) -> bool:
+    text = f"{caption} {role}".lower()
+    return any(k in text for k in ("framework", "overview", "architecture", "pipeline", "model overview", "main architecture"))
+
+
+def _is_result_figure(caption: str, role: str) -> bool:
+    text = f"{caption} {role}".lower()
+    return any(k in text for k in ("result", "comparison", "qualitative", "experiment", "accuracy", "ablation", "benchmark", "performance", "table", "metric", "seg"))
 
 
 def _format_authors(authors) -> str:
@@ -386,6 +437,11 @@ def _gemini_layout(
     prompt_parts.append("\nKey Figures:")
     for fig in analysis.key_figures:
         prompt_parts.append(f"- [{fig.figure_id}] {fig.caption} ({fig.role})")
+    if doc.figures:
+        prompt_parts.append("\nPaper figure index:")
+        for fig in doc.figures[:12]:
+            label = getattr(fig, "label", None) or "(no label)"
+            prompt_parts.append(f"- [{fig.figure_id}] {label}: {fig.caption}")
     if analysis.experiments:
         prompt_parts.append("\nExperiments:")
         exp = analysis.experiments
@@ -456,9 +512,9 @@ def _static_layout(
     sections = []
     sections.append(_build_title_section(doc, analysis))
     sections.extend(_build_row1(analysis))
-    sections.extend(_build_row2(analysis))
+    sections.extend(_build_row2(doc, analysis))
     sections.extend(_build_row3(analysis))
-    figure_placements = _place_figures(analysis, sections)
+    figure_placements = _place_figures(doc, analysis, sections)
     formula_displays = _place_formulas(analysis)
     return PosterBlueprint(
         paper_id=doc.paper_id,

@@ -107,3 +107,33 @@ class TestHtmlPosterRenderer:
         assert fig_map["s3"][0]["caption"].startswith("Framework of Data-Free")
         assert fig_map["s3"][0]["src"].endswith(".png")
         assert "figures/" in fig_map["s3"][0]["src"] or "output/figures" in fig_map["s3"][0]["src"]
+        assert fig_map["s3"][0]["section_type"] == "main_method"
+
+    def test_build_figure_map_marks_method_and_results_sections(self, tmp_path):
+        source_dir = tmp_path / "paper"
+        source_dir.mkdir()
+        img = source_dir / "plot.png"
+        img.write_bytes(b"fakepng")
+        doc = PaperDocument(
+            paper_id="test-999",
+            arxiv_id="9999.99999",
+            title="Test",
+            raw_markdown=".",
+            source_dir=str(source_dir),
+            figures=[
+                Figure(figure_id="fig-101", caption="Framework overview", local_path=str(img), section_id="s2"),
+                Figure(figure_id="fig-102", caption="Results on benchmarks", local_path=str(img), section_id="s3"),
+            ],
+        )
+        bp = _make_blueprint()
+        bp.sections = [
+            type("Sec", (), {"section_id": "s2", "type": "main_method"})(),
+            type("Sec", (), {"section_id": "s3", "type": "experiments"})(),
+        ]
+        bp.figure_placements = [
+            type("FP", (), {"figure_id": "fig-101", "section_id": "s2", "width_ratio": 0.95, "caption": "Framework overview"})(),
+            type("FP", (), {"figure_id": "fig-102", "section_id": "s3", "width_ratio": 0.96, "caption": "Results on benchmarks"})(),
+        ]
+        fig_map = HtmlPosterRenderer._build_figure_map(bp, doc)
+        assert fig_map["s2"][0]["section_type"] == "main_method"
+        assert fig_map["s3"][0]["section_type"] == "experiments"

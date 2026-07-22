@@ -36,6 +36,10 @@ def _make_doc():
         authors=[Author(name='Alice', affiliation='MIT')], abstract='.',
         sections=[Section(section_id='s1', title='Intro', level=1, text='.', raw_latex='.')],
         raw_markdown='.',
+        figures=[
+            Figure(figure_id='fig-101', caption='Framework overview', section_id='s1', local_path='framework.pdf'),
+            Figure(figure_id='fig-102', caption='Results on benchmarks', section_id='s1', local_path='results.pdf'),
+        ],
     )
 
 class TestPosterBlueprint:
@@ -57,10 +61,18 @@ class TestPosterBlueprint:
 
     def test_figure_placement(self):
         bp = generate_blueprint(_make_doc(), _make_analysis())
-        assert len(bp.figure_placements) == 2
         placements = {p.figure_id: p.section_id for p in bp.figure_placements}
         assert placements['fig-001'] == 'sec-experiments'
         assert placements['fig-002'] == 'sec-main-method'
+        assert placements['fig-101'] == 'sec-main-method'
+        assert placements['fig-102'] == 'sec-experiments'
+
+    def test_doc_figures_can_feed_placements(self):
+        bp = generate_blueprint(_make_doc(), _make_analysis())
+        placements = {p.figure_id: p.section_id for p in bp.figure_placements}
+        assert placements['fig-101'] == 'sec-main-method'
+        assert placements['fig-102'] == 'sec-experiments'
+        assert len(bp.figure_placements) == 4
 
     def test_formula_display(self):
         bp = generate_blueprint(_make_doc(), _make_analysis())
@@ -115,3 +127,9 @@ class TestPosterBlueprint:
         bp = generate_blueprint(_make_doc(), analysis)
         method = next(s for s in bp.sections if s.section_id == 'sec-main-method')
         assert method.col_span >= 2
+
+    def test_method_hero_gets_largest_width(self):
+        bp = generate_blueprint(_make_doc(), _make_analysis())
+        method_figs = [p for p in bp.figure_placements if p.section_id == 'sec-main-method']
+        assert method_figs
+        assert max(p.width_ratio for p in method_figs) >= 0.9
