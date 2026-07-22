@@ -124,7 +124,8 @@ def validate_node(state: UnderstandState) -> dict:
 def store_analysis_node(state: UnderstandState) -> dict:
     analysis = state.get("paper_analysis")
     if not analysis:
-        return {"error": "No analysis to store"}
+        # Preserve the original failure reason from validation or LLM calls.
+        return {"error": state.get("error") or "No analysis to store"}
     try:
         db = PaperDatabase()
         db.save_analysis(analysis)

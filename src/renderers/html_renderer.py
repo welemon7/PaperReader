@@ -80,6 +80,10 @@ class HtmlPosterRenderer:
         from src.agents.poster_planner import _normalize_latex_command_names
 
         text = _normalize_latex_command_names(text or "")
+        text = re.sub(r"\\textbf\{([^{}]*)\}", r"**\1**", text)
+        text = re.sub(r"\\textit\{([^{}]*)\}", r"*\1*", text)
+        text = re.sub(r"\\emph\{([^{}]*)\}", r"*\1*", text)
+        text = re.sub(r"\\(?:text)?tt\{([^{}]*)\}", r"`\1`", text)
         text = re.sub(r"~\\(?:cite|ref|eqref|autoref|label)\s*\{[^{}]*\}", "", text)
         text = re.sub(r"\\(?:cite|ref|eqref|autoref|label)\s*\{[^{}]*\}", "", text)
         text = re.sub(r"\\protect\s*", "", text)

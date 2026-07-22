@@ -49,6 +49,16 @@ class TestHtmlPosterRenderer:
         assert "~\\cite" not in html
         assert "wang2018" not in html
 
+    def test_render_converts_textbf_markup(self):
+        doc = PaperDocument(paper_id="test-999", arxiv_id="9999.99999", title="Test", raw_markdown=".")
+        bp = _make_blueprint()
+        bp.sections[0].content_md = r"This is \textbf{important} and \emph{clear}."
+        renderer = HtmlPosterRenderer()
+        html = renderer.render(bp, doc, Path("output") / "9999.99999")
+        assert r"\textbf" not in html
+        assert "<strong>important</strong>" in html
+        assert "<em>clear</em>" in html or "<i>clear</i>" in html
+
     def test_render_to_file(self, tmp_path):
         doc = PaperDocument(paper_id="test-999", arxiv_id="9999.99999", title="Test", raw_markdown=".")
         bp = _make_blueprint()

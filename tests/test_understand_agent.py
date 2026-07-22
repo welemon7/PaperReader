@@ -57,3 +57,7 @@ class TestAgentNodes:
             assert 'error' in r and 'API' in r['error']
     def test_validate_no_doc(self):
         assert 'error' in validate_node({'paper_document': None, 'llm_response': None})
+
+    def test_store_preserves_upstream_error(self):
+        result = store_analysis_node({'paper_analysis': None, 'error': 'Missing paper document or LLM response'})
+        assert result['error'] == 'Missing paper document or LLM response'

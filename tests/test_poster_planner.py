@@ -30,6 +30,14 @@ def _make_analysis():
         full_analysis_md='# Test',
     )
 
+
+def _make_analysis_with_doc_formulas():
+    analysis = _make_analysis()
+    analysis.key_formulas = [
+        KeyFormula(formula_id='f-001', latex='E=mc^2', semantic_desc='Energy'),
+    ]
+    return analysis
+
 def _make_doc():
     return PaperDocument(
         paper_id='test-999', arxiv_id='9999.99999', title='Test Paper',
@@ -84,6 +92,21 @@ class TestPosterBlueprint:
         bp = generate_blueprint(_make_doc(), _make_analysis())
         assert len(bp.formula_displays) == 1
         assert bp.formula_displays[0].section_id == 'sec-main-method'
+
+    def test_formula_display_backfills_from_document_when_underfilled(self):
+        doc = _make_doc()
+        doc.formulas = [
+            Formula(formula_id='f-001', latex='E=mc^2', section_id='s1'),
+            Formula(formula_id='f-002', latex='a+b=c', section_id='s1'),
+            Formula(formula_id='f-003', latex='x=y', section_id='s1'),
+        ]
+        analysis = _make_analysis_with_doc_formulas()
+        analysis.key_formulas = [KeyFormula(formula_id='f-001', latex='E=mc^2', semantic_desc='Energy')]
+        bp = generate_blueprint(doc, analysis)
+        assert len(bp.formula_displays) >= 2
+        latex_values = [f.latex for f in bp.formula_displays]
+        assert 'E=mc^2' in latex_values
+        assert any(latex in latex_values for latex in ['a+b=c', 'x=y'])
 
     def test_formula_display_drops_broken_latex(self):
         analysis = _make_analysis()

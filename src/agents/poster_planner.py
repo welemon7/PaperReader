@@ -4,6 +4,7 @@ import logging
 import re
 
 from src.schemas.analysis import PaperAnalysis
+from src.schemas.analysis import KeyFormula
 from src.schemas.paper import PaperDocument
 from src.schemas.poster import (
     FigurePlacement,
@@ -139,6 +140,7 @@ def generate_blueprint(
     use_gemini: bool = False,
 ) -> PosterBlueprint:
     analysis = normalize_analysis_for_poster(analysis.model_copy(deep=True))
+    _augment_key_formulas(doc, analysis)
     if use_gemini:
         try:
             from src.config import settings
@@ -395,6 +397,53 @@ def _place_formulas(analysis: PaperAnalysis) -> list[FormulaDisplay]:
             latex=cleaned_latex, semantic_desc=_clean_poster_text(f.semantic_desc),
         ))
     return displays
+
+
+def _augment_key_formulas(doc: PaperDocument, analysis: PaperAnalysis) -> None:
+    """Backfill missing key formulas from the paper's extracted formula index."""
+    existing = []
+    seen_keys: set[str] = set()
+    for f in analysis.key_formulas:
+        cleaned_latex = _clean_formula_latex(f.latex)
+        if not cleaned_latex:
+            continue
+        key = _formula_key(cleaned_latex)
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        existing.append(KeyFormula(
+            formula_id=f.formula_id,
+            latex=cleaned_latex,
+            semantic_desc=(f.semantic_desc or "").strip(),
+        ))
+
+    fallbacks: list[KeyFormula] = []
+    for formula in doc.formulas:
+        cleaned_latex = _clean_formula_latex(getattr(formula, "latex", ""))
+        if not cleaned_latex:
+            continue
+        key = _formula_key(cleaned_latex)
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        fallbacks.append(KeyFormula(
+            formula_id=getattr(formula, "formula_id", ""),
+            latex=cleaned_latex,
+            semantic_desc="",
+        ))
+        if len(existing) + len(fallbacks) >= 5:
+            break
+
+    if len(existing) < 2 and fallbacks:
+        analysis.key_formulas = (existing + fallbacks)[:5]
+    else:
+        analysis.key_formulas = existing[:5]
+
+
+def _formula_key(text: str) -> str:
+    text = re.sub(r"\s+", " ", (text or "")).strip()
+    text = re.sub(r"\\label\s*\{[^{}]*\}", "", text)
+    return text
 
 
 def _tighten_layout(sections: list[PosterSection], figure_placements: list[FigurePlacement]) -> None:
