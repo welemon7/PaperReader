@@ -69,6 +69,30 @@ class HtmlPosterRenderer:
             return cleaned
         return " ".join(sentences[:max_sentences]).strip()
 
+    @staticmethod
+    def _clean_formula_latex(text: str) -> str:
+        from src.agents.poster_planner import _clean_formula_latex
+
+        return _clean_formula_latex(text)
+
+    @staticmethod
+    def _clean_html_text(text: str) -> str:
+        from src.agents.poster_planner import _normalize_latex_command_names
+
+        text = _normalize_latex_command_names(text or "")
+        text = re.sub(r"~\\(?:cite|ref|eqref|autoref|label)\s*\{[^{}]*\}", "", text)
+        text = re.sub(r"\\(?:cite|ref|eqref|autoref|label)\s*\{[^{}]*\}", "", text)
+        text = re.sub(r"\\protect\s*", "", text)
+
+        lines = []
+        for line in text.splitlines():
+            cleaned = re.sub(r"\s+", " ", line).rstrip()
+            if cleaned.strip():
+                lines.append(cleaned)
+            elif line.strip() == "":
+                lines.append("")
+        return "\n".join(lines).strip()
+
     def render(self, blueprint: PosterBlueprint, doc: PaperDocument) -> str:
         try:
             self._prepare_figure_assets(blueprint, doc)
@@ -76,9 +100,19 @@ class HtmlPosterRenderer:
             pass
         rows = self._organize_rows(blueprint)
         figure_map = self._build_figure_map(blueprint, doc)
+        cleaned_formulas = []
+        for formula in blueprint.formula_displays:
+            cleaned_latex = self._clean_formula_latex(formula.latex)
+            if not cleaned_latex:
+                continue
+            formula.latex = cleaned_latex
+            formula.semantic_desc = re.sub(r"\s+", " ", (formula.semantic_desc or "")).strip()
+            cleaned_formulas.append(formula)
+        blueprint.formula_displays = cleaned_formulas
 
         for row_data in rows:
             for sec in row_data["sections"]:
+                sec.content_md = self._clean_html_text(sec.content_md)
                 sec.content_html = self._markdown_with_latex(
                     sec.content_md
                 )

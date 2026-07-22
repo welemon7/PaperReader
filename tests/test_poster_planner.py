@@ -47,17 +47,23 @@ class TestPosterBlueprint:
         bp = generate_blueprint(_make_doc(), _make_analysis())
         assert isinstance(bp, PosterBlueprint)
         assert bp.width_px == 1200 and bp.height_px == 1697
-        assert len(bp.sections) >= 8
+        assert len(bp.sections) >= 6
 
     def test_title_section(self):
         bp = generate_blueprint(_make_doc(), _make_analysis())
         titles = [s.section_id for s in bp.sections]
         assert 'sec-title' in titles
-        assert 'sec-motivation' in titles
         assert 'sec-main-method' in titles
         assert 'sec-experiments' in titles
         assert 'sec-contributions' in titles
         assert 'sec-highlights' in titles
+
+    def test_top_summary_sections_are_removed(self):
+        bp = generate_blueprint(_make_doc(), _make_analysis())
+        titles = {s.section_id for s in bp.sections}
+        assert 'sec-motivation' not in titles
+        assert 'sec-method-overview' not in titles
+        assert 'sec-key-idea' not in titles
 
     def test_figure_placement(self):
         bp = generate_blueprint(_make_doc(), _make_analysis())
@@ -78,6 +84,21 @@ class TestPosterBlueprint:
         bp = generate_blueprint(_make_doc(), _make_analysis())
         assert len(bp.formula_displays) == 1
         assert bp.formula_displays[0].section_id == 'sec-main-method'
+
+    def test_formula_display_drops_broken_latex(self):
+        analysis = _make_analysis()
+        analysis.key_formulas.append(
+            KeyFormula(
+                formula_id='f-bad',
+                latex=r'\\mathbf{d}_0=\\mathcal{D}_0(\\mathbf{z}^\\mathbf{y}_0),\\\\ \\Tilde{\\mathbf{d}}_i=\\mathbf{d}_i+\\mathrm{Conv}(\\mathrm{RRDB}(',
+                semantic_desc='Broken formula fragment',
+            )
+        )
+        bp = generate_blueprint(_make_doc(), analysis)
+        latex_values = [f.latex for f in bp.formula_displays]
+        assert all('\\Tilde' not in latex for latex in latex_values)
+        assert all('RRDB(' not in latex for latex in latex_values)
+        assert all('\\cite' not in latex and '\\ref' not in latex for latex in latex_values)
 
     def test_row_columns(self):
         bp = generate_blueprint(_make_doc(), _make_analysis())

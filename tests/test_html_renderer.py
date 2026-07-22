@@ -39,6 +39,16 @@ class TestHtmlPosterRenderer:
         assert "Our problem is" in html
         assert "<strong>" in html
 
+    def test_render_cleans_reference_fragments(self):
+        doc = PaperDocument(paper_id="test-999", arxiv_id="9999.99999", title="Test", raw_markdown=".")
+        bp = _make_blueprint()
+        bp.sections[0].content_md = r"See ~\\ref{tab:ablation} and ~\\cite{wang2018} for details."
+        renderer = HtmlPosterRenderer()
+        html = renderer.render(bp, doc)
+        assert "~\\ref" not in html
+        assert "~\\cite" not in html
+        assert "wang2018" not in html
+
     def test_render_to_file(self, tmp_path):
         doc = PaperDocument(paper_id="test-999", arxiv_id="9999.99999", title="Test", raw_markdown=".")
         bp = _make_blueprint()

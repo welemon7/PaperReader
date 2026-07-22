@@ -33,6 +33,65 @@ def _clean_poster_text(text: str) -> str:
     return text
 
 
+def _normalize_latex_command_names(text: str) -> str:
+    text = re.sub(r"\\Tilde\b", r"\\tilde", text)
+    text = re.sub(r"\\Dtilde\b", r"\\tilde", text)
+    return text
+
+
+def _latex_is_balanced(text: str) -> bool:
+    pairs = {"{": "}", "(": ")", "[": "]"}
+    opens = {"{": 0, "(": 0, "[": 0}
+    closes = {"}": "{", ")": "(", "]": "["}
+    stack: list[str] = []
+    i = 0
+    while i < len(text):
+        ch = text[i]
+        if ch == "\\":
+            i += 1
+            while i < len(text) and text[i].isalpha():
+                i += 1
+            continue
+        if ch in opens:
+            stack.append(ch)
+        elif ch in closes:
+            if not stack or stack[-1] != closes[ch]:
+                return False
+            stack.pop()
+        i += 1
+    return not stack
+
+
+def _clean_formula_latex(text: str) -> str:
+    text = (text or "").strip()
+    if not text:
+        return text
+
+    text = _normalize_latex_command_names(text)
+    text = _strip_latex_commands(text, {"cite", "ref", "eqref", "autoref", "label"})
+    text = re.sub(r"\\protect\s*", "", text)
+    text = re.sub(r"\s+", " ", text).strip()
+
+    # Drop obvious fragments that would render as broken MathJax output.
+    if text.count("$$") % 2 == 1:
+        return ""
+    if text.count("$") % 2 == 1:
+        return ""
+    if text.count("{") != text.count("}"):
+        return ""
+    if not _latex_is_balanced(text):
+        return ""
+    if re.search(r"\\(?:cite|ref|label|autoref|eqref)\b", text):
+        return ""
+    if text.count("||") % 2 == 1:
+        return ""
+    if text.count("\\left|") != text.count("\\right|"):
+        return ""
+    if text.endswith(("+", "-", "=", ",", "(", "[", "{", "\\", "/")):
+        return ""
+    return text
+
+
 def _strip_latex_commands(text: str, commands: set[str]) -> str:
     """Remove citation/reference-style LaTeX commands while preserving nearby text."""
     result: list[str] = []
@@ -79,18 +138,21 @@ def generate_blueprint(
     analysis: PaperAnalysis,
     use_gemini: bool = False,
 ) -> PosterBlueprint:
+    analysis = normalize_analysis_for_poster(analysis.model_copy(deep=True))
     if use_gemini:
         try:
             from src.config import settings
             if settings.gemini_api_key:
-                return _gemini_layout(doc, analysis)
+                blueprint = _gemini_layout(doc, analysis)
+                blueprint.sections = _drop_top_summary_sections(blueprint.sections)
+                return blueprint
         except Exception:
             logger.warning("Gemini layout failed, falling back to static layout")
     sections = []
     sections.append(_build_title_section(doc, analysis))
-    sections.extend(_build_row1(analysis))
     sections.extend(_build_row2(doc, analysis))
     sections.extend(_build_row3(analysis))
+    sections = _drop_top_summary_sections(sections)
     figure_placements = _place_figures(doc, analysis, sections)
     formula_displays = _place_formulas(analysis)
     _tighten_layout(sections, figure_placements)
@@ -105,6 +167,17 @@ def generate_blueprint(
         formula_displays=formula_displays,
         color_scheme=_default_colors(),
     )
+
+
+def _drop_top_summary_sections(sections: list[PosterSection]) -> list[PosterSection]:
+    """Remove the three redundant top summary cards from the poster layout."""
+    blocked_ids = {"sec-motivation", "sec-method-overview", "sec-key-idea"}
+    blocked_types = {"motivation", "method_overview", "key_idea"}
+    return [
+        sec
+        for sec in sections
+        if sec.section_id not in blocked_ids and sec.type not in blocked_types
+    ]
 
 
 def normalize_analysis_for_poster(analysis: PaperAnalysis) -> PaperAnalysis:
@@ -182,10 +255,14 @@ def _build_row2(doc: PaperDocument, analysis: PaperAnalysis) -> list[PosterSecti
     if analysis.key_formulas:
         lines = []
         for f in analysis.key_formulas:
-            lines.append("- $$ " + f.latex + " $$")
+            cleaned_latex = _clean_formula_latex(f.latex)
+            if not cleaned_latex:
+                continue
+            lines.append("- $$ " + cleaned_latex + " $$")
             if f.semantic_desc:
-                lines.append("  " + f.semantic_desc)
-        formulas_text = "\n\n**Key Formulas:**\n" + "\n".join(lines)
+                lines.append("  " + _clean_poster_text(f.semantic_desc))
+        if lines:
+            formulas_text = "\n\n**Key Formulas:**\n\n" + "\n".join(lines)
 
     method_detail = PosterSection(
         section_id="sec-main-method", type="main_method",
@@ -212,11 +289,13 @@ def _build_row2(doc: PaperDocument, analysis: PaperAnalysis) -> list[PosterSecti
         exp_lines.extend(table_lines)
         if exp.takeaways:
             exp_lines.append("**Takeaways:**")
+            exp_lines.append("")
             for t in exp.takeaways:
                 exp_lines.append("- " + t)
         if analysis.key_figures or doc.figures:
             exp_lines.append("")
             exp_lines.append("**Recommended visual focus:**")
+            exp_lines.append("")
             for fig in _result_visual_candidates(doc, analysis)[:3]:
                 exp_lines.append(f"- {_figure_caption(fig)}")
     exp_content = "\n".join(exp_lines) if exp_lines else "(experimental results not available)"
@@ -308,9 +387,12 @@ def _place_figures(doc: PaperDocument, analysis: PaperAnalysis, sections: list[P
 def _place_formulas(analysis: PaperAnalysis) -> list[FormulaDisplay]:
     displays = []
     for f in analysis.key_formulas:
+        cleaned_latex = _clean_formula_latex(f.latex)
+        if not cleaned_latex:
+            continue
         displays.append(FormulaDisplay(
             formula_id=f.formula_id, section_id="sec-main-method",
-            latex=f.latex, semantic_desc=f.semantic_desc,
+            latex=cleaned_latex, semantic_desc=_clean_poster_text(f.semantic_desc),
         ))
     return displays
 
@@ -439,6 +521,8 @@ def _build_highlights(analysis: PaperAnalysis) -> list[str]:
         for i, c in enumerate(analysis.contributions[:3], 1):
             lines.append(f"{i}. {c.text}")
     if analysis.experiments and analysis.experiments.takeaways:
+        if lines:
+            lines.append("")
         start = len(lines)
         for i, t in enumerate(analysis.experiments.takeaways[:3], start + 1):
             lines.append(f"{i}. {t}")
@@ -450,6 +534,11 @@ def _build_highlights(analysis: PaperAnalysis) -> list[str]:
         else:
             lines.append("1. See paper for details.")
     return lines
+
+
+def _join_with_paragraphs(*parts: str) -> str:
+    cleaned = [p.strip() for p in parts if p and p.strip()]
+    return "\n\n".join(cleaned)
 
 _GEMINI_LAYOUT_PROMPT = (
     "You are a scientific poster layout designer. "
@@ -574,9 +663,9 @@ def _static_layout(
     """Static fallback layout when Gemini is unavailable."""
     sections = []
     sections.append(_build_title_section(doc, analysis))
-    sections.extend(_build_row1(analysis))
     sections.extend(_build_row2(doc, analysis))
     sections.extend(_build_row3(analysis))
+    sections = _drop_top_summary_sections(sections)
     figure_placements = _place_figures(doc, analysis, sections)
     formula_displays = _place_formulas(analysis)
     return PosterBlueprint(
