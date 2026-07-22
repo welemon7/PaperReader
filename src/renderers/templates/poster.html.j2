@@ -47,10 +47,7 @@ body {
     border-bottom: 1px solid rgba(255,255,255,0.12);
 }
 .hero-top {
-    display: flex;
-    justify-content: space-between;
-    gap: 24px;
-    align-items: flex-start;
+    display: block;
 }
 .hero-badge {
     display: inline-flex;
@@ -69,36 +66,15 @@ body {
     line-height: 1.1;
     letter-spacing: 0;
     font-weight: 800;
-    max-width: 12.5em;
+    max-width: none;
+    width: 100%;
+    text-wrap: balance;
 }
 .authors {
     max-width: 70ch;
     color: rgba(255,255,255,0.88);
     font-size: 15px;
 }
-.hero-meta {
-    min-width: 250px;
-    text-align: right;
-    color: rgba(255,255,255,0.84);
-    font-size: 12px;
-    line-height: 1.4;
-}
-.hero-meta strong { color: white; font-weight: 700; }
-.hero-strip {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 12px;
-    margin-top: 20px;
-}
-.stat {
-    background: rgba(255,255,255,0.08);
-    border: 1px solid rgba(255,255,255,0.12);
-    border-radius: 8px;
-    padding: 10px 12px;
-    min-height: 66px;
-}
-.stat .label { display: block; color: rgba(255,255,255,0.7); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
-.stat .value { display: block; margin-top: 6px; font-size: 14px; font-weight: 700; line-height: 1.25; }
 .content {
     padding: 16px;
 }
@@ -233,9 +209,6 @@ body {
 }
 .footer-band strong { color: var(--primary); }
 @media (max-width: 1100px) {
-    .hero-top { flex-direction: column; }
-    .hero-meta { text-align: left; min-width: 0; }
-    .hero-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .row { grid-template-columns: 1fr; }
 }
 @media print {
@@ -256,25 +229,6 @@ body {
           {% if authors_str %}
           <div class="authors">{{ authors_str }}</div>
           {% endif %}
-        </div>
-        <div class="hero-meta">
-          <div><strong>Format:</strong> A0 portrait poster</div>
-          <div><strong>Focus:</strong> problem, method, results, and takeaways</div>
-          <div><strong>Figures:</strong> rasterized locally for browser rendering</div>
-        </div>
-      </div>
-      <div class="hero-strip">
-        {% for row_data in rows[:1] %}
-          {% for sec in row_data.sections[:3] %}
-          <div class="stat">
-            <span class="label">{{ sec.title }}</span>
-            <span class="value">{{ sec.content_html|striptags|truncate(90, True, '...') }}</span>
-          </div>
-          {% endfor %}
-        {% endfor %}
-        <div class="stat">
-          <span class="label">Poster intent</span>
-          <span class="value">English, faithful, poster-ready reading aid</span>
         </div>
       </div>
     </header>

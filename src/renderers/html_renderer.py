@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html as html_lib
 import logging
 import os
 import re
@@ -21,6 +22,7 @@ _TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "templates")
 class HtmlPosterRenderer:
     def __init__(self, template_dir: str = _TEMPLATE_DIR) -> None:
         self.env = Environment(loader=FileSystemLoader(template_dir))
+        self.env.filters["summarize_text"] = self._summarize_text
         self.template = self.env.get_template("poster.html.j2")
 
     @staticmethod
@@ -45,6 +47,27 @@ class HtmlPosterRenderer:
         for key, val in placeholders.items():
             html = html.replace(key, val)
         return html
+
+    @staticmethod
+    def _summarize_text(text: str, max_sentences: int = 2) -> str:
+        """Return a short readable summary without adding ellipses.
+
+        The poster hero cards should show complete copy, so we keep the first
+        one or two sentences instead of doing a hard character truncate.
+        """
+        if not text:
+            return ""
+
+        cleaned = re.sub(r"<[^>]+>", " ", text)
+        cleaned = html_lib.unescape(cleaned)
+        cleaned = re.sub(r"\s+", " ", cleaned).strip()
+        if not cleaned:
+            return ""
+
+        sentences = re.split(r"(?<=[.!?。！？])\s+", cleaned)
+        if len(sentences) <= max_sentences:
+            return cleaned
+        return " ".join(sentences[:max_sentences]).strip()
 
     def render(self, blueprint: PosterBlueprint, doc: PaperDocument) -> str:
         try:
