@@ -79,6 +79,12 @@ class TestPosterBlueprint:
         assert lookup['sec-motivation'].row_span == 1
         assert lookup['sec-main-method'].row_span == 1
 
+    def test_motivation_is_short(self):
+        bp = generate_blueprint(_make_doc(), _make_analysis())
+        motiv = next(s for s in bp.sections if s.section_id == 'sec-motivation')
+        assert len(motiv.content_md.split()) <= 80
+        assert motiv.content_md.endswith('……') or motiv.content_md.endswith('.') or motiv.content_md.endswith('!') or motiv.content_md.endswith('?')
+
     def test_figure_placement(self):
         bp = generate_blueprint(_make_doc(), _make_analysis())
         placements = {p.figure_id: p.section_id for p in bp.figure_placements}
@@ -147,6 +153,12 @@ class TestPosterBlueprint:
         bp = generate_blueprint(_make_doc(), analysis)
         highlights = next(s for s in bp.sections if s.section_id == 'sec-highlights')
         assert 'First contribution' in highlights.content_md
+
+    def test_results_do_not_include_takeaways_text(self):
+        bp = generate_blueprint(_make_doc(), _make_analysis())
+        results = next(s for s in bp.sections if s.section_id == 'sec-experiments')
+        assert 'Takeaways' not in results.content_md
+        assert 'Works well' not in results.content_md
 
     def test_author_cleaning(self):
         doc = _make_doc()

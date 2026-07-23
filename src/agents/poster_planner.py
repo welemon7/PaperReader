@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import logging
 import re
@@ -241,10 +241,11 @@ def _build_row2(doc: PaperDocument, analysis: PaperAnalysis) -> list[PosterSecti
 
 
 def _build_motivation_section(analysis: PaperAnalysis) -> PosterSection:
+    motivation = _summarize_motivation(analysis)
     return PosterSection(
         section_id="sec-motivation", type="motivation",
         title="Motivation",
-        content_md=analysis.problem_statement or "(not provided)",
+        content_md=motivation or "(not provided)",
         column=1, col_span=1, row=1,
     )
 
@@ -266,12 +267,6 @@ def _build_results_section(analysis: PaperAnalysis) -> PosterSection:
                 table_lines.append("| Best Result | " + exp.main_results + " |")
             table_lines.append("")
         exp_lines.extend(table_lines)
-        if exp.takeaways:
-            if exp_lines:
-                exp_lines.append("")
-            exp_lines.append("**Takeaways:**")
-            for takeaway in exp.takeaways[:3]:
-                exp_lines.append("- " + takeaway)
     exp_content = "\n".join(exp_lines) if exp_lines else "(experimental results not available)"
 
     return PosterSection(
@@ -307,6 +302,54 @@ def _build_highlights_section(analysis: PaperAnalysis) -> PosterSection:
         column=2, col_span=1, row=3,
     )
 
+
+def _summarize_motivation(analysis: PaperAnalysis, max_words: int = 80) -> str:
+    """Return a compact but slightly richer motivation teaser for the poster."""
+    problem = _first_sentence(_clean_poster_text(analysis.problem_statement or ""))
+    method_hint = _first_sentence(_clean_poster_text(analysis.method_overview or ""))
+    first_contribution = _clean_poster_text(analysis.contributions[0].text) if analysis.contributions else ""
+    contribution_hint = _first_clause(first_contribution) if first_contribution else ""
+
+    parts: list[str] = []
+    if problem:
+        parts.append(problem.rstrip(" ,;:.-"))
+
+    bridge = ""
+    if contribution_hint:
+        bridge = f"To address this, it introduces {contribution_hint.rstrip(' ,;:.-')} and a focused method."
+    elif method_hint:
+        bridge = f"To address this, it develops {method_hint.rstrip(' ,;:.-')} and a focused method."
+
+    if bridge:
+        parts.append(bridge)
+
+    text = " ".join(parts).strip()
+    if not text:
+        return ""
+
+    words = text.split()
+    if len(words) > max_words:
+        text = " ".join(words[:max_words]).rstrip(" ,;:.-")
+
+    text = text.rstrip(" ,;:.-")
+    if text and not text.endswith("……"):
+        text += " ……"
+    return text
+
+
+def _first_sentence(text: str) -> str:
+    if not text:
+        return ""
+    parts = re.split(r"(?<=[.!?])\s+", text)
+    return parts[0].strip() if parts else text.strip()
+
+
+def _first_clause(text: str) -> str:
+    if not text:
+        return ""
+    parts = re.split(r"[;:\uFF1B\uFF1A]|\s+-\s+|\s+and\s+|\s+while\s+|\s+whereas\s+", text, maxsplit=1, flags=re.IGNORECASE)
+    candidate = parts[0].strip() if parts else text.strip()
+    return re.sub(r"\s+", " ", candidate)
 
 def _build_compact_layout(doc: PaperDocument, analysis: PaperAnalysis) -> list[PosterSection]:
     formulas_text = ""
@@ -768,3 +811,4 @@ def _default_colors() -> dict:
         "border": "#cfd8e3",
         "highlight": "#8fb3d9",
     }
+

@@ -123,9 +123,23 @@ body {
         "motivation results"
         "method results"
         "contribution keytakeaways";
-    grid-auto-rows: minmax(140px, auto);
+    grid-template-rows: minmax(112px, auto) minmax(140px, auto) minmax(132px, auto);
     gap: 12px;
     align-items: start;
+}
+.motivation-section {
+    height: auto;
+    align-self: start;
+}
+.motivation-section .section-body {
+    padding: 8px 12px 9px;
+    gap: 6px;
+}
+.motivation-section .section-body p {
+    margin-bottom: 4px;
+}
+.motivation-section .section-body p:last-child {
+    margin-bottom: 0;
 }
 .section {
     background: var(--panel);
@@ -308,7 +322,7 @@ body {
     <main class="content">
       <section class="layout-grid">
         {% for sec in layout %}
-        <article class="section" style="grid-area: {% if sec.type == 'motivation' %}motivation{% elif sec.type == 'main_method' %}method{% elif sec.type == 'experiments' %}results{% elif sec.type == 'contributions' %}contribution{% elif sec.type == 'highlights' %}keytakeaways{% else %}auto{% endif %};">
+        <article class="section {% if sec.type == 'motivation' %}motivation-section{% endif %}" style="grid-area: {% if sec.type == 'motivation' %}motivation{% elif sec.type == 'main_method' %}method{% elif sec.type == 'experiments' %}results{% elif sec.type == 'contributions' %}contribution{% elif sec.type == 'highlights' %}keytakeaways{% else %}auto{% endif %};">
           <div class="section-header">{{ sec.title }}</div>
           <div class="section-body">
             {{ sec.content_html|safe }}
