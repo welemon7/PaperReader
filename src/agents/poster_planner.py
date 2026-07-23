@@ -146,13 +146,13 @@ def generate_blueprint(
             if settings.gemini_api_key:
                 blueprint = _gemini_layout(doc, analysis)
                 blueprint.sections = _drop_top_summary_sections(blueprint.sections)
+                _normalize_compact_layout(blueprint.sections)
                 return blueprint
         except Exception:
             logger.warning("Gemini layout failed, falling back to static layout")
     sections = []
     sections.append(_build_title_section(doc, analysis))
-    sections.extend(_build_row2(doc, analysis))
-    sections.extend(_build_row3(analysis))
+    sections.extend(_build_compact_layout(doc, analysis))
     sections = _drop_top_summary_sections(sections)
     figure_placements = _place_figures(doc, analysis, sections)
     formula_displays = _place_formulas(analysis)
@@ -173,8 +173,8 @@ def generate_blueprint(
 
 def _drop_top_summary_sections(sections: list[PosterSection]) -> list[PosterSection]:
     """Remove the three redundant top summary cards from the poster layout."""
-    blocked_ids = {"sec-motivation", "sec-method-overview", "sec-key-idea"}
-    blocked_types = {"motivation", "method_overview", "key_idea"}
+    blocked_ids = {"sec-method-overview", "sec-key-idea"}
+    blocked_types = {"method_overview", "key_idea"}
     return [
         sec
         for sec in sections
@@ -226,53 +226,30 @@ def _build_title_section(doc: PaperDocument, analysis: PaperAnalysis) -> PosterS
 
 
 def _build_row1(analysis: PaperAnalysis) -> list[PosterSection]:
-    motiv = PosterSection(
-        section_id="sec-motivation", type="motivation",
-        title="Problem",
-        content_md=analysis.problem_statement or "(not provided)",
-        column=1, col_span=1, row=1,
-    )
-    method_ov = PosterSection(
-        section_id="sec-method-overview", type="method_overview",
-        title="Core Idea",
-        content_md=analysis.method_overview or "(not provided)",
-        column=2, col_span=1, row=1,
-    )
-    key_idea_text = (
-        analysis.contributions[0].text
-        if analysis.contributions
-        else analysis.method_overview[:200]
-    )
-    key_idea = PosterSection(
-        section_id="sec-key-idea", type="key_idea",
-        title="Why It Matters",
-        content_md=key_idea_text,
-        column=3, col_span=1, row=1,
-    )
-    return [motiv, method_ov, key_idea]
+    """Compatibility wrapper for the compact layout's first row."""
+    return [_build_motivation_section(analysis)]
 
 
 def _build_row2(doc: PaperDocument, analysis: PaperAnalysis) -> list[PosterSection]:
-    formulas_text = ""
-    if analysis.key_formulas:
-        lines = []
-        for f in analysis.key_formulas:
-            cleaned_latex = _clean_formula_latex(f.latex)
-            if not cleaned_latex:
-                continue
-            lines.append("- $$ " + cleaned_latex + " $$")
-            if f.semantic_desc:
-                lines.append("  " + _clean_poster_text(f.semantic_desc))
-        if lines:
-            formulas_text = "\n\n**Key Formulas:**\n\n" + "\n".join(lines)
-
-    method_detail = PosterSection(
+    """Compatibility wrapper for the compact layout's middle row."""
+    return [_build_results_section(analysis), PosterSection(
         section_id="sec-main-method", type="main_method",
         title="Method",
-        content_md=analysis.method_overview + formulas_text,
-        column=1, col_span=2, row=2,
+        content_md=_join_with_paragraphs(analysis.method_overview, ""),
+        column=1, col_span=1, row=2,
+    )]
+
+
+def _build_motivation_section(analysis: PaperAnalysis) -> PosterSection:
+    return PosterSection(
+        section_id="sec-motivation", type="motivation",
+        title="Motivation",
+        content_md=analysis.problem_statement or "(not provided)",
+        column=1, col_span=1, row=1,
     )
 
+
+def _build_results_section(analysis: PaperAnalysis) -> PosterSection:
     exp = analysis.experiments
     exp_lines = []
     if exp:
@@ -289,18 +266,23 @@ def _build_row2(doc: PaperDocument, analysis: PaperAnalysis) -> list[PosterSecti
                 table_lines.append("| Best Result | " + exp.main_results + " |")
             table_lines.append("")
         exp_lines.extend(table_lines)
+        if exp.takeaways:
+            if exp_lines:
+                exp_lines.append("")
+            exp_lines.append("**Takeaways:**")
+            for takeaway in exp.takeaways[:3]:
+                exp_lines.append("- " + takeaway)
     exp_content = "\n".join(exp_lines) if exp_lines else "(experimental results not available)"
 
-    experiments = PosterSection(
+    return PosterSection(
         section_id="sec-experiments", type="experiments",
         title="Results",
         content_md=exp_content,
-        column=3, col_span=1, row=2,
+        column=2, col_span=1, row=1, row_span=2,
     )
-    return [method_detail, experiments]
 
 
-def _build_row3(analysis: PaperAnalysis) -> list[PosterSection]:
+def _build_contributions_section(analysis: PaperAnalysis) -> PosterSection:
     contrib_lines = []
     for c in analysis.contributions:
         prefix = "-"
@@ -309,24 +291,59 @@ def _build_row3(analysis: PaperAnalysis) -> list[PosterSection]:
         contrib_lines.append(prefix + " " + c.text)
     contrib_content = "\n".join(contrib_lines) if contrib_lines else "(not provided)"
 
-    contributions = PosterSection(
+    return PosterSection(
         section_id="sec-contributions", type="contributions",
-        title="Contributions",
+        title="Contribution",
         content_md=contrib_content,
         column=1, col_span=1, row=3,
     )
-    contributions.col_span = 2
 
-    hl_lines = _build_highlights(analysis)
 
-    highlights = PosterSection(
+def _build_highlights_section(analysis: PaperAnalysis) -> PosterSection:
+    return PosterSection(
         section_id="sec-highlights", type="highlights",
         title="Key Takeaways",
-        content_md="\n".join(hl_lines),
+        content_md="\n".join(_build_highlights(analysis)),
         column=2, col_span=1, row=3,
     )
-    highlights.col_span = 1
-    return [contributions, highlights]
+
+
+def _build_compact_layout(doc: PaperDocument, analysis: PaperAnalysis) -> list[PosterSection]:
+    formulas_text = ""
+    if analysis.key_formulas:
+        lines = []
+        for f in analysis.key_formulas:
+            cleaned_latex = _clean_formula_latex(f.latex)
+            if not cleaned_latex:
+                continue
+            lines.append("- $$ " + cleaned_latex + " $$")
+            if f.semantic_desc:
+                lines.append("  " + _clean_poster_text(f.semantic_desc))
+        if lines:
+            formulas_text = "\n\n**Key Formulas:**\n\n" + "\n".join(lines)
+
+    method_detail = PosterSection(
+        section_id="sec-main-method", type="main_method",
+        title="Method",
+        content_md=_join_with_paragraphs(analysis.method_overview, formulas_text),
+        column=1, col_span=1, row=2,
+    )
+
+    return [
+        _build_motivation_section(analysis),
+        method_detail,
+        _build_results_section(analysis),
+        _build_contributions_section(analysis),
+        _build_highlights_section(analysis),
+    ]
+
+
+def _build_row3(analysis: PaperAnalysis) -> list[PosterSection]:
+    """Compatibility wrapper for the compact layout's last row."""
+    return [
+        _build_contributions_section(analysis),
+        _build_highlights_section(analysis),
+    ]
 
 
 def _place_figures(doc: PaperDocument, analysis: PaperAnalysis, sections: list[PosterSection]) -> list[FigurePlacement]:
@@ -453,6 +470,43 @@ def _tighten_layout(sections: list[PosterSection], figure_placements: list[Figur
 
         if sec.type in {"motivation", "key_idea"} and density >= 2:
             sec.col_span = max(sec.col_span, 1)
+
+
+def _normalize_compact_layout(sections: list[PosterSection]) -> None:
+    """Pin the default poster layout to the compact two-column story grid."""
+    for sec in sections:
+        if sec.type == "title":
+            sec.column = 1
+            sec.col_span = 2
+            sec.row = 0
+            sec.row_span = 1
+        elif sec.type == "motivation":
+            sec.column = 1
+            sec.col_span = 1
+            sec.row = 1
+            sec.row_span = 1
+        elif sec.type == "main_method":
+            sec.column = 1
+            sec.col_span = 1
+            sec.row = 2
+            sec.row_span = 1
+        elif sec.type == "experiments":
+            sec.column = 2
+            sec.col_span = 1
+            sec.row = 1
+            sec.row_span = 2
+        elif sec.type == "contributions":
+            sec.column = 1
+            sec.col_span = 1
+            sec.row = 3
+            sec.row_span = 1
+        elif sec.type == "highlights":
+            sec.column = 2
+            sec.col_span = 1
+            sec.row = 3
+            sec.row_span = 1
+        else:
+            sec.row_span = max(getattr(sec, "row_span", 1), 1)
 
 
 def _figure_priority(caption: str, role: str) -> tuple[int, int]:
@@ -682,11 +736,13 @@ def _static_layout(
     """Static fallback layout when Gemini is unavailable."""
     sections = []
     sections.append(_build_title_section(doc, analysis))
-    sections.extend(_build_row2(doc, analysis))
-    sections.extend(_build_row3(analysis))
+    sections.extend(_build_compact_layout(doc, analysis))
     sections = _drop_top_summary_sections(sections)
     figure_placements = _place_figures(doc, analysis, sections)
     formula_displays = _place_formulas(analysis)
+    _normalize_compact_layout(sections)
+    _tighten_layout(sections, figure_placements)
+    _normalize_compact_layout(sections)
     return PosterBlueprint(
         paper_id=doc.paper_id,
         poster_title=doc.title,

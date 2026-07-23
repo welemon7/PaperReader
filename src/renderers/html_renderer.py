@@ -113,7 +113,7 @@ class HtmlPosterRenderer:
             self._prepare_figure_assets(blueprint, doc, output_dir)
         except Exception:
             pass
-        rows = self._organize_rows(blueprint)
+        layout = self._build_layout(blueprint)
         figure_map = self._build_figure_map(blueprint, doc, output_dir)
         cleaned_formulas = []
         for formula in blueprint.formula_displays:
@@ -125,8 +125,7 @@ class HtmlPosterRenderer:
             cleaned_formulas.append(formula)
         blueprint.formula_displays = cleaned_formulas
 
-        for row_data in rows:
-            for sec in row_data["sections"]:
+        for sec in layout:
                 sec.content_md = self._clean_html_text(sec.content_md)
                 sec.content_html = self._markdown_with_latex(
                     sec.content_md
@@ -139,7 +138,7 @@ class HtmlPosterRenderer:
             poster_width=blueprint.width_px,
             poster_height=blueprint.height_px,
             color_scheme=blueprint.color_scheme,
-            rows=rows,
+            layout=layout,
             figure_map=figure_map,
         )
 
@@ -282,6 +281,7 @@ class HtmlPosterRenderer:
 
     @staticmethod
     def _organize_rows(blueprint: PosterBlueprint) -> list[dict]:
+        """Compatibility wrapper that returns row-grouped sections."""
         grouped: dict[int, list] = {}
         for sec in blueprint.sections:
             if sec.type == "title":
@@ -292,6 +292,11 @@ class HtmlPosterRenderer:
             sections = sorted(grouped[row_id], key=lambda s: s.column)
             rows.append({"row_id": row_id, "sections": sections})
         return rows
+
+    @staticmethod
+    def _build_layout(blueprint: PosterBlueprint) -> list:
+        sections = [sec for sec in blueprint.sections if sec.type != "title"]
+        return sorted(sections, key=lambda s: (s.row, s.column))
 
     @staticmethod
     def _build_figure_map(

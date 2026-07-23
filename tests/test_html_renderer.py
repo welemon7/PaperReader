@@ -16,10 +16,14 @@ def _make_blueprint() -> PosterBlueprint:
         sections=[
             PosterSection(section_id="s1", type="motivation", title="Motivation",
                         content_md="Our problem is **important**.", column=1, col_span=1, row=1),
-            PosterSection(section_id="s2", type="method_overview", title="Method Overview",
-                        content_md="We propose a method with $E=mc^2$.", column=2, col_span=1, row=1),
+            PosterSection(section_id="s2", type="experiments", title="Results",
+                        content_md="We propose a method with $E=mc^2$.", column=2, col_span=1, row=1, row_span=2),
             PosterSection(section_id="s3", type="main_method", title="Method",
-                        content_md="Details here.", column=1, col_span=2, row=2),
+                        content_md="Details here.", column=1, col_span=1, row=2),
+            PosterSection(section_id="s4", type="contributions", title="Contribution",
+                        content_md="Bullets.", column=1, col_span=1, row=3),
+            PosterSection(section_id="s5", type="highlights", title="Key Takeaways",
+                        content_md="Takeaways.", column=2, col_span=1, row=3),
         ],
         color_scheme={"primary": "#1a5276", "accent": "#2980b9", "background": "#ffffff",
                      "text": "#2c3e50", "section_header_bg": "#1a5276",
@@ -90,9 +94,24 @@ class TestHtmlPosterRenderer:
     def test_organize_rows(self):
         bp = _make_blueprint()
         rows = HtmlPosterRenderer._organize_rows(bp)
-        assert len(rows) == 2
-        assert len(rows[0]["sections"]) == 2
-        assert len(rows[1]["sections"]) == 1
+        assert len(rows) == 3
+        assert [s.section_id for s in rows[0]["sections"]] == ["s1", "s2"]
+        assert [s.section_id for s in rows[1]["sections"]] == ["s3"]
+        assert [s.section_id for s in rows[2]["sections"]] == ["s4", "s5"]
+
+    def test_build_layout_sorts_by_row_then_column(self):
+        bp = _make_blueprint()
+        layout = HtmlPosterRenderer._build_layout(bp)
+        assert [s.section_id for s in layout] == ["s1", "s2", "s3", "s4", "s5"]
+
+    def test_render_uses_grid_areas(self):
+        doc = PaperDocument(paper_id="test-999", arxiv_id="9999.99999", title="Test", raw_markdown=".")
+        bp = _make_blueprint()
+        renderer = HtmlPosterRenderer()
+        html = renderer.render(bp, doc, Path("output") / "9999.99999")
+        assert "grid-area: motivation" in html
+        assert "grid-area: method" in html
+        assert "grid-area: results" in html
 
     def test_resolve_figure_path_prefers_existing_pdf_or_image(self, tmp_path):
         source_dir = tmp_path / "paper"

@@ -14,6 +14,7 @@ class PosterSection(BaseModel):
     column: int = Field(default=1, ge=1, le=3)
     col_span: int = Field(default=1, ge=1, le=3)
     row: int = Field(default=0, ge=0, le=3)
+    row_span: int = Field(default=1, ge=1, le=3)
 
 class FigurePlacement(BaseModel):
     figure_id: str

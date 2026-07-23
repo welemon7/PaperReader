@@ -61,17 +61,23 @@ class TestPosterBlueprint:
         bp = generate_blueprint(_make_doc(), _make_analysis())
         titles = [s.section_id for s in bp.sections]
         assert 'sec-title' in titles
+        assert 'sec-motivation' in titles
         assert 'sec-main-method' in titles
         assert 'sec-experiments' in titles
         assert 'sec-contributions' in titles
         assert 'sec-highlights' in titles
 
-    def test_top_summary_sections_are_removed(self):
+    def test_compact_layout_positions(self):
         bp = generate_blueprint(_make_doc(), _make_analysis())
-        titles = {s.section_id for s in bp.sections}
-        assert 'sec-motivation' not in titles
-        assert 'sec-method-overview' not in titles
-        assert 'sec-key-idea' not in titles
+        lookup = {s.section_id: s for s in bp.sections}
+        assert lookup['sec-motivation'].row == 1 and lookup['sec-motivation'].column == 1
+        assert lookup['sec-main-method'].row == 2 and lookup['sec-main-method'].column == 1
+        assert lookup['sec-experiments'].row == 1 and lookup['sec-experiments'].column == 2
+        assert lookup['sec-experiments'].row_span == 2
+        assert lookup['sec-contributions'].row == 3 and lookup['sec-contributions'].column == 1
+        assert lookup['sec-highlights'].row == 3 and lookup['sec-highlights'].column == 2
+        assert lookup['sec-motivation'].row_span == 1
+        assert lookup['sec-main-method'].row_span == 1
 
     def test_figure_placement(self):
         bp = generate_blueprint(_make_doc(), _make_analysis())
