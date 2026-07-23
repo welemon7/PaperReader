@@ -289,17 +289,6 @@ def _build_row2(doc: PaperDocument, analysis: PaperAnalysis) -> list[PosterSecti
                 table_lines.append("| Best Result | " + exp.main_results + " |")
             table_lines.append("")
         exp_lines.extend(table_lines)
-        if exp.takeaways:
-            exp_lines.append("**Takeaways:**")
-            exp_lines.append("")
-            for t in exp.takeaways:
-                exp_lines.append("- " + t)
-        if analysis.key_figures or doc.figures:
-            exp_lines.append("")
-            exp_lines.append("**Recommended visual focus:**")
-            exp_lines.append("")
-            for fig in _result_visual_candidates(doc, analysis)[:3]:
-                exp_lines.append(f"- {_figure_caption(fig)}")
     exp_content = "\n".join(exp_lines) if exp_lines else "(experimental results not available)"
 
     experiments = PosterSection(
