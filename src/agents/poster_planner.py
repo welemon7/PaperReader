@@ -3,6 +3,7 @@
 import logging
 import re
 
+from src.llm.client import LLMClient
 from src.schemas.analysis import PaperAnalysis
 from src.schemas.analysis import KeyFormula
 from src.schemas.paper import PaperDocument
@@ -147,6 +148,7 @@ def generate_blueprint(
                 blueprint = _gemini_layout(doc, analysis)
                 blueprint.sections = _drop_top_summary_sections(blueprint.sections)
                 _normalize_compact_layout(blueprint.sections)
+                _apply_poster_highlights(blueprint.sections, analysis)
                 return blueprint
         except Exception:
             logger.warning("Gemini layout failed, falling back to static layout")
@@ -157,6 +159,7 @@ def generate_blueprint(
     figure_placements = _place_figures(doc, analysis, sections)
     formula_displays = _place_formulas(analysis)
     _tighten_layout(sections, figure_placements)
+    _apply_poster_highlights(sections, analysis)
     return PosterBlueprint(
         paper_id=doc.paper_id,
         poster_title=doc.title,
@@ -304,11 +307,18 @@ def _build_highlights_section(analysis: PaperAnalysis) -> PosterSection:
 
 
 def _summarize_motivation(analysis: PaperAnalysis, max_words: int = 80) -> str:
-    """Return a compact but slightly richer motivation teaser for the poster."""
+    """Return a compact motivation teaser without inline emphasis."""
     problem = _first_sentence(_clean_poster_text(analysis.problem_statement or ""))
     method_hint = _first_sentence(_clean_poster_text(analysis.method_overview or ""))
     first_contribution = _clean_poster_text(analysis.contributions[0].text) if analysis.contributions else ""
     contribution_hint = _first_clause(first_contribution) if first_contribution else ""
+
+    metric_hint = ""
+    if analysis.experiments:
+        if analysis.experiments.main_results:
+            metric_hint = _first_sentence(_clean_poster_text(analysis.experiments.main_results))
+        elif analysis.experiments.metrics:
+            metric_hint = _clean_poster_text(", ".join(analysis.experiments.metrics[:2]))
 
     parts: list[str] = []
     if problem:
@@ -323,18 +333,14 @@ def _summarize_motivation(analysis: PaperAnalysis, max_words: int = 80) -> str:
     if bridge:
         parts.append(bridge)
 
+    if metric_hint:
+        parts.append(f"It targets {metric_hint.rstrip(' ,;:.-')} on the reported benchmarks.")
+
     text = " ".join(parts).strip()
     if not text:
         return ""
 
-    words = text.split()
-    if len(words) > max_words:
-        text = " ".join(words[:max_words]).rstrip(" ,;:.-")
-
-    text = text.rstrip(" ,;:.-")
-    if text and not text.endswith("……"):
-        text += " ……"
-    return text
+    return text.rstrip(" ,;:.-")
 
 
 def _first_sentence(text: str) -> str:
@@ -350,6 +356,151 @@ def _first_clause(text: str) -> str:
     parts = re.split(r"[;:\uFF1B\uFF1A]|\s+-\s+|\s+and\s+|\s+while\s+|\s+whereas\s+", text, maxsplit=1, flags=re.IGNORECASE)
     candidate = parts[0].strip() if parts else text.strip()
     return re.sub(r"\s+", " ", candidate)
+
+
+def _apply_highlight_spans(text: str, highlights: list[tuple[str, str]]) -> str:
+    if not text or not highlights:
+        return text or ""
+
+    highlighted = text
+    for phrase, css_class in sorted(highlights, key=lambda item: len(item[0]), reverse=True):
+        if not phrase:
+            continue
+        pattern = re.compile(re.escape(phrase), flags=re.IGNORECASE)
+
+        def _replace(match: re.Match[str]) -> str:
+            return f'<span class="{css_class}">{match.group(0)}</span>'
+
+        highlighted = pattern.sub(_replace, highlighted, count=1)
+    return highlighted
+
+
+def _apply_poster_highlights(sections: list[PosterSection], analysis: PaperAnalysis) -> None:
+    highlight_map = _select_poster_highlights(sections, analysis)
+    if not highlight_map:
+        return
+
+    for sec in sections:
+        highlights = highlight_map.get(sec.type)
+        if not highlights:
+            continue
+        sec.content_md = _apply_highlight_spans(sec.content_md, highlights)
+
+
+def _select_poster_highlights(
+    sections: list[PosterSection],
+    analysis: PaperAnalysis,
+) -> dict[str, list[tuple[str, str]]]:
+    if not LLMClient.is_configured():
+        return {}
+
+    from src.config import settings
+
+    client = LLMClient(
+        api_key=settings.openai_api_key,
+        base_url=settings.llm_base_url,
+        model=settings.llm_model,
+    )
+
+    user_prompt = _build_highlight_prompt(sections, analysis)
+    schema = {
+        "type": "object",
+        "properties": {
+            "highlights": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "section_type": {
+                            "type": "string",
+                            "enum": ["main_method", "experiments"],
+                        },
+                        "phrase": {"type": "string"},
+                        "kind": {"type": "string", "enum": ["phrase", "metric"]},
+                    },
+                    "required": ["section_type", "phrase", "kind"],
+                    "additionalProperties": False,
+                },
+            }
+        },
+        "required": ["highlights"],
+        "additionalProperties": False,
+    }
+
+    try:
+        result = client.chat_json(system=_POSTER_HIGHLIGHT_SYSTEM_PROMPT, user=user_prompt, response_schema=schema)
+    except Exception as exc:
+        logger.warning("Poster highlight selection failed: %s", exc)
+        return {}
+
+    content_by_type = {
+        sec.type: (sec.content_md or "")
+        for sec in sections
+        if sec.type in {"main_method", "experiments"}
+    }
+
+    mapped: dict[str, list[tuple[str, str]]] = {"main_method": [], "experiments": []}
+    seen: set[tuple[str, str]] = set()
+    highlights = result.get("highlights", []) if isinstance(result, dict) else []
+    for item in highlights:
+        if not isinstance(item, dict):
+            continue
+        section_type = item.get("section_type", "")
+        if section_type not in mapped:
+            continue
+        phrase = _clean_poster_text(str(item.get("phrase", "")))
+        if not phrase:
+            continue
+        haystack = content_by_type.get(section_type, "")
+        if phrase.lower() not in haystack.lower():
+            continue
+        css_class = "poster-highlight-metric" if item.get("kind") == "metric" else "poster-highlight"
+        key = (section_type, phrase.lower())
+        if key in seen:
+            continue
+        seen.add(key)
+        mapped[section_type].append((phrase, css_class))
+
+    return {key: value for key, value in mapped.items() if value}
+
+
+def _build_highlight_prompt(sections: list[PosterSection], analysis: PaperAnalysis) -> str:
+    parts: list[str] = []
+    parts.append("Analyze the full poster content and choose exact phrases to highlight.")
+    parts.append("Focus on method modules, architecture names, datasets, metrics, and result numbers.")
+    parts.append("Do not select from Motivation unless absolutely necessary.")
+    parts.append("Prefer phrases from main_method and experiments.")
+    parts.append("Return only phrases that appear verbatim in the text below, and keep them short.")
+    parts.append("Use kind=metric for numbers, percentages, scores, or benchmark values. Use kind=phrase otherwise.")
+    parts.append("Return at most 6 highlights total.")
+    parts.append("")
+    parts.append(f"Paper: {analysis.paper_id}")
+    if analysis.problem_statement:
+        parts.append(f"Problem: {_clean_poster_text(analysis.problem_statement)}")
+    parts.append("")
+    for sec in sections:
+        if sec.type not in {"motivation", "main_method", "experiments", "contributions", "highlights"}:
+            continue
+        content = (sec.content_md or "").strip()
+        if not content:
+            continue
+        if len(content) > 1200:
+            content = content[:1200].rstrip() + "..."
+        parts.append(f"[{sec.type}] {sec.title}")
+        parts.append(content)
+        parts.append("")
+    return "\n".join(parts).strip()
+
+
+_POSTER_HIGHLIGHT_SYSTEM_PROMPT = (
+    "You are analyzing a scientific poster draft. "
+    "Select only exact phrases from the provided poster content that deserve visual emphasis. "
+    "Prioritize method modules, architecture names, datasets, metrics, and result numbers. "
+    "Return concise phrases that appear verbatim in the text. "
+    "Do not invent wording or choose from Motivation unless necessary. "
+    "Prefer highlights for main_method and experiments only."
+)
+
 
 def _build_compact_layout(doc: PaperDocument, analysis: PaperAnalysis) -> list[PosterSection]:
     formulas_text = ""
@@ -811,4 +962,6 @@ def _default_colors() -> dict:
         "border": "#cfd8e3",
         "highlight": "#8fb3d9",
     }
+
+
 

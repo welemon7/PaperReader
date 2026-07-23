@@ -81,6 +81,15 @@ class TestHtmlPosterRenderer:
         assert "<strong>important</strong>" in html
         assert "<em>clear</em>" in html or "<i>clear</i>" in html
 
+    def test_render_preserves_highlight_spans(self):
+        doc = PaperDocument(paper_id="test-999", arxiv_id="9999.99999", title="Test", raw_markdown=".")
+        bp = _make_blueprint()
+        bp.sections[2].content_md = 'Details about the <span class="poster-highlight">novel approach</span> and <span class="poster-highlight-metric">97.3%</span>.'
+        renderer = HtmlPosterRenderer()
+        html = renderer.render(bp, doc, Path("output") / "9999.99999")
+        assert '<span class="poster-highlight">novel approach</span>' in html
+        assert '<span class="poster-highlight-metric">97.3%</span>' in html
+
     def test_render_to_file(self, tmp_path):
         doc = PaperDocument(paper_id="test-999", arxiv_id="9999.99999", title="Test", raw_markdown=".")
         bp = _make_blueprint()

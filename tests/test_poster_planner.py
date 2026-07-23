@@ -1,5 +1,6 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 import sys, pytest
+from unittest.mock import patch
 from src.schemas.analysis import PaperAnalysis, Contribution, ExperimentSummary, KeyFormula, KeyFigure
 from src.schemas.paper import PaperDocument, Author, Section, Formula, Figure, Reference
 from src.schemas.poster import PosterBlueprint
@@ -83,7 +84,24 @@ class TestPosterBlueprint:
         bp = generate_blueprint(_make_doc(), _make_analysis())
         motiv = next(s for s in bp.sections if s.section_id == 'sec-motivation')
         assert len(motiv.content_md.split()) <= 80
-        assert motiv.content_md.endswith('……') or motiv.content_md.endswith('.') or motiv.content_md.endswith('!') or motiv.content_md.endswith('?')
+        assert '……' not in motiv.content_md
+
+    @patch("src.agents.poster_planner.LLMClient.is_configured", return_value=True)
+    @patch("src.agents.poster_planner.LLMClient.chat_json")
+    def test_highlights_are_applied_to_method_and_results(self, mock_chat_json, _mock_configured):
+        mock_chat_json.return_value = {
+            "highlights": [
+                {"section_type": "main_method", "phrase": "novel approach", "kind": "phrase"},
+                {"section_type": "experiments", "phrase": "State-of-the-art", "kind": "metric"},
+            ]
+        }
+        bp = generate_blueprint(_make_doc(), _make_analysis())
+        method = next(s for s in bp.sections if s.section_id == 'sec-main-method')
+        results = next(s for s in bp.sections if s.section_id == 'sec-experiments')
+        motiv = next(s for s in bp.sections if s.section_id == 'sec-motivation')
+        assert '<span class="poster-highlight">novel approach</span>' in method.content_md
+        assert '<span class="poster-highlight-metric">State-of-the-art</span>' in results.content_md
+        assert '<span' not in motiv.content_md
 
     def test_figure_placement(self):
         bp = generate_blueprint(_make_doc(), _make_analysis())
@@ -195,3 +213,4 @@ class TestPosterBlueprint:
         method_figs = [p for p in bp.figure_placements if p.section_id == 'sec-main-method']
         assert method_figs
         assert max(p.width_ratio for p in method_figs) >= 0.9
+

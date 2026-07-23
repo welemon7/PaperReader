@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import html as html_lib
 import logging
@@ -64,7 +64,7 @@ class HtmlPosterRenderer:
         if not cleaned:
             return ""
 
-        sentences = re.split(r"(?<=[.!?。！？])\s+", cleaned)
+        sentences = re.split(r"(?<=[.!?銆傦紒锛焆)\s+", cleaned)
         if len(sentences) <= max_sentences:
             return cleaned
         return " ".join(sentences[:max_sentences]).strip()
@@ -126,10 +126,8 @@ class HtmlPosterRenderer:
         blueprint.formula_displays = cleaned_formulas
 
         for sec in layout:
-                sec.content_md = self._clean_html_text(sec.content_md)
-                sec.content_html = self._markdown_with_latex(
-                    sec.content_md
-                )
+            sec.content_md = self._clean_html_text(sec.content_md)
+            sec.content_html = self._markdown_with_latex(sec.content_md)
 
         return self.template.render(
             poster_title=blueprint.poster_title,
@@ -368,3 +366,6 @@ class HtmlPosterRenderer:
         except Exception as e:
             logger.exception("PNG capture failed: %s", e)
             return False
+
+
+
