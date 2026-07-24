@@ -5,8 +5,13 @@ import logging
 import re
 from typing import Any, Optional
 
-from langgraph.graph import END, StateGraph
 from typing import TypedDict
+
+try:
+    from langgraph.graph import END, StateGraph
+except ModuleNotFoundError:  # pragma: no cover - fallback for minimal test envs
+    END = "__end__"
+    StateGraph = None
 
 from src.llm.client import LLMClient, LLMError
 from src.schemas.analysis import (
@@ -232,6 +237,8 @@ def _parse_analysis(doc: PaperDocument, llm_resp: dict) -> PaperAnalysis:
     )
 
 def build_understand_graph():
+    if StateGraph is None:
+        raise RuntimeError("langgraph is not installed")
     workflow = StateGraph(UnderstandState)
     workflow.add_node("load_paper", load_paper_node)
     workflow.add_node("build_prompt", build_prompt_node)
@@ -251,7 +258,25 @@ _compiled_graph = None
 def run_understand_paper(arxiv_id: str) -> PaperAnalysis:
     global _compiled_graph
     if _compiled_graph is None:
-        _compiled_graph = build_understand_graph()
+        try:
+            _compiled_graph = build_understand_graph()
+        except RuntimeError:
+            _compiled_graph = None
+
+    if _compiled_graph is None:
+        state: UnderstandState = {
+            "arxiv_id": arxiv_id,
+            "paper_document": None,
+            "analysis_prompt": None,
+            "llm_response": None,
+            "paper_analysis": None,
+            "error": None,
+        }
+        for node in (load_paper_node, build_prompt_node, call_llm_node, validate_node, store_analysis_node):
+            state.update(node(state))
+            if state.get("error"):
+                raise RuntimeError(state["error"])
+        return state["paper_analysis"]
     initial_state: UnderstandState = {
         "arxiv_id": arxiv_id,
         "paper_document": None,

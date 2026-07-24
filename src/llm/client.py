@@ -42,6 +42,11 @@ class LLMClient:
         Returns:
             Parsed JSON dict from the LLM response.
         """
+        # happyapi's JSON mode is picky about the literal lowercase token "json".
+        # Add it explicitly so both json_object and json_schema requests remain accepted.
+        system = system.rstrip() + "\n\nReturn the answer as json only."
+        user = user.rstrip() + "\n\njson"
+
         body: dict[str, Any] = {
             "model": self.model,
             "messages": [
@@ -118,6 +123,14 @@ class LLMClient:
     def is_configured() -> bool:
         """Check if the API key is set."""
         return bool(settings.openai_api_key) and settings.openai_api_key not in (
+            "",
+            "sk-your-key-here",
+        )
+
+    @staticmethod
+    def planner_is_configured() -> bool:
+        """Check whether the dedicated planner credentials are set."""
+        return bool(getattr(settings, "planner_api_key", "")) and getattr(settings, "planner_api_key", "") not in (
             "",
             "sk-your-key-here",
         )

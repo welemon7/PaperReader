@@ -4,8 +4,11 @@ import logging
 from pathlib import Path
 from typing import Annotated, Optional, TypedDict
 
-from langgraph.graph import END, StateGraph
-from langgraph.graph.message import add_messages
+try:
+    from langgraph.graph import END, StateGraph
+except ModuleNotFoundError:  # pragma: no cover - fallback for minimal test envs
+    END = "__end__"
+    StateGraph = None
 
 from src.parsers.extractor import ComponentExtractor
 from src.parsers.latex_parser import LatexParser, ParseResult
@@ -221,6 +224,8 @@ def router(state: ParseState) -> str:
 
 def build_parse_graph() -> StateGraph:
     """Build the Phase 1 parsing LangGraph."""
+    if StateGraph is None:
+        raise RuntimeError("langgraph is not installed")
     workflow = StateGraph(ParseState)
 
     workflow.add_node("download", download_node)
@@ -253,7 +258,26 @@ def run_parse_paper(arxiv_id: str, force: bool = False) -> PaperDocument:
     """
     global _compiled_graph
     if _compiled_graph is None:
-        _compiled_graph = build_parse_graph()
+        try:
+            _compiled_graph = build_parse_graph()
+        except RuntimeError:
+            _compiled_graph = None
+
+    if _compiled_graph is None:
+        state: ParseState = {
+            "arxiv_id": arxiv_id,
+            "source_dir": None,
+            "main_tex": None,
+            "parse_result": None,
+            "components": None,
+            "paper_document": None,
+            "error": None,
+        }
+        for node in (download_node, parse_node, extract_node, build_node, store_node):
+            state.update(node(state))
+            if state.get("error"):
+                raise RuntimeError(state["error"])
+        return state["paper_document"]
 
     initial_state: ParseState = {
         "arxiv_id": arxiv_id,

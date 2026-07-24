@@ -4,8 +4,14 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from minio import Minio
-from minio.error import S3Error
+try:
+    from minio import Minio
+    from minio.error import S3Error
+except ModuleNotFoundError:  # pragma: no cover - optional dependency in test envs
+    Minio = None
+
+    class S3Error(Exception):
+        pass
 
 from src.config import settings
 
@@ -16,6 +22,8 @@ class ImageStorage:
     """Store extracted paper images in MinIO."""
 
     def __init__(self) -> None:
+        if Minio is None:
+            raise RuntimeError("minio is not installed")
         self.client = Minio(
             settings.minio_endpoint,
             access_key=settings.minio_access_key,

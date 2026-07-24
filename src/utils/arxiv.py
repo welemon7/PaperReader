@@ -10,7 +10,11 @@ from pathlib import Path
 from typing import Optional
 
 import httpx
-import arxiv
+
+try:
+    import arxiv
+except ModuleNotFoundError:  # pragma: no cover - optional dependency in test envs
+    arxiv = None
 
 from src.config import settings
 
@@ -19,6 +23,8 @@ logger = logging.getLogger(__name__)
 
 class ArxivDownloader:
     def __init__(self) -> None:
+        if arxiv is None:
+            raise RuntimeError("arxiv is not installed")
         self.client = arxiv.Client(page_size=1, delay_seconds=3, num_retries=3)
         self.cache_dir = Path(settings.arxiv_cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)

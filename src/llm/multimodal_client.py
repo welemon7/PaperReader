@@ -40,11 +40,15 @@ def multimodal_analyze(
     poster workflow.
     """
     provider = (provider or os.getenv("POSTER_VISION_PROVIDER") or "gemini").lower()
-    if provider not in {"gemini", "agnes"}:
+    if provider not in {"gemini", "agnes", "openai"}:
         logger.warning("Unsupported multimodal provider '%s', falling back to gemini", provider)
         provider = "gemini"
 
-    if provider == "agnes":
+    if provider == "openai":
+        api_key = os.getenv("OPENAI_API_KEY") or settings.openai_api_key or settings.planner_api_key
+        base_url = (os.getenv("OPENAI_BASE_URL") or settings.planner_base_url or settings.llm_base_url).rstrip("/")
+        model = os.getenv("OPENAI_MODEL") or settings.review_model or settings.planner_model
+    elif provider == "agnes":
         api_key = os.getenv("AGNES_API_KEY") or settings.agnes_api_key or settings.gemini_api_key
         base_url = (os.getenv("AGNES_BASE_URL") or settings.agnes_base_url or settings.gemini_base_url).rstrip("/")
         model = os.getenv("AGNES_MODEL") or settings.agnes_model or settings.gemini_model

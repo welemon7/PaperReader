@@ -4,6 +4,7 @@ import logging
 import re
 import subprocess
 import shutil
+import time
 from pathlib import Path
 from typing import Iterable, Optional
 
@@ -122,11 +123,23 @@ def copy_or_rasterize_asset(src: Path, out_dir: Path, target_name: str | None = 
 
     if suffix in _IMAGE_SUFFIXES:
         target = out_dir / f"{safe_name}{suffix}"
+        if src.resolve() == target.resolve() if target.exists() else src == target:
+            return target
         if src != target:
-            try:
-                shutil.copy2(src, target)
-            except Exception as exc:
-                logger.warning("Failed to copy figure asset %s: %s", src, exc)
+            last_exc: Exception | None = None
+            for attempt in range(3):
+                try:
+                    shutil.copyfile(src, target)
+                    shutil.copystat(src, target, follow_symlinks=True)
+                    last_exc = None
+                    break
+                except Exception as exc:
+                    last_exc = exc
+                    if attempt < 2:
+                        time.sleep(0.2 * (attempt + 1))
+                    else:
+                        logger.warning("Failed to copy figure asset %s: %s", src, exc)
+            if last_exc is not None:
                 return src
         return target
 

@@ -6,6 +6,7 @@ from src.schemas.poster import PosterBlueprint, PosterSection
 from src.schemas.paper import PaperDocument
 from src.schemas.paper import Figure
 from src.renderers.html_renderer import HtmlPosterRenderer
+from src.utils.figure_assets import copy_or_rasterize_asset
 
 
 def _make_blueprint() -> PosterBlueprint:
@@ -210,3 +211,28 @@ class TestHtmlPosterRenderer:
         fig_map = HtmlPosterRenderer._build_figure_map(bp, doc, tmp_path)
         assert fig_map["s2"][0]["section_type"] == "main_method"
         assert fig_map["s3"][0]["section_type"] == "experiments"
+
+    def test_copy_or_rasterize_asset_retries_on_copy_failure(self, tmp_path, monkeypatch):
+        src = tmp_path / "figure.png"
+        src.write_bytes(b"fakepng")
+        out_dir = tmp_path / "out"
+
+        calls = {"count": 0}
+
+        def _fake_copyfile(_src, _dst):
+            calls["count"] += 1
+            if calls["count"] < 3:
+                raise PermissionError("locked")
+            Path(_dst).write_bytes(b"fakepng")
+
+        monkeypatch.setattr("src.utils.figure_assets.shutil.copyfile", _fake_copyfile)
+        monkeypatch.setattr("src.utils.figure_assets.shutil.copystat", lambda *args, **kwargs: None)
+        result = copy_or_rasterize_asset(src, out_dir, "figure")
+        assert result is not None
+        assert result.exists()
+
+    def test_copy_or_rasterize_asset_returns_target_for_same_file(self, tmp_path):
+        src = tmp_path / "figure.png"
+        src.write_bytes(b"fakepng")
+        result = copy_or_rasterize_asset(src, tmp_path, "figure")
+        assert result == src

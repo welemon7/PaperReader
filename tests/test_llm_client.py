@@ -11,6 +11,9 @@ class TestLLMClient:
     def test_is_configured_valid(self):
         with patch.object(settings, 'openai_api_key', 'sk-real'):
             assert LLMClient.is_configured()
+    def test_planner_is_configured_valid(self):
+        with patch.object(settings, 'planner_api_key', 'sk-planner'):
+            assert LLMClient.planner_is_configured()
     @patch('src.llm.client.httpx.post')
     def test_chat_json_success(self, mock_post):
         mr = MagicMock()

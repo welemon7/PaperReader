@@ -7,6 +7,7 @@ from typing import Optional
 from src.agents.parse_agent import run_parse_paper
 from src.agents.understand_agent import run_understand_paper
 from src.agents.poster_planner import generate_blueprint, normalize_analysis_for_poster
+from src.agents.poster_v2 import build_layout_tree, layout_tree_to_blueprint, review_rendered_poster, evaluate_poster_qa
 from src.agents.validation_agent import validate_poster
 from src.renderers.html_renderer import HtmlPosterRenderer
 from src.storage.sqlite import PaperDatabase
@@ -106,6 +107,17 @@ def run_pipeline(
     blueprint_path.write_text(blueprint.model_dump_json(indent=2), encoding="utf-8")
     logger.info("Phase 3 complete: %d sections, %d figures", len(blueprint.sections), len(blueprint.figure_placements))
 
+    # ---- Phase 3b: v2 Layout Tree ----
+    try:
+        layout_tree = build_layout_tree(doc, analysis, use_gpt5=bool(settings.openai_api_key or settings.gemini_api_key))
+        results["layout_tree"] = layout_tree
+        layout_tree_path = output_dir / "layout_tree.json"
+        layout_tree_path.write_text(layout_tree.model_dump_json(indent=2), encoding="utf-8")
+        logger.info("Phase 3b complete: %d tree nodes", len(layout_tree.nodes))
+    except Exception as e:
+        logger.warning("Phase 3b skipped: %s", e)
+        results["layout_tree"] = None
+
     # ---- Phase 4: Render ----
     logger.info("=== Phase 4: Render ===")
     renderer = HtmlPosterRenderer()
@@ -113,6 +125,18 @@ def run_pipeline(
     renderer.render_to_file(blueprint, doc, html_path)
     results["html_path"] = html_path
     logger.info("Phase 4 complete: %s (%d bytes)", html_path, html_path.stat().st_size)
+
+    try:
+        review = review_rendered_poster(html_path, output_dir)
+        results["poster_review"] = review
+        review_path = output_dir / "poster_review.json"
+        review_path.write_text(review.model_dump_json(indent=2), encoding="utf-8")
+        qa_eval = evaluate_poster_qa(doc, analysis, html_path.read_text(encoding="utf-8"), visual_score=review.quality_score)
+        results["poster_qa_eval"] = qa_eval
+        qa_path = output_dir / "poster_qa_eval.json"
+        qa_path.write_text(qa_eval.model_dump_json(indent=2), encoding="utf-8")
+    except Exception as e:
+        logger.warning("V2 review/eval skipped: %s", e)
 
     # ---- Phase 5: Validate ----
     logger.info("=== Phase 5: Validate ===")

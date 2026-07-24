@@ -14,6 +14,7 @@ if str(_root) not in sys.path:
 from src.agents.parse_agent import run_parse_paper
 from src.agents.understand_agent import run_understand_paper
 from src.agents.poster_planner import generate_blueprint
+from src.agents.poster_v2 import run_poster_v2
 from src.utils.output_paths import resolve_paper_output_dir
 
 logging.basicConfig(
@@ -65,6 +66,11 @@ def _parse_args() -> argparse.Namespace:
     pipeline.add_argument("--force", action="store_true", help="Force re-parse")
     pipeline.add_argument("--optimize", action="store_true", help="Enable Gemini optimization")
     pipeline.add_argument("--no-validate", action="store_true", help="Skip Phase 5 validation")
+
+    v2 = sub.add_parser("pipeline-v2", help="Run the v2 poster pipeline: layout tree -> HTML -> review -> QA eval")
+    v2.add_argument("arxiv_id", help="arXiv ID")
+    v2.add_argument("--output-dir", type=Path, default=Path("output"), help="Output directory")
+    v2.add_argument("--use_apigpt", action="store_true", help="Use api-GPT planning when available")
 
     sub.add_parser("list", help="List parsed papers in the database")
     pl = sub.add_parser("plan", help="Generate poster blueprint from parsed and understood paper")
@@ -140,6 +146,22 @@ def _run(args: argparse.Namespace) -> None:
                 logger.info("Pipeline complete: %d sections, %d figures", len(bp.sections), len(bp.figure_placements))
         except Exception:
             logger.exception("Pipeline failed")
+            sys.exit(1)
+
+    elif args.command == "pipeline-v2":
+        logger.info("Starting v2 poster pipeline for %s", args.arxiv_id)
+        try:
+            output_dir = resolve_paper_output_dir(args.output_dir, args.arxiv_id)
+            results = run_poster_v2(args.arxiv_id, output_dir=output_dir, use_gpt5=args.use_gpt5)
+            logger.info(
+                "V2 pipeline complete: %d tree nodes, quality=%s, qa=%s/%s",
+                len(results["layout_tree"].nodes),
+                results["review"].quality_score,
+                results["qa_eval"].correct_count,
+                results["qa_eval"].total_count,
+            )
+        except Exception:
+            logger.exception("V2 pipeline failed")
             sys.exit(1)
 
     elif args.command == "plan":
