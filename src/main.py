@@ -152,7 +152,7 @@ def _run(args: argparse.Namespace) -> None:
         logger.info("Starting v2 poster pipeline for %s", args.arxiv_id)
         try:
             output_dir = resolve_paper_output_dir(args.output_dir, args.arxiv_id)
-            results = run_poster_v2(args.arxiv_id, output_dir=output_dir, use_gpt5=args.use_gpt5)
+            results = run_poster_v2(args.arxiv_id, output_dir=output_dir, use_gpt5=args.use_apigpt)
             logger.info(
                 "V2 pipeline complete: %d tree nodes, quality=%s, qa=%s/%s",
                 len(results["layout_tree"].nodes),
