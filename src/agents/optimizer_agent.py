@@ -37,12 +37,13 @@ _SYSTEM_PROMPT = (
     '- "needs_improvement": bool (false if quality >= 8)\n\n'
     "Rules:\n"
     "- Keep core method/overview figures, especially framework and introduction figures.\n"
-    "- Keep result/comparison figures in Experiments only.\n"
+    "- Keep result/comparison figures in the main result area or core summary area.\n"
     "- Prefer at most 4 figures total.\n"
     "- Do not invent facts not supported by the paper.\n"
     "- Keep poster-facing text in English and close to the paper wording.\n"
     "- If Highlights are weak, rewrite them from contributions and experiment takeaways.\n"
-    "- If the poster is already strong, return minimal changes and set needs_improvement=false."
+    "- If the poster is already strong, return minimal changes and set needs_improvement=false.\n"
+    "- Optimize global whitespace, table height, figure crop fit, and figure relevance from the screenshot alone."
 )
 
 
@@ -54,6 +55,11 @@ def _regenerate_figures(blueprint, doc, output_dir):
     refine the existing figure plan.
     """
     return blueprint, doc, []
+
+
+def _poster_vision_provider() -> str:
+    provider = (os.getenv("POSTER_VISION_PROVIDER") or settings.poster_vision_provider or "agnes").lower()
+    return provider if provider in {"agnes", "gemini", "openai"} else "agnes"
 
 
 def _extract_numbers(text: str) -> set[str]:
@@ -205,7 +211,14 @@ def _apply_structured_quality_gate(
     return safe_review
 
 
-def _create_gemini_client() -> LLMClient:
+def _create_vision_client() -> LLMClient:
+    provider = _poster_vision_provider()
+    if provider == "agnes":
+        return LLMClient(
+            api_key=settings.agnes_api_key or settings.gemini_api_key,
+            base_url=settings.agnes_base_url or settings.gemini_base_url,
+            model=settings.agnes_model or settings.gemini_model,
+        )
     return LLMClient(
         api_key=settings.gemini_api_key,
         base_url=settings.gemini_base_url,
@@ -255,6 +268,13 @@ def _build_optimize_prompt(
     if screenshot_note:
         parts.append("\n## Screenshot Review\n")
         parts.append(screenshot_note)
+    parts.append("\n## Global QA Checklist\n")
+    parts.append("- Check whether the poster has too much whitespace or too little whitespace.")
+    parts.append("- Check whether table heights are balanced and readable, not too tall or too compressed.")
+    parts.append("- Check whether figure crops are appropriate and whether each figure is the right size.")
+    parts.append("- Check whether each figure is the right semantic match for its section.")
+    parts.append("- Check whether the layout is visually compact, balanced, and aesthetically pleasing.")
+    parts.append("- Prefer factual corrections, better figure placement, and tighter section sizing over rewriting content.")
     parts.append("\n## Task\n")
     parts.append("Review each section and suggest improved content_md. "
                  "You may also adjust layout and figure selection for better balance. "
@@ -312,9 +332,9 @@ def optimize_poster(
     if not doc or not analysis:
         raise RuntimeError(f"Paper or analysis not found for {arxiv_id}")
 
-    gemini = _create_gemini_client()
-    if not gemini.api_key or gemini.api_key == settings.gemini_api_key and not gemini.api_key:
-        logger.warning("Gemini API key not configured, using DeepSeek fallback")
+    vision_client = _create_vision_client()
+    if not vision_client.api_key:
+        logger.warning("Poster vision API key not configured; optimization will rely on local heuristics")
 
     out = resolve_paper_output_dir(output_dir, arxiv_id)
     bp_path = out / "blueprint.json"
@@ -349,7 +369,7 @@ def optimize_poster(
             if core_assets:
                 screenshot_note.append("Core figures: " + ", ".join(p.as_posix() for p in core_assets))
 
-            provider = (os.getenv("POSTER_VISION_PROVIDER") or settings.poster_vision_provider or "agnes").lower()
+            provider = _poster_vision_provider()
             screenshot_review = multimodal_analyze(
                 system_prompt=_AGNES_REVIEW_PROMPT if provider == "agnes" else _VISION_PROMPT,
                 image_paths=([str(screenshot_path)] if screenshot_path.exists() else []) + [str(p) for p in core_assets],
@@ -365,7 +385,7 @@ def optimize_poster(
                 analysis,
                 screenshot_note="\n".join(screenshot_note),
             )
-            response = gemini.chat_json(system=_SYSTEM_PROMPT, user=prompt)
+            response = vision_client.chat_json(system=_SYSTEM_PROMPT, user=prompt)
             latest_response = response
 
             quality = response.get("quality_score", 0)

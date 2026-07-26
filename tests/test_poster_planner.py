@@ -63,20 +63,24 @@ class TestPosterBlueprint:
         titles = [s.section_id for s in bp.sections]
         assert 'sec-title' in titles
         assert 'sec-motivation' in titles
+        assert 'sec-method-overview' in titles
+        assert 'sec-key-idea' in titles
         assert 'sec-main-method' in titles
-        assert 'sec-experiments' in titles
         assert 'sec-contributions' in titles
         assert 'sec-highlights' in titles
+        assert 'sec-project' in titles
 
     def test_compact_layout_positions(self):
         bp = generate_blueprint(_make_doc(), _make_analysis())
         lookup = {s.section_id: s for s in bp.sections}
         assert lookup['sec-motivation'].row == 1 and lookup['sec-motivation'].column == 1
+        assert lookup['sec-method-overview'].row == 1 and lookup['sec-method-overview'].column == 2
+        assert lookup['sec-key-idea'].row == 1 and lookup['sec-key-idea'].column == 3
         assert lookup['sec-main-method'].row == 2 and lookup['sec-main-method'].column == 1
-        assert lookup['sec-experiments'].row == 1 and lookup['sec-experiments'].column == 2
-        assert lookup['sec-experiments'].row_span == 2
+        assert lookup['sec-main-method'].col_span == 3
         assert lookup['sec-contributions'].row == 3 and lookup['sec-contributions'].column == 1
         assert lookup['sec-highlights'].row == 3 and lookup['sec-highlights'].column == 2
+        assert lookup['sec-project'].row == 3 and lookup['sec-project'].column == 3
         assert lookup['sec-motivation'].row_span == 1
         assert lookup['sec-main-method'].row_span == 1
 
@@ -97,31 +101,32 @@ class TestPosterBlueprint:
         }
         bp = generate_blueprint(_make_doc(), _make_analysis())
         method = next(s for s in bp.sections if s.section_id == 'sec-main-method')
-        results = next(s for s in bp.sections if s.section_id == 'sec-experiments')
+        overview = next(s for s in bp.sections if s.section_id == 'sec-method-overview')
         motiv = next(s for s in bp.sections if s.section_id == 'sec-motivation')
         assert '<span class="poster-highlight">novel approach</span>' in method.content_md
-        assert '<span class="poster-highlight-metric">State-of-the-art</span>' in results.content_md
+        assert '<span class="poster-highlight-metric">State-of-the-art</span>' in method.content_md
+        assert '<span' not in overview.content_md
         assert '<span' not in motiv.content_md
 
     def test_figure_placement(self):
         bp = generate_blueprint(_make_doc(), _make_analysis())
         placements = {p.figure_id: p.section_id for p in bp.figure_placements}
-        assert placements['fig-001'] == 'sec-experiments'
-        assert placements['fig-002'] == 'sec-main-method'
-        assert placements['fig-101'] == 'sec-main-method'
-        assert placements['fig-102'] == 'sec-experiments'
+        assert placements['fig-001'] == 'sec-main-method'
+        assert placements['fig-002'] == 'sec-method-overview'
+        assert placements['fig-101'] == 'sec-method-overview'
+        assert placements['fig-102'] == 'sec-main-method'
 
     def test_doc_figures_can_feed_placements(self):
         bp = generate_blueprint(_make_doc(), _make_analysis())
         placements = {p.figure_id: p.section_id for p in bp.figure_placements}
-        assert placements['fig-101'] == 'sec-main-method'
-        assert placements['fig-102'] == 'sec-experiments'
+        assert placements['fig-101'] == 'sec-method-overview'
+        assert placements['fig-102'] == 'sec-main-method'
         assert len(bp.figure_placements) == 4
 
     def test_formula_display(self):
         bp = generate_blueprint(_make_doc(), _make_analysis())
         assert len(bp.formula_displays) == 1
-        assert bp.formula_displays[0].section_id == 'sec-main-method'
+        assert bp.formula_displays[0].section_id == 'sec-method-overview'
 
     def test_formula_display_backfills_from_document_when_underfilled(self):
         doc = _make_doc()
@@ -174,9 +179,9 @@ class TestPosterBlueprint:
 
     def test_results_do_not_include_takeaways_text(self):
         bp = generate_blueprint(_make_doc(), _make_analysis())
-        results = next(s for s in bp.sections if s.section_id == 'sec-experiments')
-        assert 'Takeaways' not in results.content_md
-        assert 'Works well' not in results.content_md
+        core = next(s for s in bp.sections if s.section_id == 'sec-main-method')
+        assert 'State-of-the-art' in core.content_md
+        assert 'Dataset-A' in core.content_md
 
     def test_author_cleaning(self):
         doc = _make_doc()

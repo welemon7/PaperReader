@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     gemini_base_url: str = "https://happyapi.org/v1"
 
     # Poster vision / review
-    poster_vision_provider: str = "openai"
+    poster_vision_provider: str = "agnes"
     agnes_api_key: str = ""
     agnes_model: str = "agnes-2.0-flash"
     agnes_base_url: str = "https://apihub.agnes-ai.com/v1"

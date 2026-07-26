@@ -20,6 +20,11 @@ from src.utils.output_paths import resolve_paper_output_dir
 logger = logging.getLogger(__name__)
 
 
+def _poster_vision_provider() -> str:
+    provider = (settings.poster_vision_provider or "agnes").lower()
+    return provider if provider in {"agnes", "gemini", "openai"} else "agnes"
+
+
 def validate_doc(doc: PaperDocument) -> list[str]:
     issues = []
     if not doc.title:
@@ -127,7 +132,7 @@ def run_pipeline(
     logger.info("Phase 4 complete: %s (%d bytes)", html_path, html_path.stat().st_size)
 
     try:
-        review = review_rendered_poster(html_path, output_dir)
+        review = review_rendered_poster(html_path, output_dir, provider=_poster_vision_provider())
         results["poster_review"] = review
         review_path = output_dir / "poster_review.json"
         review_path.write_text(review.model_dump_json(indent=2), encoding="utf-8")

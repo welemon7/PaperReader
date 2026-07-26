@@ -4,74 +4,43 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{{ poster_title }} - Poster</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
 :root {
-    --bg: {{ color_scheme.background }};
-    --panel: #ffffff;
-    --panel-weak: #f7f9fc;
-    --ink: {{ color_scheme.text }};
-    --muted: #5f6b7a;
-    --border: {{ color_scheme.border }};
-    --primary: {{ color_scheme.primary }};
-    --accent: {{ color_scheme.accent }};
-    --highlight: {{ color_scheme.highlight }};
+    --poster-blue: {{ color_scheme.primary }};
+    --poster-dark-blue: #072245;
+    --poster-bg: #ffffff;
+    --border-color: {{ color_scheme.border }};
+    --text-main: {{ color_scheme.text }};
+    --text-muted: #4a5568;
+    --accent-orange: {{ color_scheme.accent }};
+    --panel-soft: #f7f9fc;
 }
-* { box-sizing: border-box; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { min-height: 100%; }
 body {
-    margin: 0;
-    background:
-        radial-gradient(circle at top left, rgba(25, 45, 74, 0.08), transparent 28%),
-        radial-gradient(circle at top right, rgba(102, 151, 198, 0.08), transparent 24%),
-        var(--bg);
-    color: var(--ink);
-    font-family: Inter, "Helvetica Neue", Arial, sans-serif;
+    background: #e9ecf1;
+    font-family: 'Inter', sans-serif;
+    color: var(--text-main);
     line-height: 1.5;
-}
-.page {
-    width: min({{ poster_width }}px, calc(100vw - 32px));
-    margin: 16px auto 24px;
-}
-.poster {
-    background: linear-gradient(180deg, rgba(255,255,255,0.95), #ffffff 120px);
-    border: 1px solid rgba(18, 32, 49, 0.08);
-    box-shadow: 0 18px 60px rgba(18, 32, 49, 0.14);
-    overflow: hidden;
-}
-.hero {
-    padding: 32px 34px 24px;
-    background:
-        linear-gradient(135deg, rgba(22, 50, 79, 0.98), rgba(22, 50, 79, 0.92)),
-        linear-gradient(90deg, rgba(90, 125, 154, 0.8), rgba(143, 179, 217, 0.55));
-    color: white;
-    border-bottom: 1px solid rgba(255,255,255,0.12);
-}
-.hero-top {
+    padding: 30px 20px;
     display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 16px;
+    justify-content: center;
 }
-.hero-title-group {
-    min-width: 0;
-    flex: 1 1 auto;
+.poster-container {
+    max-width: 1400px;
+    width: 100%;
+    background: var(--poster-bg);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    padding: 20px;
 }
-.hero-badge-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 10px;
-}
-.hero-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 10px;
-    border: 1px solid rgba(255,255,255,0.18);
-    border-radius: 999px;
-    font-size: 12px;
-    letter-spacing: 0;
-    opacity: 0.95;
+.header {
+    text-align: center;
+    padding-bottom: 15px;
+    border-bottom: 2px solid var(--border-color);
+    margin-bottom: 15px;
 }
 .hero-pill {
     display: inline-flex;
@@ -79,184 +48,114 @@ body {
     justify-content: center;
     min-height: 28px;
     padding: 5px 10px;
-    border: 1px solid rgba(255,255,255,0.22);
+    border: 1px solid rgba(11, 47, 101, 0.18);
     border-radius: 999px;
-    color: rgba(255,255,255,0.96);
-    background: rgba(255,255,255,0.08);
+    color: var(--poster-blue);
+    background: rgba(11, 47, 101, 0.06);
     font-size: 12px;
     font-weight: 700;
     line-height: 1;
     text-decoration: none;
     white-space: nowrap;
 }
-.hero-link {
-    background: rgba(255,255,255,0.12);
-}
-.hero-link:hover {
-    background: rgba(255,255,255,0.18);
-}
-.hero h1 {
-    margin: 16px 0 8px;
-    font-size: 30px;
-    line-height: 1.1;
-    letter-spacing: 0;
+.hero-link:hover { background: rgba(11, 47, 101, 0.1); }
+.header h1 {
+    font-size: 32px;
+    color: var(--poster-blue);
     font-weight: 800;
-    max-width: none;
-    width: 100%;
-    display: block;
-    text-wrap: balance;
-    overflow-wrap: normal;
-    word-break: normal;
-}
-.authors {
-    max-width: 70ch;
-    color: rgba(255,255,255,0.88);
-    font-size: 15px;
-}
-.content {
-    padding: 14px;
-}
-.layout-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-areas:
-        "motivation results"
-        "method results"
-        "contribution keytakeaways";
-    grid-template-rows: minmax(112px, auto) minmax(140px, auto) minmax(132px, auto);
-    gap: 12px;
-    align-items: start;
-}
-.motivation-section {
-    height: auto;
-    align-self: start;
-}
-.motivation-section .section-body {
-    padding: 8px 12px 9px;
-    gap: 6px;
-}
-.motivation-section .section-body p {
+    letter-spacing: 0;
     margin-bottom: 4px;
+    text-wrap: balance;
 }
-.motivation-section .section-body p:last-child {
-    margin-bottom: 0;
+.header .authors {
+    font-size: 14px;
+    color: var(--text-muted);
+    font-weight: 600;
+    margin-top: 2px;
 }
-.section {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 8px;
+.header .affiliation {
+    font-size: 13px;
+    color: var(--text-muted);
+}
+.grid-container {
+    display: grid;
+    grid-template-columns: 1fr 1.2fr 1fr;
+    grid-template-areas:
+        "motivation overview key_idea"
+        "core core core"
+        "contributions highlights project";
+    gap: 15px;
+}
+.section-block {
+    border: 1px solid var(--border-color);
+    background: #fff;
+    border-radius: 4px;
     overflow: hidden;
-    min-height: 0;
-    align-self: stretch;
-    height: 100%;
     display: flex;
     flex-direction: column;
+    min-height: 0;
 }
-.section-header {
-    background: linear-gradient(180deg, rgba(232, 238, 244, 0.95), rgba(245, 248, 251, 0.95));
-    padding: 8px 12px;
-    color: var(--primary);
-    border-bottom: 1px solid var(--border);
-    font-size: 12px;
+.section-title {
+    background: var(--poster-blue);
+    color: #fff;
+    font-size: 13px;
     font-weight: 800;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    text-align: center;
+    padding: 8px 10px;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
 }
-.section-body {
-    padding: 11px 12px 12px;
-    font-size: 12px;
-    color: var(--ink);
+.section-content {
+    padding: 12px 14px;
+    font-size: 13px;
+    flex: 1;
     display: flex;
     flex-direction: column;
     gap: 10px;
-    flex: 1 1 auto;
 }
-.section-body p { margin: 0 0 8px; }
-.section-body p:last-child { margin-bottom: 0; }
-.section-body ul, .section-body ol { margin: 8px 0; padding-left: 18px; }
-.section-body li { margin-bottom: 5px; }
-.section-body strong { color: var(--primary); }
-.poster-highlight {
-    color: #b83c00;
-    font-weight: 800;
-}
-.poster-highlight-metric {
-    color: #1f6f8b;
-    font-weight: 800;
-}
-.section-body blockquote {
-    margin: 10px 0;
-    padding: 10px 12px;
-    border-left: 3px solid var(--accent);
-    background: var(--panel-weak);
-    color: var(--muted);
-}
-.section-body table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 8px 0;
+.section-content p { margin: 0; }
+.section-content ul, .section-content ol { padding-left: 18px; margin: 5px 0; }
+.section-content li { margin-bottom: 5px; }
+.section-content strong { color: var(--poster-blue); }
+.highlight-orange { color: var(--accent-orange); font-weight: 700; }
+.muted { color: var(--text-muted); }
+.callout {
+    background: #f8fafc;
+    border-left: 4px solid var(--poster-blue);
+    padding: 8px 12px;
     font-size: 12px;
 }
-.section-body th, .section-body td {
-    border: 1px solid #d8e1ea;
-    padding: 7px 8px;
-    text-align: left;
-    vertical-align: top;
-}
-.section-body th {
-    background: #edf3f8;
-    color: var(--primary);
-    font-weight: 700;
-}
+.callout.alt { border-left-color: var(--accent-orange); }
 .figure-stack {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-    align-content: start;
-    justify-items: stretch;
+    gap: 10px;
 }
-.figure-stack.method-hero {
-    grid-template-columns: minmax(0, 1fr);
-    justify-items: center;
-}
-.figure-stack.results-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-.figure-stack.results-single {
-    grid-template-columns: minmax(0, 1fr);
-}
+.figure-stack.one { grid-template-columns: 1fr; }
+.figure-stack.two { grid-template-columns: 1fr 1fr; }
 .figure-card {
-    border: 1px solid #d8e0ea;
-    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
     background: #fff;
     padding: 7px;
-    align-self: start;
-}
-.figure-card.full { grid-column: 1 / -1; }
-.figure-card.method-hero-card {
-    width: min(100%, 680px);
-}
-.figure-card.result-card {
-    min-height: 0;
 }
 .figure-card img {
     width: 100%;
     height: auto;
     display: block;
-    border-radius: 4px;
-}
-.figure-card.method-hero-card img,
-.figure-card.result-card img {
-    width: 100%;
-    max-height: 280px;
+    border-radius: 3px;
     object-fit: contain;
     background: #fbfcfe;
+}
+.figure-card.method-card img,
+.figure-card.result-card img {
+    max-height: 260px;
 }
 .figure-caption {
     margin-top: 6px;
     font-size: 11px;
     line-height: 1.35;
-    color: var(--muted);
+    color: var(--text-muted);
 }
 .figure-placeholder {
     min-height: 110px;
@@ -270,104 +169,155 @@ body {
     border: 1px dashed #c6d3df;
     border-radius: 6px;
 }
-.footer {
-    padding: 0 16px 16px;
-}
-.footer-band {
-    display: flex;
-    justify-content: space-between;
-    gap: 16px;
-    align-items: center;
-    padding: 12px 14px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: linear-gradient(180deg, #fbfdff, #f4f8fc);
-    color: var(--muted);
+.table-wrap { overflow-x: auto; }
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 4px 0 0;
     font-size: 12px;
 }
-.footer-band strong { color: var(--primary); }
-@media (min-width: 1101px) {
-    .section { min-height: 100%; }
+th, td {
+    border: 1px solid #d8e1ea;
+    padding: 7px 8px;
+    text-align: left;
+    vertical-align: top;
 }
+th {
+    background: #edf3f8;
+    color: var(--poster-blue);
+    font-weight: 700;
+}
+.code-link {
+    word-break: break-all;
+    color: var(--poster-blue);
+    font-weight: 700;
+    text-decoration: none;
+}
+.code-link:hover { text-decoration: underline; }
+.project-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    text-align: center;
+    min-height: 100%;
+}
+.qr-placeholder {
+    width: 80px;
+    height: 80px;
+    background: #000;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+}
+.link-text {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--poster-blue);
+    word-break: break-all;
+}
+.code-cta {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+}
+.code-cta .label {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+.grid-area-motivation { grid-area: motivation; }
+.grid-area-overview { grid-area: overview; }
+.grid-area-keyidea { grid-area: key_idea; }
+.grid-area-core { grid-area: core; }
+.grid-area-contributions { grid-area: contributions; }
+.grid-area-highlights { grid-area: highlights; }
+.grid-area-project { grid-area: project; }
 @media (max-width: 1100px) {
-    .layout-grid {
+    .grid-container {
         grid-template-columns: 1fr;
         grid-template-areas:
             "motivation"
-            "method"
-            "results"
-            "contribution"
-            "keytakeaways";
+            "overview"
+            "key_idea"
+            "core"
+            "contributions"
+            "highlights"
+            "project";
     }
+    .figure-stack.two { grid-template-columns: 1fr; }
 }
 @media print {
-    body { background: white; }
-    .page { width: 100%; margin: 0; }
-    .poster { box-shadow: none; border: none; }
+    body { background: white; padding: 0; }
+    .poster-container { box-shadow: none; border: none; }
 }
 </style>
 </head>
 <body>
-<div class="page">
-  <div class="poster">
-    <header class="hero">
-      <div class="hero-top">
-        <div class="hero-title-group">
-          <div class="hero-badge-row">
-            <div class="hero-badge">Paper-to-Poster Research Reader</div>
-            {% if code_url %}
+
+<div class="poster-container">
+    <header class="header">
+        <h1>{{ poster_title }}</h1>
+        {% if authors_str %}
+        <div class="authors">{{ authors_str }}</div>
+        {% endif %}
+        {% if code_url %}
+        <div class="grid-area-project" style="margin-top: 8px; margin-bottom: 2px;">
             <a class="hero-pill hero-link" href="{{ code_url }}" target="_blank" rel="noreferrer noopener">{{ code_url }}</a>
-            {% endif %}
-          </div>
-          <h1>{{ poster_title }}</h1>
-          {% if authors_str %}
-          <div class="authors">{{ authors_str }}</div>
-          {% endif %}
         </div>
-      </div>
+        {% endif %}
+        <div class="affiliation">Paper-to-Poster Research Reader</div>
     </header>
 
-    <main class="content">
-      <section class="layout-grid">
+    <div class="grid-container">
         {% for sec in layout %}
-        <article class="section {% if sec.type == 'motivation' %}motivation-section{% endif %}" style="grid-area: {% if sec.type == 'motivation' %}motivation{% elif sec.type == 'main_method' %}method{% elif sec.type == 'experiments' %}results{% elif sec.type == 'contributions' %}contribution{% elif sec.type == 'highlights' %}keytakeaways{% else %}auto{% endif %};">
-          <div class="section-header">{{ sec.title }}</div>
-          <div class="section-body">
-            {{ sec.content_html|safe }}
-            {% set section_figs = figure_map.get(sec.section_id, []) %}
-            {% if section_figs %}
-            <div class="figure-stack {% if sec.type == 'main_method' %}method-hero{% elif sec.type == 'experiments' %}{% if section_figs|length > 1 %}results-grid{% else %}results-single{% endif %}{% endif %}">
-              {% for fig in section_figs %}
-              <div class="figure-card {% if sec.type == 'main_method' and loop.first %}method-hero-card{% elif sec.type == 'experiments' %}result-card{% endif %} {% if fig.width_ratio >= 0.8 %}full{% endif %}">
-                {% if fig.src %}
-                <img src="{{ fig.src }}" alt="{{ fig.caption }}">
-                {% else %}
-                <div class="figure-placeholder">Figure unavailable: {{ fig.caption }}</div>
+        {% set grid_class = 'grid-area-' ~ sec.type %}
+        <div class="section-block {{ grid_class }}" style="grid-area: {% if sec.type == 'motivation' %}motivation{% elif sec.type == 'method_overview' %}overview{% elif sec.type == 'key_idea' %}key_idea{% elif sec.type == 'main_method' %}core{% elif sec.type == 'contributions' %}contributions{% elif sec.type == 'highlights' %}highlights{% elif sec.type == 'project_link' %}project{% else %}core{% endif %};">
+            <div class="section-title">{{ sec.title }}</div>
+            <div class="section-content">
+                {% if sec.type == 'project_link' %}
+                <div class="project-box">
+                    <div class="qr-placeholder">[QR]</div>
+                    <div class="code-cta">
+                        <div class="label">Code & Project</div>
+                        {% if code_url %}
+                        <a class="code-link" href="{{ code_url }}" target="_blank" rel="noreferrer noopener">{{ code_url }}</a>
+                        {% endif %}
+                    </div>
+                </div>
                 {% endif %}
-                {% if fig.caption %}
-                <div class="figure-caption">{{ fig.caption }}</div>
+                {{ sec.content_html|safe }}
+                {% set section_figs = figure_map.get(sec.section_id, []) %}
+                {% if section_figs %}
+                <div class="figure-stack {% if sec.type in ['method_overview', 'main_method'] %}one{% elif section_figs|length > 1 %}two{% else %}one{% endif %}">
+                    {% for fig in section_figs %}
+                    <div class="figure-card {% if sec.type in ['method_overview', 'main_method'] %}method-card{% elif sec.type == 'experiments' %}result-card{% endif %}">
+                        {% if fig.src %}
+                        <img src="{{ fig.src }}" alt="{{ fig.caption }}">
+                        {% else %}
+                        <div class="figure-placeholder">Figure unavailable: {{ fig.caption }}</div>
+                        {% endif %}
+                        {% if fig.caption %}
+                        <div class="figure-caption">{{ fig.caption }}</div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
                 {% endif %}
-              </div>
-              {% endfor %}
             </div>
-            {% endif %}
-          </div>
-        </article>
+        </div>
         {% endfor %}
-      </section>
-    </main>
-
-    <footer class="footer">
-      <div class="footer-band">
-        <div><strong>Reader mode:</strong> optimized for quick paper comprehension and poster export.</div>
-        <div><strong>Validation:</strong> render, inspect, refine.</div>
-      </div>
-    </footer>
-  </div>
+    </div>
 </div>
+
 <script>
 MathJax = { tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] } };
 </script>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+
 </body>
 </html>

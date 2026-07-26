@@ -49,6 +49,11 @@ _QA_SYSTEM_PROMPT = (
 )
 
 
+def _poster_vision_provider() -> str:
+    provider = (settings.poster_vision_provider or "agnes").lower()
+    return provider if provider in {"agnes", "gemini", "openai"} else "agnes"
+
+
 def _normalize_severity(value: object) -> str:
     text = str(value or "").strip().lower()
     if text in {"error", "warning", "info"}:
@@ -351,6 +356,7 @@ def render_layout_tree(doc: PaperDocument, analysis: PaperAnalysis, tree: Layout
 def review_rendered_poster(html_path: Path, output_dir: Path, provider: str | None = None) -> PosterReview:
     png_path = output_dir / "poster.png"
     capture_poster(html_path, png_path)
+    provider = provider or _poster_vision_provider()
     review = multimodal_analyze(
         system_prompt=_COMMENT_SYSTEM_PROMPT,
         image_paths=[str(png_path)] if png_path.exists() else [],
@@ -468,14 +474,14 @@ def run_poster_v2(arxiv_id: str, output_dir: Path | str = Path("output"), use_gp
 
     tree = build_layout_tree(doc, analysis, use_gpt5=use_gpt5)
     blueprint, html_path = render_layout_tree(doc, analysis, tree, out)
-    review = review_rendered_poster(html_path, out, provider=settings.poster_vision_provider)
+    review = review_rendered_poster(html_path, out, provider=_poster_vision_provider())
 
     if review.needs_improvement and review.issues:
         tree, blueprint = _apply_comment_feedback(tree, blueprint, review)
         (out / "layout_tree.json").write_text(tree.model_dump_json(indent=2), encoding="utf-8")
         (out / "blueprint_v2.json").write_text(blueprint.model_dump_json(indent=2), encoding="utf-8")
         blueprint, html_path = render_layout_tree(doc, analysis, tree, out)
-        review = review_rendered_poster(html_path, out, provider=settings.poster_vision_provider)
+        review = review_rendered_poster(html_path, out, provider=_poster_vision_provider())
 
     poster_text = html_path.read_text(encoding="utf-8")
     qa_eval = evaluate_poster_qa(doc, analysis, poster_text, visual_score=review.quality_score)
