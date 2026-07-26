@@ -30,3 +30,12 @@ class TestLLMClient:
         mock_post.return_value = mr
         r = LLMClient().chat_json('', '')
         assert r == {'a': 1}
+
+    @patch('src.llm.client.httpx.post')
+    def test_chat_returns_raw_content(self, mock_post):
+        mr = MagicMock()
+        mr.status_code = 200
+        mr.json.return_value = {'choices': [{'message': {'content': '<html><body>ok</body></html>'}}]}
+        mock_post.return_value = mr
+        content = LLMClient().chat('sys', 'user')
+        assert content == '<html><body>ok</body></html>'

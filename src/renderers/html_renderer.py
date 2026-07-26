@@ -10,6 +10,7 @@ from typing import Optional
 import markdown as md_lib
 from jinja2 import Environment, FileSystemLoader
 
+from src.llm.client import LLMClient, LLMError
 from src.schemas.paper import PaperDocument
 from src.schemas.poster import PosterBlueprint, FigurePlacement
 from src.utils.figure_assets import copy_or_rasterize_asset, resolve_figure_source, sanitize_asset_name
@@ -17,13 +18,15 @@ from src.utils.figure_assets import copy_or_rasterize_asset, resolve_figure_sour
 logger = logging.getLogger(__name__)
 
 _TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "templates")
+_DEFAULT_HTML_OPTIMIZER_PROMPT = Path(__file__).resolve().parents[2] / "example" / "LLM-up.txt"
 
 
 class HtmlPosterRenderer:
-    def __init__(self, template_dir: str = _TEMPLATE_DIR) -> None:
+    def __init__(self, template_dir: str = _TEMPLATE_DIR, optimizer_prompt_path: Path | None = None) -> None:
         self.env = Environment(loader=FileSystemLoader(template_dir))
         self.env.filters["summarize_text"] = self._summarize_text
         self.template = self.env.get_template("poster.html.j2")
+        self.optimizer_prompt_path = Path(optimizer_prompt_path) if optimizer_prompt_path else _DEFAULT_HTML_OPTIMIZER_PROMPT
 
     @staticmethod
     def _markdown_with_latex(text: str) -> str:
@@ -102,6 +105,7 @@ class HtmlPosterRenderer:
         blueprint: PosterBlueprint,
         doc: PaperDocument,
         output_dir: Path | None = None,
+        optimize_with_llm: bool = False,
     ) -> str:
         if output_dir is None:
             from src.utils.output_paths import sanitize_output_name
@@ -129,7 +133,7 @@ class HtmlPosterRenderer:
             sec.content_md = self._clean_html_text(sec.content_md)
             sec.content_html = self._markdown_with_latex(sec.content_md)
 
-        return self.template.render(
+        html = self.template.render(
             poster_title=blueprint.poster_title,
             authors_str=blueprint.authors_str,
             code_url=blueprint.code_url,
@@ -140,16 +144,73 @@ class HtmlPosterRenderer:
             figure_map=figure_map,
         )
 
+        if optimize_with_llm:
+            html = self._optimize_html_with_llm(html, doc, blueprint, output_dir)
+
+        return html
+
     def render_to_file(
         self,
         blueprint: PosterBlueprint,
         doc: PaperDocument,
         output_path: Path,
+        optimize_with_llm: bool = False,
     ) -> Path:
-        html = self.render(blueprint, doc, output_path.parent)
+        html = self.render(blueprint, doc, output_path.parent, optimize_with_llm=optimize_with_llm)
         output_path.write_text(html, encoding="utf-8")
         logger.info("Poster HTML saved to %s", output_path)
         return output_path
+
+    def _optimize_html_with_llm(
+        self,
+        html: str,
+        doc: PaperDocument,
+        blueprint: PosterBlueprint,
+        output_dir: Path,
+    ) -> str:
+        if not LLMClient.is_configured():
+            logger.info("LLM optimizer disabled: API key not configured")
+            return html
+
+        try:
+            instruction = self.optimizer_prompt_path.read_text(encoding="utf-8")
+        except OSError as e:
+            logger.warning("LLM optimizer prompt missing, skipping optimization: %s", e)
+            return html
+
+        client = LLMClient()
+        system_prompt = (
+            "You are a strict HTML poster editor. "
+            "Return a complete, standalone HTML document only. "
+            "Preserve the paper content, figures, and math rendering. "
+            "Do not add explanations, markdown, or code fences."
+        )
+        user_prompt = (
+            f"{instruction.strip()}\n\n"
+            f"## Paper\nTitle: {doc.title}\nArXiv: {doc.arxiv_id or doc.paper_id}\n"
+            f"## Poster Blueprint\nTitle: {blueprint.poster_title}\n"
+            f"Authors: {blueprint.authors_str}\n"
+            f"Output directory: {output_dir.as_posix()}\n\n"
+            "## Initial HTML\n"
+            f"{html}"
+        )
+
+        try:
+            optimized = client.chat(system=system_prompt, user=user_prompt)
+        except LLMError as e:
+            logger.warning("HTML optimization skipped: %s", e)
+            return html
+
+        optimized = optimized.strip()
+        if not optimized:
+            logger.warning("HTML optimization returned empty content; keeping original HTML")
+            return html
+        if "<html" not in optimized.lower() or "</html>" not in optimized.lower():
+            logger.warning("HTML optimization did not return a full document; keeping original HTML")
+            return html
+
+        logger.info("HTML optimized with LLM (%d -> %d chars)", len(html), len(optimized))
+        return optimized
 
     def _prepare_figure_assets(self, blueprint: PosterBlueprint, doc: PaperDocument, output_dir: Path) -> None:
         """Normalize all poster figures to browser-friendly local assets.

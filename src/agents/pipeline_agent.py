@@ -127,7 +127,7 @@ def run_pipeline(
     logger.info("=== Phase 4: Render ===")
     renderer = HtmlPosterRenderer()
     html_path = output_dir / "poster.html"
-    renderer.render_to_file(blueprint, doc, html_path)
+    renderer.render_to_file(blueprint, doc, html_path, optimize_with_llm=True)
     results["html_path"] = html_path
     logger.info("Phase 4 complete: %s (%d bytes)", html_path, html_path.stat().st_size)
 

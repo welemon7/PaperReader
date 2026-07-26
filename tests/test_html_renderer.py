@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import patch
 
 from src.schemas.poster import PosterBlueprint, PosterSection
 from src.schemas.paper import PaperDocument
@@ -105,6 +106,23 @@ class TestHtmlPosterRenderer:
         assert result.exists()
         content = result.read_text(encoding="utf-8")
         assert "Test Poster" in content
+
+    @patch("src.renderers.html_renderer.LLMClient.is_configured", return_value=False)
+    def test_render_skips_llm_when_unconfigured(self, _mock_config):
+        doc = PaperDocument(paper_id="test-999", arxiv_id="9999.99999", title="Test", raw_markdown=".")
+        bp = _make_blueprint()
+        renderer = HtmlPosterRenderer()
+        html = renderer.render(bp, doc, Path("output") / "9999.99999", optimize_with_llm=True)
+        assert "<!DOCTYPE html>" in html
+
+    @patch("src.renderers.html_renderer.LLMClient.is_configured", return_value=True)
+    @patch("src.renderers.html_renderer.LLMClient.chat", return_value="<!DOCTYPE html><html><body>optimized</body></html>")
+    def test_render_uses_llm_optimizer(self, _mock_chat, _mock_config, tmp_path):
+        doc = PaperDocument(paper_id="test-999", arxiv_id="9999.99999", title="Test", raw_markdown=".")
+        bp = _make_blueprint()
+        renderer = HtmlPosterRenderer()
+        html = renderer.render(bp, doc, tmp_path, optimize_with_llm=True)
+        assert "optimized" in html
 
     def test_organize_rows(self):
         bp = _make_blueprint()
