@@ -355,7 +355,6 @@ def optimize_poster(
                 system_prompt=_VISION_REVIEW_PROMPT,
                 image_paths=([str(screenshot_path)] if screenshot_path.exists() else []) + [str(p) for p in core_assets],
                 user_text=_build_harness_prompt(blueprint, analysis, doc),
-                # provider="openai",
             )
             if screenshot_review is not None:
                 latest_review = _apply_structured_quality_gate(blueprint, doc, analysis, screenshot_review)

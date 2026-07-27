@@ -19,6 +19,10 @@ __all__ = [
     "run_pipeline",
     "optimize_poster",
     "validate_poster",
+    "optimize_html_with_llm",
+    "batch_optimize_html",
+    "optimize_with_feedback",
+    "optimize_html_string",
 ]
 
 
@@ -62,4 +66,16 @@ def __getattr__(name: str):
     if name == "validate_poster":
         from .validation_agent import validate_poster
         return validate_poster
+    if name == "optimize_html_with_llm":
+        from .html_optimizer import optimize_html_with_llm
+        return optimize_html_with_llm
+    if name == "batch_optimize_html":
+        from .html_optimizer import batch_optimize_html
+        return batch_optimize_html
+    if name == "optimize_with_feedback":
+        from .html_optimizer import optimize_with_feedback
+        return optimize_with_feedback
+    if name == "optimize_html_string":
+        from .html_optimizer import optimize_html_string
+        return optimize_html_string
     raise AttributeError(name)

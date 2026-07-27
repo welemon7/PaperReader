@@ -95,6 +95,23 @@ def _parse_args() -> argparse.Namespace:
     u.add_argument("arxiv_id", help="arXiv ID of the previously parsed paper")
     u.add_argument("--output", "-o", type=Path, default=None, help="Output JSON file for the PaperAnalysis")
 
+    # ========== 新增: HTML 优化子命令 ==========
+    # 单次/迭代 HTML 优化
+    opt_html = sub.add_parser("optimize-html", help="Optimize an HTML poster using LLM with a custom prompt")
+    opt_html.add_argument("html", type=Path, help="Path to the HTML file to optimize")
+    opt_html.add_argument("prompt", type=Path, help="Path to the optimization prompt file (LLM-up.txt)")
+    opt_html.add_argument("--output", "-o", type=Path, default=None, help="Output HTML file path")
+    opt_html.add_argument("--model", type=str, default=None, help="LLM model to use")
+    opt_html.add_argument("--iterations", type=int, default=1, help="Number of optimization iterations")
+    opt_html.add_argument("--feedback", type=Path, default=None, help="Feedback prompt file for iterative optimization")
+
+    # 批量 HTML 优化
+    batch_opt = sub.add_parser("batch-optimize-html", help="Batch optimize HTML with multiple prompts")
+    batch_opt.add_argument("html", type=Path, help="Path to the HTML file to optimize")
+    batch_opt.add_argument("prompts", type=Path, help="Directory containing prompt .txt files")
+    batch_opt.add_argument("--output-dir", "-o", type=Path, default=Path("optimized"), help="Output directory")
+    batch_opt.add_argument("--model", type=str, default=None, help="LLM model to use")
+
     return parser.parse_args()
 
 
@@ -129,7 +146,6 @@ def _run(args: argparse.Namespace) -> None:
             len(doc.references),
         )
 
-    
     elif args.command == "pipeline":
         from src.agents.pipeline_agent import run_pipeline
         logger.info("Starting full pipeline for %s", args.arxiv_id)
@@ -205,7 +221,6 @@ def _run(args: argparse.Namespace) -> None:
                     f"{p['paper_id']:<20} {p['arxiv_id']:<20} {p['created_at']:<30}"
                 )
 
-
     elif args.command == "parse-pdf":
         from src.parsers.pdf_extractor import extract_pdf_text, extract_pdf_figures, infer_title, extract_formulas_from_text, extract_sections_from_markdown
         from src.schemas.paper import PaperDocument, Section, Formula, Figure
@@ -266,6 +281,57 @@ def _run(args: argparse.Namespace) -> None:
             len(analysis.key_formulas),
             len(analysis.key_figures),
         )
+
+    elif args.command == "optimize-html":
+        from src.agents.html_optimizer import optimize_html_with_llm, optimize_with_feedback
+
+        if args.iterations > 1:
+            # 迭代优化
+            logger.info(f"Starting iterative HTML optimization: {args.iterations} iterations")
+            output_dir = args.output.parent if args.output else args.html.parent / "optimized"
+            results = optimize_with_feedback(
+                html_path=args.html,
+                prompt_path=args.prompt,
+                feedback_path=args.feedback,
+                iterations=args.iterations,
+                output_dir=output_dir,
+            )
+            logger.info(f"Optimization complete: {len(results)} iterations")
+            for r in results:
+                if r.get("success"):
+                    logger.info(f"  Iteration {r['iteration']}: {r['output_file']} ({r['size']} chars)")
+                else:
+                    logger.warning(f"  Iteration {r['iteration']}: FAILED - {r.get('error')}")
+        else:
+            # 单次优化
+            logger.info("Starting HTML optimization")
+            output = args.output or args.html.parent / f"{args.html.stem}_optimized.html"
+            result = optimize_html_with_llm(
+                html_path=args.html,
+                prompt_path=args.prompt,
+                output_path=output,
+                model=args.model,
+            )
+            logger.info(f"Optimization complete: {output} ({len(result)} chars)")
+
+    elif args.command == "batch-optimize-html":
+        from src.agents.html_optimizer import batch_optimize_html
+
+        logger.info(f"Starting batch HTML optimization with prompts from: {args.prompts}")
+        results = batch_optimize_html(
+            html_path=args.html,
+            prompts_dir=args.prompts,
+            output_dir=args.output_dir,
+            model=args.model,
+        )
+        success_count = sum(1 for r in results if r.get("success"))
+        logger.info(f"Batch optimization complete: {success_count}/{len(results)} successful")
+        for r in results:
+            if r.get("success"):
+                logger.info(f"  {r['prompt_file']} -> {r['output_file']}")
+            else:
+                logger.warning(f"  {r['prompt_file']}: FAILED - {r.get('error')}")
+
 
 if __name__ == "__main__":
     cli_entry()

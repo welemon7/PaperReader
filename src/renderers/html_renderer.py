@@ -21,6 +21,8 @@ _TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "templates")
 _DEFAULT_HTML_OPTIMIZER_PROMPT = Path(__file__).resolve().parents[2] / "example" / "LLM-up.txt"
 
 
+
+
 class HtmlPosterRenderer:
     def __init__(self, template_dir: str = _TEMPLATE_DIR, optimizer_prompt_path: Path | None = None) -> None:
         self.env = Environment(loader=FileSystemLoader(template_dir))
@@ -53,23 +55,24 @@ class HtmlPosterRenderer:
 
     @staticmethod
     def _summarize_text(text: str, max_sentences: int = 2) -> str:
-        """Return a short readable summary without adding ellipses.
-
-        The poster hero cards should show complete copy, so we keep the first
-        one or two sentences instead of doing a hard character truncate.
-        """
+        """Return a short readable summary without adding ellipses."""
         if not text:
             return ""
 
+        # 清理HTML标签和实体
         cleaned = re.sub(r"<[^>]+>", " ", text)
         cleaned = html_lib.unescape(cleaned)
         cleaned = re.sub(r"\s+", " ", cleaned).strip()
+
         if not cleaned:
             return ""
 
-        sentences = re.split(r"(?<=[.!?銆傦紒锛焆)\s+", cleaned)
+        sentence_endings = r"[.!?。！？]"
+        sentences = re.split(f"(?<={sentence_endings})\\s+", cleaned)
+
         if len(sentences) <= max_sentences:
             return cleaned
+
         return " ".join(sentences[:max_sentences]).strip()
 
     @staticmethod
