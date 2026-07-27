@@ -5,6 +5,7 @@ import logging
 import re
 from pathlib import Path
 from typing import Any, Optional
+from urllib.parse import urlsplit
 
 from src.llm.client import LLMClient
 from src.config import settings
@@ -59,9 +60,15 @@ def optimize_html_with_llm(
     # 读取内容
     html_content = html_path.read_text(encoding='utf-8')
     user_prompt = prompt_path.read_text(encoding='utf-8')
+    allowed_figures = _collect_allowed_figure_assets(html_path.parent / "figures")
 
     logger.info(f"Loaded HTML: {len(html_content)} chars")
     logger.info(f"Loaded prompt: {len(user_prompt)} chars")
+    if allowed_figures:
+        user_prompt = (
+            f"{user_prompt}\n\nAllowed figure assets (use only these local files for <img> tags):\n"
+            + "\n".join(f"- figures/{name}" for name in sorted(allowed_figures))
+        )
 
     # 构建完整的用户提示
     full_user_prompt = _build_user_prompt(html_content, user_prompt)
@@ -77,6 +84,7 @@ def optimize_html_with_llm(
         )
         # 清理响应（移除可能的 markdown 包裹）
         optimized_html = _clean_response(response)
+        optimized_html = _normalize_figure_sources(optimized_html, allowed_figures)
 
         logger.info(f"Received optimized HTML: {len(optimized_html)} chars")
 
@@ -105,6 +113,47 @@ def _build_user_prompt(html_content: str, user_instructions: str) -> str:
     {user_instructions}
     
     Please optimize the HTML according to the instructions. Return ONLY the complete HTML document, no explanations."""
+
+
+def _collect_allowed_figure_assets(figures_dir: Path) -> set[str]:
+    if not figures_dir.exists():
+        return set()
+    return {path.name for path in figures_dir.iterdir() if path.is_file()}
+
+
+def _normalize_figure_sources(html: str, allowed_figures: set[str]) -> str:
+    if not html or not allowed_figures:
+        return html
+
+    img_pattern = re.compile(
+        r"<img(?P<before>[^>]*?)\bsrc=(?P<quote>[\"'])(?P<src>.*?)(?P=quote)(?P<after>[^>]*)>",
+        re.IGNORECASE | re.DOTALL,
+    )
+
+    def _rewrite(match: re.Match[str]) -> str:
+        before = match.group("before")
+        quote = match.group("quote")
+        src = match.group("src").strip()
+        after = match.group("after")
+
+        normalized = _allowed_figure_src(src, allowed_figures)
+        if normalized:
+            return f"<img{before} src={quote}{normalized}{quote}{after}>"
+        return '<div class="figure-placeholder">Figure unavailable</div>'
+
+    return img_pattern.sub(_rewrite, html)
+
+
+def _allowed_figure_src(src: str, allowed_figures: set[str]) -> str:
+    if not src or src.startswith("data:"):
+        return ""
+    parsed = urlsplit(src)
+    candidate = Path(parsed.path).name
+    if candidate in allowed_figures:
+        return f"figures/{candidate}"
+    if src.replace("\\", "/").startswith("figures/") and candidate in allowed_figures:
+        return f"figures/{candidate}"
+    return ""
 
 
 def _clean_response(response: str) -> str:

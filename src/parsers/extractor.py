@@ -4,7 +4,7 @@ import logging
 import re
 
 from .latex_parser import ParseResult
-from src.utils.figure_assets import resolve_figure_source
+from src.utils.figure_assets import resolve_figure_source, sanitize_asset_name
 
 logger = logging.getLogger(__name__)
 
@@ -120,6 +120,7 @@ class ComponentExtractor:
                     "label": label or None,
                     "caption": caption,
                     "local_path": path.strip(),
+                    "asset_filename": sanitize_asset_name(fid, fid),
                     "minio_path": None,
                     "width": width or None,
                     "section_id": sec_id,
@@ -161,6 +162,7 @@ class ComponentExtractor:
                     "label": label or None,
                     "caption": caption,
                     "local_path": path.strip(),
+                    "asset_filename": sanitize_asset_name(fid, fid),
                     "minio_path": None,
                     "width": width or None,
                     "section_id": sec_id,

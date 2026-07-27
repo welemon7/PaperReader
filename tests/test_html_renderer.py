@@ -321,7 +321,27 @@ class TestHtmlPosterRenderer:
             type("FP", (), {"figure_id": "fig-001", "section_id": "s3", "width_ratio": 0.9, "caption": "Plot"})()
         ]
         fig_map = HtmlPosterRenderer._build_figure_map(bp, doc, tmp_path)
-        assert fig_map["s3"][0]["src"] == "paper/plot.png"
+        assert fig_map["s3"][0]["src"] is None
+
+    def test_build_figure_map_rejects_non_figures_sources(self, tmp_path):
+        source_dir = tmp_path / "paper"
+        source_dir.mkdir()
+        img = source_dir / "plot.png"
+        img.write_bytes(b"fakepng")
+        doc = PaperDocument(
+            paper_id="test-999",
+            arxiv_id="9999.99999",
+            title="Test",
+            raw_markdown=".",
+            source_dir=str(source_dir),
+            figures=[Figure(figure_id="fig-001", caption="Plot", local_path=str(img), section_id="s3")],
+        )
+        bp = _make_blueprint()
+        bp.figure_placements = [
+            type("FP", (), {"figure_id": "fig-001", "section_id": "s3", "width_ratio": 0.9, "caption": "Plot"})()
+        ]
+        fig_map = HtmlPosterRenderer._build_figure_map(bp, doc, tmp_path)
+        assert fig_map["s3"][0]["src"] is None
 
     def test_build_figure_map_matches_semantic_blueprint_ids(self, tmp_path, monkeypatch):
         source_dir = tmp_path / "paper"

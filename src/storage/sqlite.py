@@ -70,6 +70,7 @@ class FigureRecord(Base):
     paper_id = Column(String, ForeignKey("papers.paper_id"), nullable=False, primary_key=True)
     section_id = Column(String, nullable=False)
     caption = Column(Text, default="")
+    asset_filename = Column(String, nullable=True)
     minio_path = Column(String, nullable=True)
     local_path = Column(String, nullable=True)
     label = Column(String, nullable=True)
@@ -161,6 +162,7 @@ class PaperDatabase:
                         paper_id=paper_id,
                         section_id=fig.section_id,
                         caption=fig.caption,
+                        asset_filename=fig.asset_filename,
                         minio_path=fig.minio_path,
                         local_path=fig.local_path,
                         label=fig.label,

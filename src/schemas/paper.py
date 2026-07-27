@@ -21,6 +21,7 @@ class Figure(BaseModel):
     label: Optional[str] = Field(default=None, description="\\label{fig:...} if present")
     caption: str = Field(default="")
     local_path: Optional[str] = Field(default=None, description="Path to extracted image on disk")
+    asset_filename: Optional[str] = Field(default=None, description="Stable filename for the normalized figure asset")
     minio_path: Optional[str] = Field(default=None, description="Path inside MinIO bucket")
     width: Optional[str] = Field(default=None, description="\\includegraphics[width=...]")
     section_id: str = Field(description="Section this figure belongs to")

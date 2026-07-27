@@ -228,10 +228,19 @@ class HtmlPosterRenderer:
                 continue
             candidate = self._resolve_figure_path(fig.local_path or fig.minio_path or "", doc.source_dir)
             if not candidate:
+                logger.warning("Skipping figure %s: source asset not found", getattr(fig, "figure_id", ""))
+                fig.local_path = None
                 continue
-            prepared = self._ensure_browser_asset(candidate, fig_dir, fig.figure_id)
-            if prepared:
+            prepared = self._ensure_browser_asset(
+                candidate,
+                fig_dir,
+                getattr(fig, "asset_filename", None) or fig.figure_id,
+            )
+            if prepared and prepared.resolve().is_relative_to(fig_dir.resolve()):
                 fig.local_path = str(prepared)
+            else:
+                logger.warning("Skipping figure %s: normalized asset missing under figures/", getattr(fig, "figure_id", ""))
+                fig.local_path = None
 
     def _ensure_browser_asset(self, src: Path, out_dir: Path, figure_id: str) -> Path | None:
         src = src.resolve()
@@ -242,9 +251,7 @@ class HtmlPosterRenderer:
         prepared = copy_or_rasterize_asset(src, out_dir, target_name)
         if prepared:
             return prepared
-        if src.suffix.lower() not in {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff"}:
-            return None
-        return src
+        return None
 
     @staticmethod
     def _resolve_figure_path(local_path: str, source_dir: str) -> Path | None:
@@ -262,6 +269,7 @@ class HtmlPosterRenderer:
             cls._normalize_figure_key(getattr(fig, "figure_id", "")),
             cls._normalize_figure_key(getattr(fig, "label", "")),
             cls._normalize_figure_key(getattr(fig, "caption", "")),
+            cls._normalize_figure_key(getattr(fig, "asset_filename", "")),
         }
         local_path = getattr(fig, "local_path", None)
         if local_path:
@@ -384,12 +392,16 @@ class HtmlPosterRenderer:
                 src = fig.local_path or fig.minio_path
                 if src:
                     resolved = HtmlPosterRenderer._resolve_figure_path(src, doc.source_dir)
-                    if resolved and resolved.suffix.lower() == ".pdf":
-                        resolved = copy_or_rasterize_asset(resolved, output_dir / "figures", fig.figure_id) or resolved
+                    figures_dir = (output_dir / "figures").resolve()
                     if resolved:
-                        entry["src"] = HtmlPosterRenderer._browser_asset_uri(resolved, output_dir)
-                    else:
-                        entry["src"] = src if src.startswith("file:") else Path(src).resolve().as_uri() if Path(src).exists() else src
+                        if resolved.suffix.lower() == ".pdf":
+                            target_name = getattr(fig, "asset_filename", None) or fig.figure_id
+                            resolved = copy_or_rasterize_asset(resolved, output_dir / "figures", target_name) or resolved
+                        if resolved.resolve().is_relative_to(figures_dir):
+                            entry["src"] = HtmlPosterRenderer._browser_asset_uri(resolved, output_dir)
+                        else:
+                            logger.warning("Dropping non-normalized figure asset for %s", fp.figure_id)
+                            entry["src"] = None
             fig_map.setdefault(fp.section_id, []).append(entry)
         return fig_map
 
