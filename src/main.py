@@ -16,6 +16,7 @@ from src.agents.understand_agent import run_understand_paper
 from src.agents.poster_planner import generate_blueprint
 from src.agents.poster_v2 import run_poster_v2
 from src.utils.output_paths import resolve_paper_output_dir
+from src.llm.multimodal_client import capture_poster
 
 logging.basicConfig(
     level=logging.INFO,
@@ -23,6 +24,15 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 logger = logging.getLogger(__name__)
+
+
+def _save_html_png(html_path: Path, png_path: Path) -> Path | None:
+    """Render an HTML poster to a PNG file next to the HTML output."""
+    png_path.parent.mkdir(parents=True, exist_ok=True)
+    result = capture_poster(html_path=html_path, png_path=png_path)
+    if result:
+        logger.info("Poster PNG saved to %s", result)
+    return result
 
 
 def cli_entry() -> None:
@@ -344,6 +354,8 @@ def _run(args: argparse.Namespace) -> None:
                 output_path=output,
                 model=args.model,
             )
+            _save_html_png(html_path, html_path.with_suffix(".png"))
+            _save_html_png(output, output.with_suffix(".png"))
             logger.info(f"Optimization complete: {output} ({len(result)} chars)")
 
     elif args.command == "batch-optimize-html":
