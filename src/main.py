@@ -64,13 +64,13 @@ def _parse_args() -> argparse.Namespace:
     pipeline.add_argument("arxiv_id", help="arXiv ID")
     pipeline.add_argument("--output-dir", type=Path, default=Path("output"), help="Output directory")
     pipeline.add_argument("--force", action="store_true", help="Force re-parse")
-    pipeline.add_argument("--optimize", action="store_true", help="Enable Gemini optimization")
+    pipeline.add_argument("--optimize", action="store_true", help="Enable LLM optimization")
     pipeline.add_argument("--no-validate", action="store_true", help="Skip Phase 5 validation")
 
     v2 = sub.add_parser("pipeline-v2", help="Run the v2 poster pipeline: layout tree -> HTML -> review -> QA eval")
     v2.add_argument("arxiv_id", help="arXiv ID")
     v2.add_argument("--output-dir", type=Path, default=Path("output"), help="Output directory")
-    v2.add_argument("--use_apigpt", action="store_true", help="Use api-GPT planning when available")
+    v2.add_argument("--use_llm", action="store_true", help="Use LLM planning when available")
 
     sub.add_parser("list", help="List parsed papers in the database")
     pl = sub.add_parser("plan", help="Generate poster blueprint from parsed and understood paper")
@@ -80,7 +80,7 @@ def _parse_args() -> argparse.Namespace:
     v.add_argument("arxiv_id", help="arXiv ID of the parsed paper")
     v.add_argument("blueprint", type=Path, help="Path to the PosterBlueprint JSON file")
 
-    op = sub.add_parser("optimize", help="Optimize poster content using Gemini LLM")
+    op = sub.add_parser("optimize", help="Optimize poster content using LLM")
     op.add_argument("arxiv_id", help="arXiv ID")
     op.add_argument("--output-dir", type=Path, default=Path("output"), help="Output directory")
     op.add_argument("--iterations", type=int, default=1, help="Max optimization iterations")
@@ -152,7 +152,7 @@ def _run(args: argparse.Namespace) -> None:
         logger.info("Starting v2 poster pipeline for %s", args.arxiv_id)
         try:
             output_dir = resolve_paper_output_dir(args.output_dir, args.arxiv_id)
-            results = run_poster_v2(args.arxiv_id, output_dir=output_dir, use_gpt5=args.use_apigpt)
+            results = run_poster_v2(args.arxiv_id, output_dir=output_dir, use_gpt5=args.use_llm)
             logger.info(
                 "V2 pipeline complete: %d tree nodes, quality=%s, qa=%s/%s",
                 len(results["layout_tree"].nodes),

@@ -49,9 +49,6 @@ _QA_SYSTEM_PROMPT = (
 )
 
 
-def _poster_vision_provider() -> str:
-    provider = (settings.poster_vision_provider or "agnes").lower()
-    return provider if provider in {"agnes", "gemini", "openai"} else "agnes"
 
 
 def _normalize_severity(value: object) -> str:
@@ -142,7 +139,11 @@ def build_layout_tree(doc: PaperDocument, analysis: PaperAnalysis, use_gpt5: boo
 
     if use_gpt5 and LLMClient.is_configured():
         try:
-            client = LLMClient(api_key=getattr(settings, "planner_api_key", None) or None, base_url=getattr(settings, "planner_base_url", None) or None, model=getattr(settings, "planner_model", None) or None)
+            client = LLMClient(
+                api_key=settings.llm_api_key,
+                base_url=settings.llm_base_url,
+                model=settings.llm_model,
+            )
             prompt = _build_tree_prompt(doc, analysis)
             response = client.chat_json(system=_TREE_SYSTEM_PROMPT, user=prompt)
             return _parse_tree_response(doc, analysis, response)
@@ -356,12 +357,10 @@ def render_layout_tree(doc: PaperDocument, analysis: PaperAnalysis, tree: Layout
 def review_rendered_poster(html_path: Path, output_dir: Path, provider: str | None = None) -> PosterReview:
     png_path = output_dir / "poster.png"
     capture_poster(html_path, png_path)
-    provider = provider or _poster_vision_provider()
     review = multimodal_analyze(
         system_prompt=_COMMENT_SYSTEM_PROMPT,
         image_paths=[str(png_path)] if png_path.exists() else [],
         user_text="Review the rendered poster for text overload, tiny figures, density imbalance, and reading order.",
-        provider=provider,
     )
     if not review:
         return PosterReview(summary="No vision review available.")
@@ -401,7 +400,11 @@ def generate_paperquiz_questions(doc: PaperDocument, analysis: PaperAnalysis, co
 
 def evaluate_poster_qa(doc: PaperDocument, analysis: PaperAnalysis, poster_text: str, visual_score: int = 0) -> PosterQAEval:
     questions = generate_paperquiz_questions(doc, analysis)
-    client = LLMClient(api_key=settings.openai_api_key or settings.planner_api_key, base_url=settings.planner_base_url or settings.llm_base_url, model=settings.qa_model)
+    client = LLMClient(
+        api_key=settings.llm_api_key,
+        base_url=settings.llm_base_url,
+        model=settings.llm_model,
+    )
     poster_answers: list[str] = []
     correct_count = 0
     for q in questions:
@@ -474,14 +477,14 @@ def run_poster_v2(arxiv_id: str, output_dir: Path | str = Path("output"), use_gp
 
     tree = build_layout_tree(doc, analysis, use_gpt5=use_gpt5)
     blueprint, html_path = render_layout_tree(doc, analysis, tree, out)
-    review = review_rendered_poster(html_path, out, provider=_poster_vision_provider())
+    review = review_rendered_poster(html_path, out)
 
     if review.needs_improvement and review.issues:
         tree, blueprint = _apply_comment_feedback(tree, blueprint, review)
         (out / "layout_tree.json").write_text(tree.model_dump_json(indent=2), encoding="utf-8")
         (out / "blueprint_v2.json").write_text(blueprint.model_dump_json(indent=2), encoding="utf-8")
         blueprint, html_path = render_layout_tree(doc, analysis, tree, out)
-        review = review_rendered_poster(html_path, out, provider=_poster_vision_provider())
+        review = review_rendered_poster(html_path, out)
 
     poster_text = html_path.read_text(encoding="utf-8")
     qa_eval = evaluate_poster_qa(doc, analysis, poster_text, visual_score=review.quality_score)

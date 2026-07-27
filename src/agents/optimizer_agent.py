@@ -57,9 +57,6 @@ def _regenerate_figures(blueprint, doc, output_dir):
     return blueprint, doc, []
 
 
-def _poster_vision_provider() -> str:
-    provider = (os.getenv("POSTER_VISION_PROVIDER") or settings.poster_vision_provider or "agnes").lower()
-    return provider if provider in {"agnes", "gemini", "openai"} else "agnes"
 
 
 def _extract_numbers(text: str) -> set[str]:
@@ -130,23 +127,11 @@ def _generate_result_chart(analysis, output_dir, chart_data=None):
     return None
 
 
-_VISION_PROMPT = (
-    "You are a scientific poster design expert. Review the poster image and the attached figure images. "
-    "Return JSON with:\n"
-    '- "quality_score": int (1-10)\n'
-    '- "figure_selection": list of {"keep": bool, "figure_id": str, "section_id": str, "width_ratio": float, "caption": str}\n'
-    "  - For each figure, decide if it belongs in the poster. Keep only essential ones (architecture, core results).\n"
-    '  - Assign to correct section (sec-main-method, sec-experiments, etc.)\n'
-    '  - Set width_ratio based on importance (0.5 for smaller, 1.0 for full width)\n'
-    '- "layout_feedback": list of {"section": str, "suggestion": str}\n'
-    '- "issues": list of {"severity": str, "description": str}\n'
-    '- "needs_improvement": bool\n'
-    "Be critical: 2-4 figures max. Remove redundant ones. Keep the visual hierarchy clean and poster-like."
-)
-
-_AGNES_REVIEW_PROMPT = (
+# 统一的系统提示词（合并原来的 VISION_PROMPT 和 AGNES_REVIEW_PROMPT）
+_VISION_REVIEW_PROMPT = (
     "You are a strict scientific poster reviewer. Compare the poster screenshot and core figures against the paper summary. "
     "Reject any suggestion that changes formulas, numeric results, or factual claims without exact evidence. "
+    "Be critical: 2-4 figures max. Remove redundant ones. Keep the visual hierarchy clean and poster-like. "
     "Output JSON with: quality_score, issues, figure_selection, layout_feedback, and needs_improvement. "
     "For each issue include severity and description. Treat the screenshot as the primary layout source."
 )
@@ -212,17 +197,13 @@ def _apply_structured_quality_gate(
 
 
 def _create_vision_client() -> LLMClient:
-    provider = _poster_vision_provider()
-    if provider == "agnes":
-        return LLMClient(
-            api_key=settings.agnes_api_key or settings.gemini_api_key,
-            base_url=settings.agnes_base_url or settings.gemini_base_url,
-            model=settings.agnes_model or settings.gemini_model,
-        )
+    """创建统一的LLM客户端，使用统一的配置"""
+    if not settings.llm_api_key:
+        logger.warning("LLM API key not configured")
     return LLMClient(
-        api_key=settings.gemini_api_key,
-        base_url=settings.gemini_base_url,
-        model=settings.gemini_model,
+        api_key=settings.llm_api_key,
+        base_url=settings.llm_base_url,
+        model=settings.llm_model,
     )
 
 
@@ -323,7 +304,7 @@ def optimize_poster(
     output_dir: str = "output",
     max_iterations: int = 1,
 ) -> dict[str, Any]:
-    logger.info("=== Poster Optimization with Gemini ===")
+    logger.info("=== Poster Optimization ===")
 
     db = PaperDatabase()
     doc = db.get_paper_by_arxiv(arxiv_id)
@@ -334,7 +315,7 @@ def optimize_poster(
 
     vision_client = _create_vision_client()
     if not vision_client.api_key:
-        logger.warning("Poster vision API key not configured; optimization will rely on local heuristics")
+        logger.warning("LLM API key not configured; optimization will rely on local heuristics")
 
     out = resolve_paper_output_dir(output_dir, arxiv_id)
     bp_path = out / "blueprint.json"
@@ -369,12 +350,12 @@ def optimize_poster(
             if core_assets:
                 screenshot_note.append("Core figures: " + ", ".join(p.as_posix() for p in core_assets))
 
-            provider = _poster_vision_provider()
+            # 使用统一的 review prompt
             screenshot_review = multimodal_analyze(
-                system_prompt=_AGNES_REVIEW_PROMPT if provider == "agnes" else _VISION_PROMPT,
+                system_prompt=_VISION_REVIEW_PROMPT,
                 image_paths=([str(screenshot_path)] if screenshot_path.exists() else []) + [str(p) for p in core_assets],
                 user_text=_build_harness_prompt(blueprint, analysis, doc),
-                provider=provider,
+                # provider="openai",
             )
             if screenshot_review is not None:
                 latest_review = _apply_structured_quality_gate(blueprint, doc, analysis, screenshot_review)

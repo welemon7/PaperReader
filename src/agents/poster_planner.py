@@ -145,7 +145,7 @@ def generate_blueprint(
     if use_gemini:
         try:
             from src.config import settings
-            if settings.gemini_api_key:
+            if settings.llm_api_key:
                 blueprint = _gemini_layout(doc, analysis)
                 _normalize_compact_layout(blueprint.sections)
                 _apply_poster_highlights(blueprint.sections, analysis)
@@ -281,6 +281,35 @@ def _build_core_section(doc: PaperDocument, analysis: PaperAnalysis) -> PosterSe
         column=1, col_span=3, row=2,
     )
 
+
+
+def _build_result_block(analysis: PaperAnalysis) -> str:
+    """Build a result summary block from analysis."""
+    if not analysis.experiments:
+        return ""
+
+    parts = []
+    exp = analysis.experiments
+
+    # Main results
+    if exp.main_results:
+        parts.append(f"**Main Results:** {_clean_poster_text(exp.main_results)}")
+
+    # Datasets
+    if exp.datasets:
+        parts.append(f"**Datasets:** {', '.join(_clean_poster_text(d) for d in exp.datasets)}")
+
+    # Metrics
+    if exp.metrics:
+        parts.append(f"**Metrics:** {', '.join(_clean_poster_text(m) for m in exp.metrics)}")
+
+    # Takeaways
+    if exp.takeaways:
+        takeaways = [_clean_poster_text(t) for t in exp.takeaways[:3]]
+        parts.append("**Key Takeaways:**")
+        parts.extend(f"- {t}" for t in takeaways)
+
+    return "\n".join(parts) if parts else ""
 
 def _build_results_section(analysis: PaperAnalysis) -> PosterSection:
     """Compatibility wrapper for the result summary used by older tests."""
@@ -703,7 +732,7 @@ def _select_poster_highlights(
     from src.config import settings
 
     client = LLMClient(
-        api_key=settings.openai_api_key,
+        api_key=settings.llm_api_key,
         base_url=settings.llm_base_url,
         model=settings.llm_model,
     )
@@ -1161,9 +1190,9 @@ def _gemini_layout(
     from src.llm.client import LLMClient
 
     gemini = LLMClient(
-        api_key=settings.gemini_api_key,
-        base_url=settings.gemini_base_url,
-        model=settings.gemini_model,
+        api_key=settings.llm_api_key,
+        base_url=settings.llm_base_url,
+        model=settings.llm_model,
     )
 
     prompt_parts = []
@@ -1194,7 +1223,7 @@ def _gemini_layout(
     try:
         result = gemini.chat_json(system=_GEMINI_LAYOUT_PROMPT, user=user_prompt)
     except Exception as e:
-        logger.warning("Gemini layout call failed: %s, using static fallback", e)
+        logger.warning("LLM layout call failed: %s, using static fallback", e)
         return _static_layout(doc, analysis)
 
     sections = []

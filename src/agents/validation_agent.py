@@ -57,16 +57,9 @@ def call_llm_node(state: ValidationState) -> dict:
     if not prompt:
         return {"error": "No prompt"}
     try:
-        if settings.gemini_api_key:
-            client = LLMClient(
-                api_key=settings.gemini_api_key,
-                base_url=settings.gemini_base_url,
-                model=settings.gemini_model,
-            )
-        elif LLMClient.is_configured():
-            client = LLMClient()
-        else:
+        if not LLMClient.is_configured():
             return {"error": "LLM API key not configured"}
+        client = LLMClient()
         result = client.chat_json(system=_SYSTEM_PROMPT, user=prompt)
         return {"llm_response": result}
     except LLMError as e:
@@ -95,17 +88,9 @@ def validate_poster(arxiv_id: str, blueprint_path: str) -> PosterValidation:
         state["blueprint"] = bp
         state["validation_prompt"] = _build_validation_prompt(state["paper_markdown"] or "", bp)
 
-        if settings.gemini_api_key:
-            client = LLMClient(
-                api_key=settings.gemini_api_key,
-                base_url=settings.gemini_base_url,
-                model=settings.gemini_model,
-            )
-        elif LLMClient.is_configured():
-            client = LLMClient()
-        else:
+        if not LLMClient.is_configured():
             raise RuntimeError("LLM API key not configured")
-
+        client = LLMClient()
         llm_resp = client.chat_json(system=_SYSTEM_PROMPT, user=state["validation_prompt"] or "")
         state["llm_response"] = llm_resp
         issues_data = llm_resp.get("issues", [])

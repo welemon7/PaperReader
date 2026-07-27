@@ -17,34 +17,19 @@ class Settings(BaseSettings):
     # arXiv
     arxiv_cache_dir: str = "./data/arxiv_cache"
 
-    # LLM (OpenAI-compatible)
-    openai_api_key: str = ""
-    llm_model: str = "agnes-2.0-flash"
-    llm_base_url: str = "https://happyapi.org/v1"
+    # LLM (Unified) - 统一使用这一个配置
+    llm_api_key: str = "sk-X2AUiiAUKx1EV7qmFSr8NeErKFMpzAY1KxLeiV7ks5O5gYId"  # 统一API密钥
+    llm_model: str = "agnes-2.0-flash"  # 统一模型
+    llm_base_url: str = "https://apihub.agnes-ai.com/v1"  # 统一Base URL
     llm_max_tokens: int = 8192
     llm_temperature: float = 0.1
 
-    # Planner / QA / v2 poster flow
-    planner_api_key: str = ""
-    planner_model: str = "agnes-2.0-flash"
-    planner_base_url: str = "https://happyapi.org/v1"
-    planner_max_tokens: int = 8192
-    planner_temperature: float = 0.2
-
-    # Poster v2 dedicated model aliases
-    qa_model: str = "agnes-2.0-flash"
-    review_model: str = "agnes-2.0-flash"
-
-    # Gemini
-    gemini_api_key: str = ""
-    gemini_model: str = "gemini-3.5-flash-ci"
-    gemini_base_url: str = "https://happyapi.org/v1"
-
-    # Poster vision / review
-    poster_vision_provider: str = "agnes"
-    agnes_api_key: str = ""
-    agnes_model: str = "agnes-2.0-flash"
-    agnes_base_url: str = "https://apihub.agnes-ai.com/v1"
+    # 保留向后兼容（可选，可以删除）
+    # openai_api_key: str = ""  # 可以删除
+    # planner_api_key: str = ""  # 可以删除
+    # gemini_api_key: str = ""  # 可以删除
+    # agnes_api_key: str = ""  # 可以删除
+    # poster_vision_provider: str = "agnes"  # 可以删除
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

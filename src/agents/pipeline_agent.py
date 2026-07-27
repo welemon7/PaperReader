@@ -20,10 +20,6 @@ from src.utils.output_paths import resolve_paper_output_dir
 logger = logging.getLogger(__name__)
 
 
-def _poster_vision_provider() -> str:
-    provider = (settings.poster_vision_provider or "agnes").lower()
-    return provider if provider in {"agnes", "gemini", "openai"} else "agnes"
-
 
 def validate_doc(doc: PaperDocument) -> list[str]:
     issues = []
@@ -105,7 +101,7 @@ def run_pipeline(
 
     # ---- Phase 3: Plan ----
     logger.info("=== Phase 3: Plan ===")
-    use_gemini = bool(settings.gemini_api_key) if hasattr(settings, "gemini_api_key") else False
+    use_gemini = bool(settings.llm_api_key) if hasattr(settings, "llm_api_key") else False
     blueprint = generate_blueprint(doc, analysis, use_gemini=use_gemini)
     results["blueprint"] = blueprint
     blueprint_path = output_dir / "blueprint.json"
@@ -114,7 +110,7 @@ def run_pipeline(
 
     # ---- Phase 3b: v2 Layout Tree ----
     try:
-        layout_tree = build_layout_tree(doc, analysis, use_gpt5=bool(settings.openai_api_key or settings.gemini_api_key))
+        layout_tree = build_layout_tree(doc, analysis, use_gpt5=bool(settings.llm_api_key))
         results["layout_tree"] = layout_tree
         layout_tree_path = output_dir / "layout_tree.json"
         layout_tree_path.write_text(layout_tree.model_dump_json(indent=2), encoding="utf-8")
@@ -132,7 +128,7 @@ def run_pipeline(
     logger.info("Phase 4 complete: %s (%d bytes)", html_path, html_path.stat().st_size)
 
     try:
-        review = review_rendered_poster(html_path, output_dir, provider=_poster_vision_provider())
+        review = review_rendered_poster(html_path, output_dir)
         results["poster_review"] = review
         review_path = output_dir / "poster_review.json"
         review_path.write_text(review.model_dump_json(indent=2), encoding="utf-8")
@@ -156,7 +152,7 @@ def run_pipeline(
         results["validation"] = None
 
     if with_optimize:
-        logger.info("=== Phase 6: Optimize with Gemini ====")
+        logger.info("=== Phase 6: Optimize with LLM ====")
         try:
             from src.agents.optimizer_agent import optimize_poster
             opt = optimize_poster(arxiv_id, output_dir=str(output_dir), max_iterations=max_retries)

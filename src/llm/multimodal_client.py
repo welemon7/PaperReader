@@ -27,38 +27,21 @@ _IMAGE_MIME_TYPES = {
 
 
 def multimodal_analyze(
-    system_prompt: str,
-    image_paths: list[str],
-    user_text: str = "",
-    provider: str | None = None,
+        system_prompt: str,
+        image_paths: list[str],
+        user_text: str = "",
 ) -> Optional[dict[str, Any]]:
-    """Send images + text to a multimodal vision provider.
+    """Send images + text to multimodal LLM using unified configuration.
 
-    The current default provider is Gemini-compatible, but this wrapper keeps
-    the caller side stable so other providers (for example Agnes-compatible
-    endpoints) can be introduced through configuration without changing the
-    poster workflow.
+    Uses the unified LLM configuration from settings (llm_api_key, llm_base_url, llm_model).
     """
-    provider = (provider or os.getenv("POSTER_VISION_PROVIDER") or "gemini").lower()
-    if provider not in {"gemini", "agnes", "openai"}:
-        logger.warning("Unsupported multimodal provider '%s', falling back to gemini", provider)
-        provider = "gemini"
-
-    if provider == "openai":
-        api_key = os.getenv("OPENAI_API_KEY") or settings.openai_api_key or settings.planner_api_key
-        base_url = (os.getenv("OPENAI_BASE_URL") or settings.planner_base_url or settings.llm_base_url).rstrip("/")
-        model = os.getenv("OPENAI_MODEL") or settings.review_model or settings.planner_model
-    elif provider == "agnes":
-        api_key = os.getenv("AGNES_API_KEY") or settings.agnes_api_key or settings.gemini_api_key
-        base_url = (os.getenv("AGNES_BASE_URL") or settings.agnes_base_url or settings.gemini_base_url).rstrip("/")
-        model = os.getenv("AGNES_MODEL") or settings.agnes_model or settings.gemini_model
-    else:
-        api_key = settings.gemini_api_key
-        base_url = settings.gemini_base_url.rstrip("/")
-        model = settings.gemini_model
+    # 直接使用统一的 LLM 配置
+    api_key = settings.llm_api_key
+    base_url = settings.llm_base_url.rstrip("/")
+    model = settings.llm_model
 
     if not api_key or api_key in ("", "sk-your-key-here"):
-        logger.warning("Multimodal API key not configured for provider=%s", provider)
+        logger.warning("LLM API key not configured")
         return None
 
     content: list[dict] = [

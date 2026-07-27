@@ -16,10 +16,9 @@ class LLMError(Exception):
 
 
 class LLMClient:
-    """OpenAI-compatible LLM client (works with DeepSeek, OpenAI, etc.)."""
 
     def __init__(self, api_key=None, base_url=None, model=None) -> None:
-        self.api_key = api_key or settings.openai_api_key
+        self.api_key = api_key or settings.llm_api_key
         self.base_url = (base_url or settings.llm_base_url).rstrip("/")
         self.model = model or settings.llm_model
         self.max_tokens = settings.llm_max_tokens
@@ -137,7 +136,7 @@ class LLMClient:
     @staticmethod
     def is_configured() -> bool:
         """Check if the API key is set."""
-        return bool(settings.openai_api_key) and settings.openai_api_key not in (
+        return bool(settings.llm_api_key) and settings.llm_api_key not in (
             "",
             "sk-your-key-here",
         )
@@ -145,7 +144,7 @@ class LLMClient:
     @staticmethod
     def planner_is_configured() -> bool:
         """Check whether the dedicated planner credentials are set."""
-        return bool(getattr(settings, "planner_api_key", "")) and getattr(settings, "planner_api_key", "") not in (
+        return bool(settings.llm_api_key) and settings.llm_api_key not in (
             "",
             "sk-your-key-here",
         )

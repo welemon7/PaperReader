@@ -103,7 +103,7 @@ def call_llm_node(state: UnderstandState) -> dict:
     if not prompt:
         return {"error": "No analysis prompt"}
     if not LLMClient.is_configured():
-        return {"error": "LLM API key not configured. Set OPENAI_API_KEY in .env"}
+        return {"error": "LLM API key not configured. Set LLM_API_KEY in .env"}
     try:
         client = LLMClient()
         result = client.chat_json(system=_SYSTEM_PROMPT, user=prompt)
