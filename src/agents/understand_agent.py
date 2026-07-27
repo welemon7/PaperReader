@@ -58,11 +58,13 @@ def _extract_code_url(doc: PaperDocument) -> str:
         window = text[max(0, idx - 220): idx + 420]
         urls = [_clean_url(u) for u in _URL_PATTERN.findall(window)]
         for url in urls:
-            if any(host in url.lower() for host in ("github.com", "gitlab.com", "bitbucket.org", "codeberg.org", "huggingface.co")):
+            if any(host in url.lower() for host in
+                   ("github.com", "gitlab.com", "bitbucket.org", "codeberg.org", "huggingface.co")):
                 return url
         if urls:
             return urls[0]
     return ""
+
 
 class UnderstandState(TypedDict):
     arxiv_id: str
@@ -71,6 +73,7 @@ class UnderstandState(TypedDict):
     llm_response: Optional[dict[str, Any]]
     paper_analysis: Optional[PaperAnalysis]
     error: Optional[str]
+
 
 def load_paper_node(state: UnderstandState) -> dict:
     arxiv_id = state.get("arxiv_id", "")
@@ -88,6 +91,7 @@ def load_paper_node(state: UnderstandState) -> dict:
         logger.exception("Failed to load paper")
         return {"error": f"Load failed: {e}"}
 
+
 def build_prompt_node(state: UnderstandState) -> dict:
     doc = state.get("paper_document")
     if not doc:
@@ -98,6 +102,7 @@ def build_prompt_node(state: UnderstandState) -> dict:
     except Exception as e:
         return {"error": f"Prompt build failed: {e}"}
 
+
 def call_llm_node(state: UnderstandState) -> dict:
     prompt = state.get("analysis_prompt")
     if not prompt:
@@ -107,12 +112,15 @@ def call_llm_node(state: UnderstandState) -> dict:
     try:
         client = LLMClient()
         result = client.chat_json(system=_SYSTEM_PROMPT, user=prompt)
+        # ✅ 修复 LLM 响应格式问题
+        result = _fix_llm_response(result)
         logger.info("LLM response received (%d keys)", len(result))
         return {"llm_response": result}
     except LLMError as e:
         return {"error": f"LLM call failed: {e}"}
     except Exception as e:
         return {"error": f"Unexpected LLM error: {e}"}
+
 
 def validate_node(state: UnderstandState) -> dict:
     doc = state.get("paper_document")
@@ -125,6 +133,7 @@ def validate_node(state: UnderstandState) -> dict:
     except Exception as e:
         logger.exception("Validation failed: %s", e)
         return {"error": f"Validation failed: {e}"}
+
 
 def store_analysis_node(state: UnderstandState) -> dict:
     analysis = state.get("paper_analysis")
@@ -139,6 +148,7 @@ def store_analysis_node(state: UnderstandState) -> dict:
         return {}
     except Exception as e:
         return {"error": f"Store failed: {e}"}
+
 
 _SYSTEM_PROMPT = (
     "You are a research paper analysis expert. "
@@ -161,12 +171,13 @@ _SYSTEM_PROMPT = (
     "\n  - figure_id: the figure ID"
     "\n  - caption: the figure caption"
     "\n  - role: what this figure illustrates"
-    "\n- experiments: Object with datasets, metrics, main_results, takeaways"
+    "\n- experiments: Object with datasets (list of strings), metrics (list of strings), main_results (string), takeaways (list of strings)"
     "\n- conclusion: Summary of the paper conclusion"
     "\n- code_url: Project code repository URL extracted from the paper body (e.g. GitHub link). Leave empty string if not found."
     "\n- full_analysis_md: Complete markdown analysis of the paper"
     "\n\nAll narrative fields that will appear in the poster must be in English only. Do not mix Chinese into problem_statement, contributions, method_overview, key_figures, experiments, or conclusion. Be precise, concise, and faithful to the source text."
 )
+
 
 def _build_analysis_prompt(doc: PaperDocument) -> str:
     parts = []
@@ -198,11 +209,60 @@ def _build_analysis_prompt(doc: PaperDocument) -> str:
     return "\n".join(parts)
 
 
+# ✅ 新增: 修复 LLM 响应格式
+def _fix_llm_response(response: dict) -> dict:
+    """修复 LLM 响应中的常见格式问题"""
+    if not isinstance(response, dict):
+        return response
+
+    # 复制一份避免修改原始数据
+    fixed = response.copy()
+
+    # 修复 experiments 字段
+    if "experiments" in fixed and isinstance(fixed["experiments"], dict):
+        exp = fixed["experiments"].copy()
+
+        # main_results: 列表 → 字符串
+        if "main_results" in exp:
+            if isinstance(exp["main_results"], list):
+                # 将列表元素连接成字符串
+                exp["main_results"] = " ".join(
+                    str(item) for item in exp["main_results"] if item
+                )
+            elif exp["main_results"] is None:
+                exp["main_results"] = ""
+
+        # takeaways: 字符串 → 列表
+        if "takeaways" in exp:
+            if isinstance(exp["takeaways"], str):
+                exp["takeaways"] = [exp["takeaways"]] if exp["takeaways"] else []
+            elif exp["takeaways"] is None:
+                exp["takeaways"] = []
+
+        # datasets: 字符串 → 列表
+        if "datasets" in exp:
+            if isinstance(exp["datasets"], str):
+                exp["datasets"] = [exp["datasets"]] if exp["datasets"] else []
+            elif exp["datasets"] is None:
+                exp["datasets"] = []
+
+        # metrics: 字符串 → 列表
+        if "metrics" in exp:
+            if isinstance(exp["metrics"], str):
+                exp["metrics"] = [exp["metrics"]] if exp["metrics"] else []
+            elif exp["metrics"] is None:
+                exp["metrics"] = []
+
+        fixed["experiments"] = exp
+
+    return fixed
+
 
 def _safe_get(obj, key, default):
     if isinstance(obj, dict):
         return obj.get(key, default)
     return default
+
 
 def _safe_parse_list(items, model_cls):
     if not isinstance(items, list):
@@ -215,8 +275,52 @@ def _safe_parse_list(items, model_cls):
             except Exception:
                 pass
     return result
+
+
 def _parse_analysis(doc: PaperDocument, llm_resp: dict) -> PaperAnalysis:
     code_url = llm_resp.get("code_url", "") or _extract_code_url(doc)
+
+    # 处理 experiments，确保格式正确
+    experiments = None
+    if isinstance(llm_resp.get("experiments"), dict):
+        exp_data = llm_resp["experiments"].copy()
+
+        # 确保 main_results 是字符串
+        if "main_results" in exp_data:
+            if isinstance(exp_data["main_results"], list):
+                exp_data["main_results"] = " ".join(
+                    str(item) for item in exp_data["main_results"] if item
+                )
+            elif exp_data["main_results"] is None:
+                exp_data["main_results"] = ""
+
+        # 确保 takeaways 是列表
+        if "takeaways" in exp_data:
+            if isinstance(exp_data["takeaways"], str):
+                exp_data["takeaways"] = [exp_data["takeaways"]] if exp_data["takeaways"] else []
+            elif exp_data["takeaways"] is None:
+                exp_data["takeaways"] = []
+
+        # 确保 datasets 是列表
+        if "datasets" in exp_data:
+            if isinstance(exp_data["datasets"], str):
+                exp_data["datasets"] = [exp_data["datasets"]] if exp_data["datasets"] else []
+            elif exp_data["datasets"] is None:
+                exp_data["datasets"] = []
+
+        # 确保 metrics 是列表
+        if "metrics" in exp_data:
+            if isinstance(exp_data["metrics"], str):
+                exp_data["metrics"] = [exp_data["metrics"]] if exp_data["metrics"] else []
+            elif exp_data["metrics"] is None:
+                exp_data["metrics"] = []
+
+        try:
+            experiments = ExperimentSummary(**exp_data)
+        except Exception as e:
+            logger.warning(f"Failed to parse experiments: {e}, data: {exp_data}")
+            experiments = None
+
     return PaperAnalysis(
         paper_id=doc.paper_id,
         arxiv_id=doc.arxiv_id,
@@ -226,15 +330,12 @@ def _parse_analysis(doc: PaperDocument, llm_resp: dict) -> PaperAnalysis:
         method_overview=llm_resp.get("method_overview", ""),
         key_formulas=_safe_parse_list(llm_resp.get("key_formulas", []), KeyFormula),
         key_figures=_safe_parse_list(llm_resp.get("key_figures", []), KeyFigure),
-        experiments=(
-            ExperimentSummary(**llm_resp["experiments"])
-            if isinstance(llm_resp.get("experiments"), dict)
-            else None
-        ),
+        experiments=experiments,
         conclusion=llm_resp.get("conclusion", ""),
         code_url=code_url,
         full_analysis_md=llm_resp.get("full_analysis_md", ""),
     )
+
 
 def build_understand_graph():
     if StateGraph is None:
@@ -253,7 +354,9 @@ def build_understand_graph():
     workflow.add_edge("store", END)
     return workflow.compile()
 
+
 _compiled_graph = None
+
 
 def run_understand_paper(arxiv_id: str) -> PaperAnalysis:
     global _compiled_graph
