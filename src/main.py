@@ -5,7 +5,7 @@ import json
 import logging
 import sys
 from pathlib import Path
-
+import re
 # Ensure project root is on sys.path
 _root = Path(__file__).resolve().parent.parent
 if str(_root) not in sys.path:
@@ -284,13 +284,48 @@ def _run(args: argparse.Namespace) -> None:
 
     elif args.command == "optimize-html":
         from src.agents.html_optimizer import optimize_html_with_llm, optimize_with_feedback
+        from src.storage.sqlite import PaperDatabase
+        from src.agents.poster_v2 import run_poster_v2
+        from src.agents.poster_planner import generate_blueprint
 
+        html_path = Path(args.html)
+
+        # ✅ 新增：如果 HTML 不存在，先生成初稿
+        if not html_path.exists():
+            logger.info(f"HTML not found: {html_path}")
+
+            # 尝试从路径中提取 arxiv_id
+            # 例如：output/2302.01650/poster.html -> 2302.01650
+            arxiv_id = None
+            for part in html_path.parent.parts:
+                if re.match(r'\d{4}\.\d{4,5}', part):
+                    arxiv_id = part
+                    break
+
+            if not arxiv_id:
+                logger.error(
+                    "Cannot extract arxiv_id from path. Please provide a valid arxiv_id or ensure HTML exists.")
+                logger.info("Usage: python -m src.main pipeline-v2 {arxiv_id} --output-dir output --use_llm")
+                sys.exit(1)
+
+            logger.info(f"Auto-generating initial poster for {arxiv_id}...")
+            try:
+                # 使用 pipeline-v2 生成初稿
+                output_dir = html_path.parent
+                results = run_poster_v2(arxiv_id, output_dir=output_dir, use_gpt5=True)
+                logger.info(f"Initial poster generated: {html_path}")
+            except Exception as e:
+                logger.exception(f"Failed to generate initial poster: {e}")
+                logger.info("Please run: python -m src.main pipeline-v2 {arxiv_id} --output-dir output --use_llm")
+                sys.exit(1)
+
+        # 继续优化流程
         if args.iterations > 1:
             # 迭代优化
             logger.info(f"Starting iterative HTML optimization: {args.iterations} iterations")
-            output_dir = args.output.parent if args.output else args.html.parent / "optimized"
+            output_dir = args.output.parent if args.output else html_path.parent / "optimized"
             results = optimize_with_feedback(
-                html_path=args.html,
+                html_path=html_path,
                 prompt_path=args.prompt,
                 feedback_path=args.feedback,
                 iterations=args.iterations,
@@ -305,9 +340,9 @@ def _run(args: argparse.Namespace) -> None:
         else:
             # 单次优化
             logger.info("Starting HTML optimization")
-            output = args.output or args.html.parent / f"{args.html.stem}_optimized.html"
+            output = args.output or html_path.parent / f"{html_path.stem}_optimized.html"
             result = optimize_html_with_llm(
-                html_path=args.html,
+                html_path=html_path,
                 prompt_path=args.prompt,
                 output_path=output,
                 model=args.model,
