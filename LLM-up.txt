@@ -1,21 +1,16 @@
 将给定的“初稿”HTML海报的生成逻辑优化为“完美版”样式。严格按以下步骤操作，最终输出一份完整、可直接运行的全英HTML文件。
 
 ### 1. 全局视觉升级
-- 替换CSS变量：
-  - `--poster-blue: #0b2f65;`
-  - `--accent-orange: #c75300;`
-  - 其他颜色保持和谐。
+- 颜色保持和谐。
 - 容器样式：`padding: 24px; border-radius: 8px;`。
 - 标题字号：`h1` 改为 `34px`，增加 `letter-spacing: -0.3px`。
 - 作者和附属信息字号微调，保持整洁。
 
-### 2. 修复网格布局（关键）
+### 2. 修复网格布局
 - 确保 `grid-template-areas` 精确为：
 "motivation overview key_idea"
 "core core core"
 "contributions highlights project"
-
-text
 - **禁止**使用 `main_method` 或 `method_overview` 等额外网格区域，所有内容必须放入上述六个区域。
 - 如果存在重复的 `core` 区域，合并为一个，命名为“Core Results”。
 - 在 `core` 区域内，采用三栏布局（`.core-grid`）：
@@ -30,33 +25,27 @@ text
 - 添加一个 `formula-box` 显示关键公式：
 - 添加一个 `callout` 说明关键洞察。
 - **删除**任何关于 benchmark 列表的内容（因为表格里已有）。
-
 - **Method Overview**：
 - 简述方法大纲。
 - 列两个要点。
 - 插入（网络架构总览）作为单独图片。
 - 在图片下方添加一个带边框的公式块，显示方法中最主要的公式：
-
 - **Key Idea**：
 - 聚焦最关键的地方，解释它如何使用的。
 - 三个要点。
-- 插入插图（详细结构）。
-
+- 插入插图（详细结构图）。
 - **Core Results**（即原来的 core 区域）：
 - 标题改为“Core Results”。
 - 顶部一行文字：具体效果和优势指标点。
 - 三栏（`.core-grid`）：
-  - 左：（结果）结果图1
+  - 左：（视觉结果）结果图1
   - 中：表格，三行数据（找到数据集和对应的一些指标）
   - 右：（视觉对比和消融）结果图2
-
 - **Contributions**：
 - 四条要点：
-
 - **Highlights**：
 - 四条短要点。
-- 添加四个 `badge-pill` 标签（可以加一些符号，比如🌐⚡ 🏆 🔄 🔥🚩等等）。
-
+- 添加四个 `badge-pill` 标签（可以加一些符号，比如🌐⚡ 🏆 🔄 🔥🚩等）。
 - **Project**：
 - QR 占位（`[QR]`）。
 - Code & Project 标签，下方显示 GitHub 链接（如果论文中有，没有的话这里Project就说code will be release）。
@@ -65,13 +54,13 @@ text
 ### 4. 图片与文件引用
 - 使用以下图片文件（假设都存在）：
 - `结果图1` → 放在 Core Results 左栏
-- `结果图1` → 放在 Core Results 右栏
+- `结果图2` → 放在 Core Results 右栏
 - `模型框架图（网络架构总览）` → 放在 Method Overview
 - `详细结构图` → 放在 Key Idea
 - **删除**任何其他图片引用（如多余的结果图或者内容图等）。
 
 ### 5. 头部（Header）处理
-- 标题、作者保持。
+- 标题、作者、附属信息保持。
 - 将 GitHub 链接转为“hero-pill”样式，并添加 🔗 图标（或类似）。
 - 删除“Paper-to-Poster Research Reader”附属信息。
 
@@ -80,7 +69,7 @@ text
 - 确保所有 `.section-block` 使用统一的圆角、边框。
 - 响应式适配保持不变（`@media (max-width: 1100px)`）。
 - 可以标记出一些重点词
-- 整体内容精炼一些，并且不要重复
+- 整体内容精炼一些，并且不要重复内容与图片
 
 开始优化。
 

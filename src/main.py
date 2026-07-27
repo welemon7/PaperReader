@@ -95,7 +95,6 @@ def _parse_args() -> argparse.Namespace:
     u.add_argument("arxiv_id", help="arXiv ID of the previously parsed paper")
     u.add_argument("--output", "-o", type=Path, default=None, help="Output JSON file for the PaperAnalysis")
 
-    # ========== 新增: HTML 优化子命令 ==========
     # 单次/迭代 HTML 优化
     opt_html = sub.add_parser("optimize-html", help="Optimize an HTML poster using LLM with a custom prompt")
     opt_html.add_argument("html", type=Path, help="Path to the HTML file to optimize")
@@ -155,7 +154,6 @@ def _run(args: argparse.Namespace) -> None:
                 args.arxiv_id,
                 output_dir=output_dir,
                 force=args.force,
-                with_optimize=args.optimize,
             )
             bp = results.get("blueprint")
             if bp:
@@ -168,7 +166,7 @@ def _run(args: argparse.Namespace) -> None:
         logger.info("Starting v2 poster pipeline for %s", args.arxiv_id)
         try:
             output_dir = resolve_paper_output_dir(args.output_dir, args.arxiv_id)
-            results = run_poster_v2(args.arxiv_id, output_dir=output_dir, use_gpt5=args.use_llm)
+            results = run_poster_v2(args.arxiv_id, output_dir=output_dir, use_llm=args.use_llm)
             logger.info(
                 "V2 pipeline complete: %d tree nodes, quality=%s, qa=%s/%s",
                 len(results["layout_tree"].nodes),
@@ -290,7 +288,6 @@ def _run(args: argparse.Namespace) -> None:
 
         html_path = Path(args.html)
 
-        # ✅ 新增：如果 HTML 不存在，先生成初稿
         if not html_path.exists():
             logger.info(f"HTML not found: {html_path}")
 
@@ -305,18 +302,18 @@ def _run(args: argparse.Namespace) -> None:
             if not arxiv_id:
                 logger.error(
                     "Cannot extract arxiv_id from path. Please provide a valid arxiv_id or ensure HTML exists.")
-                logger.info("Usage: python -m src.main pipeline-v2 {arxiv_id} --output-dir output --use_llm")
+                logger.info("Usage: python -m src.main pipeline-v2 {arxiv_id} --output-dir output")
                 sys.exit(1)
 
             logger.info(f"Auto-generating initial poster for {arxiv_id}...")
             try:
                 # 使用 pipeline-v2 生成初稿
                 output_dir = html_path.parent
-                results = run_poster_v2(arxiv_id, output_dir=output_dir, use_gpt5=True)
+                results = run_poster_v2(arxiv_id, output_dir=output_dir)
                 logger.info(f"Initial poster generated: {html_path}")
             except Exception as e:
                 logger.exception(f"Failed to generate initial poster: {e}")
-                logger.info("Please run: python -m src.main pipeline-v2 {arxiv_id} --output-dir output --use_llm")
+                logger.info("Please run: python -m src.main pipeline-v2 {arxiv_id} --output-dir output")
                 sys.exit(1)
 
         # 继续优化流程

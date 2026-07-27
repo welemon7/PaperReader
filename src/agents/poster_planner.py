@@ -4,7 +4,6 @@ import html as html_lib
 import logging
 import re
 
-from src.llm.client import LLMClient
 from src.schemas.analysis import PaperAnalysis
 from src.schemas.analysis import KeyFormula
 from src.schemas.paper import PaperDocument
@@ -136,23 +135,12 @@ def _strip_latex_commands(text: str, commands: set[str]) -> str:
 
 
 def generate_blueprint(
-    doc: PaperDocument,
-    analysis: PaperAnalysis,
-    use_gemini: bool = False,
+        doc: PaperDocument,
+        analysis: PaperAnalysis,
 ) -> PosterBlueprint:
+    """Generate poster blueprint using static layout only."""
     analysis = normalize_analysis_for_poster(analysis.model_copy(deep=True))
     _augment_key_formulas(doc, analysis)
-    if use_gemini:
-        try:
-            from src.config import settings
-            if settings.llm_api_key:
-                blueprint = _gemini_layout(doc, analysis)
-                _normalize_compact_layout(blueprint.sections)
-                _apply_poster_highlights(blueprint.sections, analysis)
-                _normalize_compact_layout(blueprint.sections)
-                return blueprint
-        except Exception:
-            logger.warning("Gemini layout failed, falling back to static layout")
     sections = []
     sections.append(_build_title_section(doc, analysis))
     sections.extend(_build_compact_layout(doc, analysis))
@@ -160,7 +148,6 @@ def generate_blueprint(
     formula_displays = _place_formulas(analysis)
     _tighten_layout(sections, figure_placements)
     _normalize_compact_layout(sections)
-    _apply_poster_highlights(sections, analysis)
     return PosterBlueprint(
         paper_id=doc.paper_id,
         poster_title=doc.title,
@@ -173,7 +160,6 @@ def generate_blueprint(
         formula_displays=formula_displays,
         color_scheme=_default_colors(),
     )
-
 
 def _drop_top_summary_sections(sections: list[PosterSection]) -> list[PosterSection]:
     """Compatibility shim kept for older callers.
@@ -708,135 +694,11 @@ def _apply_highlight_spans(text: str, highlights: list[tuple[str, str]]) -> str:
     return highlighted
 
 
-def _apply_poster_highlights(sections: list[PosterSection], analysis: PaperAnalysis) -> None:
-    highlight_map = _select_poster_highlights(sections, analysis)
-    if not highlight_map:
-        return
-
-    for sec in sections:
-        highlights = highlight_map.get(sec.type)
-        if sec.type == "main_method" and highlight_map.get("experiments"):
-            highlights = (highlights or []) + highlight_map["experiments"]
-        if not highlights:
-            continue
-        sec.content_md = _apply_highlight_spans(sec.content_md, highlights)
 
 
-def _select_poster_highlights(
-    sections: list[PosterSection],
-    analysis: PaperAnalysis,
-) -> dict[str, list[tuple[str, str]]]:
-    if not LLMClient.is_configured():
-        return {}
-
-    from src.config import settings
-
-    client = LLMClient(
-        api_key=settings.llm_api_key,
-        base_url=settings.llm_base_url,
-        model=settings.llm_model,
-    )
-
-    user_prompt = _build_highlight_prompt(sections, analysis)
-    schema = {
-        "type": "object",
-        "properties": {
-            "highlights": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "section_type": {
-                            "type": "string",
-                            "enum": ["method_overview", "key_idea", "main_method", "experiments"],
-                        },
-                        "phrase": {"type": "string"},
-                        "kind": {"type": "string", "enum": ["phrase", "metric"]},
-                    },
-                    "required": ["section_type", "phrase", "kind"],
-                    "additionalProperties": False,
-                },
-            }
-        },
-        "required": ["highlights"],
-        "additionalProperties": False,
-    }
-
-    try:
-        result = client.chat_json(system=_POSTER_HIGHLIGHT_SYSTEM_PROMPT, user=user_prompt, response_schema=schema)
-    except Exception as exc:
-        logger.warning("Poster highlight selection failed: %s", exc)
-        return {}
-
-    content_by_type = {
-        sec.type: (sec.content_md or "")
-        for sec in sections
-        if sec.type in {"method_overview", "key_idea", "main_method", "experiments"}
-    }
-    if "experiments" not in content_by_type and "main_method" in content_by_type:
-        content_by_type["experiments"] = content_by_type["main_method"]
-
-    mapped: dict[str, list[tuple[str, str]]] = {"method_overview": [], "key_idea": [], "main_method": [], "experiments": []}
-    seen: set[tuple[str, str]] = set()
-    highlights = result.get("highlights", []) if isinstance(result, dict) else []
-    for item in highlights:
-        if not isinstance(item, dict):
-            continue
-        section_type = item.get("section_type", "")
-        if section_type not in mapped:
-            continue
-        phrase = _clean_poster_text(str(item.get("phrase", "")))
-        if not phrase:
-            continue
-        haystack = content_by_type.get(section_type, "")
-        if phrase.lower() not in haystack.lower():
-            continue
-        css_class = "poster-highlight-metric" if item.get("kind") == "metric" else "poster-highlight"
-        key = (section_type, phrase.lower())
-        if key in seen:
-            continue
-        seen.add(key)
-        mapped[section_type].append((phrase, css_class))
-
-    return {key: value for key, value in mapped.items() if value}
 
 
-def _build_highlight_prompt(sections: list[PosterSection], analysis: PaperAnalysis) -> str:
-    parts: list[str] = []
-    parts.append("Analyze the full poster content and choose exact phrases to highlight.")
-    parts.append("Focus on method modules, architecture names, datasets, metrics, and result numbers.")
-    parts.append("Do not select from Motivation unless absolutely necessary.")
-    parts.append("Prefer phrases from method_overview, key_idea, main_method, and experiments.")
-    parts.append("Return only phrases that appear verbatim in the text below, and keep them short.")
-    parts.append("Use kind=metric for numbers, percentages, scores, or benchmark values. Use kind=phrase otherwise.")
-    parts.append("Return at most 6 highlights total.")
-    parts.append("")
-    parts.append(f"Paper: {analysis.paper_id}")
-    if analysis.problem_statement:
-        parts.append(f"Problem: {_clean_poster_text(analysis.problem_statement)}")
-    parts.append("")
-    for sec in sections:
-        if sec.type not in {"motivation", "method_overview", "key_idea", "main_method", "experiments", "contributions", "highlights"}:
-            continue
-        content = (sec.content_md or "").strip()
-        if not content:
-            continue
-        if len(content) > 1200:
-            content = content[:1200].rstrip() + "..."
-        parts.append(f"[{sec.type}] {sec.title}")
-        parts.append(content)
-        parts.append("")
-    return "\n".join(parts).strip()
 
-
-_POSTER_HIGHLIGHT_SYSTEM_PROMPT = (
-    "You are analyzing a scientific poster draft. "
-    "Select only exact phrases from the provided poster content that deserve visual emphasis. "
-    "Prioritize method modules, architecture names, datasets, metrics, and result numbers. "
-    "Return concise phrases that appear verbatim in the text. "
-    "Do not invent wording or choose from Motivation unless necessary. "
-    "Prefer highlights for method_overview, key_idea, main_method, and experiments only."
-)
 
 
 def _build_compact_layout(doc: PaperDocument, analysis: PaperAnalysis) -> list[PosterSection]:
@@ -1158,138 +1020,8 @@ def _join_with_paragraphs(*parts: str) -> str:
     cleaned = [p.strip() for p in parts if p and p.strip()]
     return "\n\n".join(cleaned)
 
-_GEMINI_LAYOUT_PROMPT = (
-    "You are a scientific poster layout designer. "
-    "Given a paper analysis, design the optimal poster layout.\n\n"
-    "Return JSON with:\n"
-    '- "sections": list of {section_id, type, title, column, col_span, row} '
-    "- design the grid layout\n"
-    '- "figure_placements": list of {figure_id, section_id, width_ratio, caption} '
-    "- max 4 figures\n"
-    '- "color_scheme": dict with primary, accent, background, text, '
-    "section_header_bg, section_header_text, border, highlight\n\n"
-    "Layout rules:\n"
-    f"- Poster size is fixed to A0 portrait: {POSTER_WIDTH_MM}mm x {POSTER_HEIGHT_MM}mm ({POSTER_WIDTH_PX}px x {POSTER_HEIGHT_PX}px)\n"
-    "- Core architecture/overview figures: place in method section, "
-    "width_ratio >= 0.8\n"
-    "- Result/comparison figures: group in experiments section, "
-    "width_ratio 0.45-0.55\n"
-    "- Max 4 figures total. Remove redundant ones.\n"
-    "- Design a grid that tells a visual story: motivation -> method "
-    "-> results -> contributions\n"
-    "- Use 2-3 rows with flexible column spans"
-)
 
 
-def _gemini_layout(
-    doc: PaperDocument,
-    analysis: PaperAnalysis,
-) -> PosterBlueprint:
-    """Use Gemini to design the poster layout based on paper analysis."""
-    from src.config import settings
-    from src.llm.client import LLMClient
-
-    gemini = LLMClient(
-        api_key=settings.llm_api_key,
-        base_url=settings.llm_base_url,
-        model=settings.llm_model,
-    )
-
-    prompt_parts = []
-    prompt_parts.append(f"Paper: {doc.title}")
-    prompt_parts.append(f"\nProblem: {analysis.problem_statement}")
-    prompt_parts.append("\nContributions:")
-    for contrib in analysis.contributions:
-        prompt_parts.append(f"- {contrib.text}")
-    prompt_parts.append(f"\nMethod: {analysis.method_overview}")
-    if analysis.code_url:
-        prompt_parts.append(f"\nCode / Project URL: {analysis.code_url}")
-    prompt_parts.append("\nKey Figures:")
-    for fig in analysis.key_figures:
-        prompt_parts.append(f"- [{fig.figure_id}] {fig.caption} ({fig.role})")
-    if doc.figures:
-        prompt_parts.append("\nPaper figure index:")
-        for fig in doc.figures[:12]:
-            label = getattr(fig, "label", None) or "(no label)"
-            prompt_parts.append(f"- [{fig.figure_id}] {label}: {fig.caption}")
-    if analysis.experiments:
-        prompt_parts.append("\nExperiments:")
-        exp = analysis.experiments
-        if exp.datasets:
-            prompt_parts.append(f"Datasets: {', '.join(exp.datasets)}")
-        prompt_parts.append(f"Results: {exp.main_results}")
-
-    user_prompt = "\n".join(prompt_parts)
-    try:
-        result = gemini.chat_json(system=_GEMINI_LAYOUT_PROMPT, user=user_prompt)
-    except Exception as e:
-        logger.warning("LLM layout call failed: %s, using static fallback", e)
-        return _static_layout(doc, analysis)
-
-    sections = []
-    for s in result.get("sections", []):
-        sections.append(PosterSection(
-            section_id=s.get("section_id", ""),
-            type=s.get("type", "motivation"),
-            title=s.get("title", ""),
-            content_md=s.get("content_md", ""),
-            column=s.get("column", 1),
-            col_span=s.get("col_span", 1),
-            row=s.get("row", 0),
-        ))
-
-    figure_placements = []
-    for fp in result.get("figure_placements", []):
-        figure_placements.append(FigurePlacement(
-            figure_id=fp.get("figure_id", ""),
-            section_id=fp.get("section_id", ""),
-            width_ratio=fp.get("width_ratio", 0.9),
-            caption=fp.get("caption", ""),
-        ))
-
-    formula_displays = _place_formulas(analysis)
-    color_scheme = result.get("color_scheme", _default_colors())
-
-    return PosterBlueprint(
-        paper_id=doc.paper_id,
-        poster_title=doc.title,
-        authors_str="; ".join(a.name for a in doc.authors),
-        code_url=analysis.code_url,
-        width_px=POSTER_WIDTH_PX, height_px=POSTER_HEIGHT_PX,
-        width_mm=POSTER_WIDTH_MM, height_mm=POSTER_HEIGHT_MM,
-        sections=sections,
-        figure_placements=figure_placements,
-        formula_displays=formula_displays,
-        color_scheme=color_scheme,
-    )
-
-
-def _static_layout(
-    doc: PaperDocument,
-    analysis: PaperAnalysis,
-) -> PosterBlueprint:
-    """Static fallback layout when Gemini is unavailable."""
-    sections = []
-    sections.append(_build_title_section(doc, analysis))
-    sections.extend(_build_compact_layout(doc, analysis))
-    sections = _drop_top_summary_sections(sections)
-    figure_placements = _place_figures(doc, analysis, sections)
-    formula_displays = _place_formulas(analysis)
-    _normalize_compact_layout(sections)
-    _tighten_layout(sections, figure_placements)
-    _normalize_compact_layout(sections)
-    return PosterBlueprint(
-        paper_id=doc.paper_id,
-        poster_title=doc.title,
-        authors_str="; ".join(a.name for a in doc.authors),
-        code_url=analysis.code_url,
-        width_px=POSTER_WIDTH_PX, height_px=POSTER_HEIGHT_PX,
-        width_mm=POSTER_WIDTH_MM, height_mm=POSTER_HEIGHT_MM,
-        sections=sections,
-        figure_placements=figure_placements,
-        formula_displays=formula_displays,
-        color_scheme=_default_colors(),
-    )
 
 
 def _default_colors() -> dict:

@@ -7,7 +7,7 @@ from typing import Optional
 from src.agents.parse_agent import run_parse_paper
 from src.agents.understand_agent import run_understand_paper
 from src.agents.poster_planner import generate_blueprint, normalize_analysis_for_poster
-from src.agents.poster_v2 import build_layout_tree, layout_tree_to_blueprint, review_rendered_poster, evaluate_poster_qa
+from src.agents.poster_v2 import build_layout_tree, layout_tree_to_blueprint
 from src.agents.validation_agent import validate_poster
 from src.renderers.html_renderer import HtmlPosterRenderer
 from src.storage.sqlite import PaperDatabase
@@ -50,7 +50,6 @@ def run_pipeline(
     output_dir: Path = Path("output"),
     force: bool = True,
     max_retries: int = 2,
-    with_optimize: bool = False,
 ) -> dict:
     """Run all 5 phases sequentially with validation and retry loops."""
     output_dir = resolve_paper_output_dir(output_dir, arxiv_id)
@@ -101,8 +100,7 @@ def run_pipeline(
 
     # ---- Phase 3: Plan ----
     logger.info("=== Phase 3: Plan ===")
-    use_gemini = bool(settings.llm_api_key) if hasattr(settings, "llm_api_key") else False
-    blueprint = generate_blueprint(doc, analysis, use_gemini=use_gemini)
+    blueprint = generate_blueprint(doc, analysis)
     results["blueprint"] = blueprint
     blueprint_path = output_dir / "blueprint.json"
     blueprint_path.write_text(blueprint.model_dump_json(indent=2), encoding="utf-8")
@@ -110,7 +108,7 @@ def run_pipeline(
 
     # ---- Phase 3b: v2 Layout Tree ----
     try:
-        layout_tree = build_layout_tree(doc, analysis, use_gpt5=bool(settings.llm_api_key))
+        layout_tree = build_layout_tree(doc, analysis)
         results["layout_tree"] = layout_tree
         layout_tree_path = output_dir / "layout_tree.json"
         layout_tree_path.write_text(layout_tree.model_dump_json(indent=2), encoding="utf-8")
@@ -123,44 +121,14 @@ def run_pipeline(
     logger.info("=== Phase 4: Render ===")
     renderer = HtmlPosterRenderer()
     html_path = output_dir / "poster.html"
-    renderer.render_to_file(blueprint, doc, html_path, optimize_with_llm=True)
+    renderer.render_to_file(blueprint, doc, html_path)
     results["html_path"] = html_path
     logger.info("Phase 4 complete: %s (%d bytes)", html_path, html_path.stat().st_size)
 
-    try:
-        review = review_rendered_poster(html_path, output_dir)
-        results["poster_review"] = review
-        review_path = output_dir / "poster_review.json"
-        review_path.write_text(review.model_dump_json(indent=2), encoding="utf-8")
-        qa_eval = evaluate_poster_qa(doc, analysis, html_path.read_text(encoding="utf-8"), visual_score=review.quality_score)
-        results["poster_qa_eval"] = qa_eval
-        qa_path = output_dir / "poster_qa_eval.json"
-        qa_path.write_text(qa_eval.model_dump_json(indent=2), encoding="utf-8")
-    except Exception as e:
-        logger.warning("V2 review/eval skipped: %s", e)
 
     # ---- Phase 5: Validate ----
-    logger.info("=== Phase 5: Validate ===")
-    try:
-        validation = validate_poster(arxiv_id, str(blueprint_path))
-        results["validation"] = validation
-        validation_path = output_dir / "validation.json"
-        validation_path.write_text(validation.model_dump_json(indent=2), encoding="utf-8")
-        logger.info("Phase 5 complete: scores=%s, issues=%d", validation.scores, len(validation.issues))
-    except Exception as e:
-        logger.warning("Phase 5 (Validate) skipped: %s", e)
-        results["validation"] = None
-
-    if with_optimize:
-        logger.info("=== Phase 6: Optimize with LLM ====")
-        try:
-            from src.agents.optimizer_agent import optimize_poster
-            opt = optimize_poster(arxiv_id, output_dir=str(output_dir), max_iterations=max_retries)
-            results["optimization"] = opt
-            logger.info("Phase 6: quality %d/10, %d iterations", opt["final_quality"], opt["iterations"])
-        except Exception as e:
-            logger.warning("Phase 6 skipped: %s", e)
-            results["optimization"] = None
+    logger.info("=== Phase 5: Validate (waiting writing)===")
+    results["validation"] = None
 
     logger.info("=== Pipeline complete ====")
     return results

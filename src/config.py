@@ -18,9 +18,9 @@ class Settings(BaseSettings):
     arxiv_cache_dir: str = "./data/arxiv_cache"
 
     # LLM (Unified) - 统一使用这一个配置
-    llm_api_key: str = "sk-X2AUiiAUKx1EV7qmFSr8NeErKFMpzAY1KxLeiV7ks5O5gYId"  # 统一API密钥
-    llm_model: str = "agnes-2.0-flash"  # 统一模型
-    llm_base_url: str = "https://apihub.agnes-ai.com/v1"  # 统一Base URL
+    llm_api_key: str = ""  # 统一API密钥
+    llm_model: str = ""  # 统一模型
+    llm_base_url: str = ""  # 统一Base URL
     llm_max_tokens: int = 8192
     llm_temperature: float = 0.1
 
