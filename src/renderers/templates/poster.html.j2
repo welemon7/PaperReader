@@ -9,13 +9,13 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
 :root {
-    --poster-blue: {{ color_scheme.primary }};
+    --poster-blue: #0b2f65;
     --poster-dark-blue: #072245;
     --poster-bg: #ffffff;
     --border-color: {{ color_scheme.border }};
     --text-main: {{ color_scheme.text }};
     --text-muted: #4a5568;
-    --accent-orange: {{ color_scheme.accent }};
+    --accent-orange: #c75300;
     --panel-soft: #f7f9fc;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -34,7 +34,8 @@ body {
     width: 100%;
     background: var(--poster-bg);
     box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-    padding: 20px;
+    padding: 24px;
+    border-radius: 8px;
 }
 .header {
     text-align: center;
@@ -60,21 +61,21 @@ body {
 }
 .hero-link:hover { background: rgba(11, 47, 101, 0.1); }
 .header h1 {
-    font-size: 32px;
+    font-size: 34px;
     color: var(--poster-blue);
     font-weight: 800;
-    letter-spacing: 0;
+    letter-spacing: -0.3px;
     margin-bottom: 4px;
     text-wrap: balance;
 }
 .header .authors {
-    font-size: 14px;
+    font-size: 13px;
     color: var(--text-muted);
     font-weight: 600;
     margin-top: 2px;
 }
 .header .affiliation {
-    font-size: 13px;
+    font-size: 12px;
     color: var(--text-muted);
 }
 .grid-container {
@@ -127,6 +128,26 @@ body {
     font-size: 12px;
 }
 .callout.alt { border-left-color: var(--accent-orange); }
+.formula-box {
+    background: #f8fafc;
+    border: 1px solid #d8e1ea;
+    border-left: 3px solid var(--poster-blue);
+    padding: 10px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+}
+.formula-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--poster-blue);
+    font-weight: 800;
+    margin-bottom: 6px;
+}
+.formula-desc {
+    margin-top: 6px;
+    color: var(--text-muted);
+}
 .figure-stack {
     display: grid;
     gap: 10px;
@@ -156,6 +177,95 @@ body {
     font-size: 11px;
     line-height: 1.35;
     color: var(--text-muted);
+}
+.core-band {
+    grid-area: core;
+}
+.core-band .section-content {
+    gap: 12px;
+}
+.core-band-title {
+    background: linear-gradient(180deg, rgba(11, 47, 101, 0.98), rgba(11, 47, 101, 0.92));
+}
+.core-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) minmax(0, 1fr);
+    gap: 12px;
+    align-items: start;
+}
+.core-column {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.core-column .section-copy {
+    font-size: 13px;
+    line-height: 1.5;
+}
+.core-table-wrap {
+    overflow-x: auto;
+}
+.core-table-wrap table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    margin: 0;
+}
+.item-details-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.item-details-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--poster-blue);
+    font-weight: 800;
+}
+.item-details-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    margin: 0;
+}
+.item-details-table th,
+.item-details-table td {
+    border: 1px solid #d8e1ea;
+    padding: 7px 8px;
+    text-align: left;
+    vertical-align: top;
+}
+.item-details-table th {
+    width: 28%;
+    background: #edf3f8;
+    color: var(--poster-blue);
+    font-weight: 700;
+}
+.core-table-wrap th,
+.core-table-wrap td {
+    border: 1px solid #d8e1ea;
+    padding: 7px 8px;
+    text-align: left;
+    vertical-align: top;
+}
+.core-table-wrap th {
+    background: #edf3f8;
+    color: var(--poster-blue);
+    font-weight: 700;
+}
+.core-empty {
+    min-height: 120px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 16px;
+    background: #f6f8fb;
+    color: #748191;
+    border: 1px dashed #c6d3df;
+    border-radius: 6px;
 }
 .figure-placeholder {
     min-height: 110px;
@@ -230,13 +340,29 @@ th {
     color: var(--text-muted);
     font-weight: 600;
 }
-.grid-area-motivation { grid-area: motivation; }
-.grid-area-overview { grid-area: overview; }
-.grid-area-keyidea { grid-area: key_idea; }
-.grid-area-core { grid-area: core; }
-.grid-area-contributions { grid-area: contributions; }
-.grid-area-highlights { grid-area: highlights; }
-.grid-area-project { grid-area: project; }
+.badge-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.badge-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid #d8e1ea;
+    background: #f6f8fb;
+    color: var(--poster-blue);
+    border-radius: 999px;
+    padding: 5px 10px;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+}
+.project-footer {
+    margin-top: 8px;
+    font-size: 11px;
+    color: var(--text-muted);
+}
 @media (max-width: 1100px) {
     .grid-container {
         grid-template-columns: 1fr;
@@ -274,48 +400,193 @@ th {
     </header>
 
     <div class="grid-container">
+        {% set ns = namespace(motivation=None, overview=None, key_idea=None, core_method=None, core_results=None, contributions=None, highlights=None, project=None) %}
         {% for sec in layout %}
-        {% set grid_class = 'grid-area-' ~ sec.type %}
-        <div class="section-block {{ grid_class }}" style="grid-area: {% if sec.type == 'motivation' %}motivation{% elif sec.type == 'method_overview' %}overview{% elif sec.type == 'key_idea' %}key_idea{% elif sec.type == 'main_method' %}core{% elif sec.type == 'contributions' %}contributions{% elif sec.type == 'highlights' %}highlights{% elif sec.type == 'project_link' %}project{% else %}core{% endif %};">
-            <div class="section-title">{{ sec.title }}</div>
+            {% if sec.type == 'motivation' %}
+                {% set ns.motivation = sec %}
+            {% elif sec.type == 'method_overview' %}
+                {% set ns.overview = sec %}
+            {% elif sec.type == 'key_idea' %}
+                {% set ns.key_idea = sec %}
+            {% elif sec.type == 'main_method' %}
+                {% set ns.core_method = sec %}
+            {% elif sec.type == 'experiments' %}
+                {% set ns.core_results = sec %}
+            {% elif sec.type == 'contributions' %}
+                {% set ns.contributions = sec %}
+            {% elif sec.type == 'highlights' %}
+                {% set ns.highlights = sec %}
+            {% elif sec.type == 'project_link' %}
+                {% set ns.project = sec %}
+            {% endif %}
+        {% endfor %}
+
+        <div class="section-block" style="grid-area: motivation;">
+            <div class="section-title">{{ ns.motivation.title if ns.motivation else 'Motivation' }}</div>
             <div class="section-content">
-                {% if sec.type == 'project_link' %}
-                <div class="project-box">
-                    <div class="qr-placeholder">[QR]</div>
-                    <div class="code-cta">
-                        <div class="label">Code & Project</div>
-                        {% if code_url %}
-                        <a class="code-link" href="{{ code_url }}" target="_blank" rel="noreferrer noopener">{{ code_url }}</a>
-                        {% endif %}
-                    </div>
-                </div>
+                {% if ns.motivation %}
+                    {{ ns.motivation.content_html|safe }}
+                {% else %}
+                    (not provided)
                 {% endif %}
-                {{ sec.content_html|safe }}
-                {% set section_figs = figure_map.get(sec.section_id, []) %}
-                {% if section_figs %}
-                <div class="figure-stack {% if sec.type in ['method_overview', 'main_method'] %}one{% elif section_figs|length > 1 %}two{% else %}one{% endif %}">
-                    {% for fig in section_figs %}
-                    <div class="figure-card {% if sec.type in ['method_overview', 'main_method'] %}method-card{% elif sec.type == 'experiments' %}result-card{% endif %}">
+            </div>
+        </div>
+
+        <div class="section-block" style="grid-area: overview;">
+            <div class="section-title">{{ ns.overview.title if ns.overview else 'Method Overview' }}</div>
+            <div class="section-content">
+                {% if ns.overview %}
+                    {{ ns.overview.content_html|replace('[[METHOD_FORMULA]]', '')|safe }}
+                {% else %}
+                    (not provided)
+                {% endif %}
+                {% set overview_figs = figure_map.get(ns.overview.section_id, []) if ns.overview else [] %}
+                {% if overview_figs %}
+                <div class="figure-stack one">
+                    {% for fig in overview_figs[:1] %}
+                    <div class="figure-card method-card">
                         {% if fig.src %}
                         <img src="{{ fig.src }}" alt="{{ fig.caption }}">
                         {% else %}
                         <div class="figure-placeholder">Figure unavailable: {{ fig.caption }}</div>
                         {% endif %}
-                        {% if fig.caption %}
-                        <div class="figure-caption">{{ fig.caption }}</div>
-                        {% endif %}
+                        {% if fig.caption %}<div class="figure-caption">{{ fig.caption }}</div>{% endif %}
                     </div>
                     {% endfor %}
                 </div>
                 {% endif %}
             </div>
         </div>
-        {% endfor %}
-    </div>
-</div>
+
+        <div class="section-block" style="grid-area: key_idea;">
+            <div class="section-title">{{ ns.key_idea.title if ns.key_idea else 'Key Idea' }}</div>
+            <div class="section-content">
+                {% if ns.key_idea %}
+                    {{ ns.key_idea.content_html|safe }}
+                {% else %}
+                    (not provided)
+                {% endif %}
+                {% set key_figs = figure_map.get(ns.key_idea.section_id, []) if ns.key_idea else [] %}
+                {% if key_figs %}
+                <div class="figure-stack one">
+                    {% for fig in key_figs[:1] %}
+                    <div class="figure-card">
+                        {% if fig.src %}
+                        <img src="{{ fig.src }}" alt="{{ fig.caption }}">
+                        {% else %}
+                        <div class="figure-placeholder">Figure unavailable: {{ fig.caption }}</div>
+                        {% endif %}
+                        {% if fig.caption %}<div class="figure-caption">{{ fig.caption }}</div>{% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="section-block core-band" style="grid-area: core;">
+            <div class="section-title core-band-title">Core Results</div>
+            <div class="section-content">
+                {% set core_figs = namespace(items=[]) %}
+                {% if ns.core_results %}
+                    {% for fig in figure_map.get(ns.core_results.section_id, []) %}
+                        {% set _ = core_figs.items.append(fig) %}
+                    {% endfor %}
+                {% endif %}
+                {% if ns.core_method %}
+                    {% for fig in figure_map.get(ns.core_method.section_id, []) %}
+                        {% set _ = core_figs.items.append(fig) %}
+                    {% endfor %}
+                {% endif %}
+                {% set left_fig = core_figs.items[0] if core_figs.items|length > 0 else None %}
+                {% set right_fig = core_figs.items[1] if core_figs.items|length > 1 else None %}
+                {% set center_source = ns.core_results if ns.core_results else ns.core_method %}
+                {% if center_source %}
+                <div class="section-copy">{{ center_source.content_html.split('[[CORE_TABLE]]')[0]|safe }}</div>
+                {% endif %}
+                <div class="core-grid">
+                    <div class="core-column">
+                        <div class="figure-card result-card">
+                            {% if left_fig and left_fig.src %}
+                            <img src="{{ left_fig.src }}" alt="{{ left_fig.caption }}">
+                            {% else %}
+                            <div class="core-empty">Result figure 1 unavailable</div>
+                            {% endif %}
+                            {% if left_fig and left_fig.caption %}<div class="figure-caption">{{ left_fig.caption }}</div>{% endif %}
+                        </div>
+                    </div>
+                    <div class="core-column">
+                        <div class="core-table-wrap">
+                            {% if center_source and center_source.content_html and '[[CORE_TABLE]]' in center_source.content_html %}
+                                {% set core_table = center_source.content_html.split('[[CORE_TABLE]]')[-1].strip() %}
+                                {{ core_table|safe }}
+                            {% else %}
+                                <div class="core-empty">Item details unavailable</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="core-column">
+                        <div class="figure-card result-card">
+                            {% if right_fig and right_fig.src %}
+                            <img src="{{ right_fig.src }}" alt="{{ right_fig.caption }}">
+                            {% else %}
+                            <div class="core-empty">Result figure 2 unavailable</div>
+                            {% endif %}
+                            {% if right_fig and right_fig.caption %}<div class="figure-caption">{{ right_fig.caption }}</div>{% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section-block" style="grid-area: contributions;">
+            <div class="section-title">{{ ns.contributions.title if ns.contributions else 'Contributions' }}</div>
+            <div class="section-content">
+                {% if ns.contributions %}
+                    {{ ns.contributions.content_html|safe }}
+                {% else %}
+                    (not provided)
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="section-block" style="grid-area: highlights;">
+            <div class="section-title">{{ ns.highlights.title if ns.highlights else 'Highlights' }}</div>
+            <div class="section-content">
+                {% if ns.highlights %}
+                    {{ ns.highlights.content_html|safe }}
+                {% else %}
+                    (not provided)
+                {% endif %}
+                <div class="badge-row">
+                    <span class="badge-pill">Cross-benchmark</span>
+                    <span class="badge-pill">Fast</span>
+                    <span class="badge-pill">Best-in-class</span>
+                    <span class="badge-pill">Robust</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="section-block" style="grid-area: project;">
+            <div class="section-title">{{ ns.project.title if ns.project else 'Project' }}</div>
+            <div class="section-content">
+                <div class="project-box">
+                    <div class="qr-placeholder">[QR]</div>
+                    <div class="code-cta">
+                        <div class="label">Code & Project</div>
+                        {% if code_url %}
+                        <a class="code-link" href="{{ code_url }}" target="_blank" rel="noreferrer noopener">{{ code_url }}</a>
+                        {% else %}
+                        <div class="link-text">Code will be release.</div>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="project-footer">Paper-to-Poster · Research Reader</div>
+            </div>
+        </div>
 
 <script>
-MathJax = { tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] } };
+MathJax = { tex: { inlineMath: [['$', '$']] } };
 </script>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
 

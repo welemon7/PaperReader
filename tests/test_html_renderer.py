@@ -146,6 +146,153 @@ class TestHtmlPosterRenderer:
         assert "grid-area: overview" in html
         assert "grid-area: key_idea" in html
         assert "grid-area: core" in html
+        assert "grid-area: contributions" in html
+        assert "grid-area: highlights" in html
+        assert "grid-area: project" in html
+        assert 'grid-template-areas:' in html
+        assert '"motivation overview key_idea"' in html
+        assert '"core core core"' in html
+        assert '"contributions highlights project"' in html
+        assert "grid-area: main_method" not in html
+        assert "grid-area: method_overview" not in html
+
+    def test_render_merges_core_band_into_core_results(self, tmp_path):
+        source_dir = tmp_path / "paper"
+        source_dir.mkdir()
+        left = source_dir / "left.png"
+        right = source_dir / "right.png"
+        left.write_bytes(b"fakepng")
+        right.write_bytes(b"fakepng")
+        doc = PaperDocument(
+            paper_id="test-999",
+            arxiv_id="9999.99999",
+            title="Test",
+            raw_markdown=".",
+            source_dir=str(source_dir),
+            figures=[
+                Figure(figure_id="fig-left", caption="Result figure 1", local_path=str(left), section_id="s4"),
+                Figure(figure_id="fig-right", caption="Result figure 2", local_path=str(right), section_id="s2"),
+            ],
+        )
+        bp = _make_blueprint()
+        bp.sections = [
+            bp.sections[0],
+            bp.sections[1],
+            bp.sections[2],
+            PosterSection(section_id="s4", type="main_method", title="Core Method", content_md="| Dataset | PSNR | SSIM |\n| --- | --- | --- |\n| ISTD+ | 34.1 | 0.92 |", column=1, col_span=3, row=2),
+            PosterSection(section_id="s5", type="contributions", title="Contributions", content_md="Bullets.", column=1, col_span=1, row=3),
+            PosterSection(section_id="s6", type="highlights", title="Highlights", content_md="Takeaways.", column=2, col_span=1, row=3),
+            PosterSection(section_id="s7", type="project_link", title="Project", content_md="Code link.", column=3, col_span=1, row=3),
+        ]
+        bp.figure_placements = [
+            type("FP", (), {"figure_id": "fig-left", "section_id": "s4", "width_ratio": 0.9, "caption": "Result figure 1"})(),
+            type("FP", (), {"figure_id": "fig-right", "section_id": "s4", "width_ratio": 0.9, "caption": "Result figure 2"})(),
+        ]
+        renderer = HtmlPosterRenderer()
+        html = renderer.render(bp, doc, tmp_path)
+        assert "Core Results" in html
+        assert "core-grid" in html
+        assert "Result figure 1" in html
+        assert "ISTD+" in html
+        assert "Result figure 2" in html
+        assert html.count('class="section-block core-band"') == 1
+        assert html.count('style="grid-area: core;"') == 1
+
+    def test_render_uses_item_details_table_for_core_results(self, tmp_path):
+        doc = PaperDocument(paper_id="test-999", arxiv_id="9999.99999", title="Test", raw_markdown=".")
+        bp = _make_blueprint()
+        bp.sections[3].content_md = (
+            "Core results are strong.\n\n"
+            "[[CORE_TABLE]]\n\n"
+            "<div class=\"item-details-wrap\">"
+            "<div class=\"item-details-title\">Item Details</div>"
+            "<table class=\"item-details-table\">"
+            "<tbody>"
+            "<tr><th>Datasets</th><td>Dataset-A<br>Dataset-B</td></tr>"
+            "<tr><th>Metrics</th><td>Accuracy<br>F1</td></tr>"
+            "<tr><th>Main Results</th><td>State-of-the-art</td></tr>"
+            "<tr><th>Takeaways</th><td>Works well</td></tr>"
+            "</tbody></table></div>"
+        )
+        renderer = HtmlPosterRenderer()
+        html = renderer.render(bp, doc, tmp_path)
+        assert "Item Details" in html
+        assert "Datasets" in html
+        assert "Metrics" in html
+        assert "Main Results" in html
+        assert "Takeaways" in html
+        assert "Dataset-A" in html
+        assert "Accuracy" in html
+
+    def test_render_reflow_content_sections(self, tmp_path):
+        source_dir = tmp_path / "paper"
+        source_dir.mkdir()
+        overview_img = source_dir / "overview.png"
+        key_img = source_dir / "detail.png"
+        overview_img.write_bytes(b"fakepng")
+        key_img.write_bytes(b"fakepng")
+
+        doc = PaperDocument(
+            paper_id="test-999",
+            arxiv_id="9999.99999",
+            title="Test",
+            raw_markdown=".",
+            source_dir=str(source_dir),
+            figures=[
+                Figure(figure_id="fig-ov", caption="Network architecture overview", local_path=str(overview_img), section_id="s2"),
+                Figure(figure_id="fig-key", caption="Detailed structure", local_path=str(key_img), section_id="s3"),
+                Figure(figure_id="fig-left", caption="Result figure 1", local_path=str(overview_img), section_id="s4"),
+                Figure(figure_id="fig-right", caption="Result figure 2", local_path=str(key_img), section_id="s4"),
+            ],
+        )
+        bp = _make_blueprint()
+        bp.code_url = "https://github.com/example/repo"
+        bp.sections[0].content_md = "The current approach is limited. It misses fine details."
+        bp.sections[1].content_md = "We introduce a compact pipeline.\n\n$$ y = f(x) $$"
+        bp.sections[2].content_md = "The key idea is to refine the output step by step."
+        bp.sections[3].content_md = "| Dataset | PSNR | SSIM |\n| --- | --- | --- |\n| ISTD+ | 34.1 | 0.92 |\n| SRD | 33.7 | 0.91 |\n| INS | 32.8 | 0.90 |"
+        bp.sections[4].content_md = "- First contribution"
+        bp.sections[5].content_md = "- Highlight one"
+        bp.sections[6].content_md = "Code link."
+        bp.figure_placements = [
+            type("FP", (), {"figure_id": "fig-ov", "section_id": "s2", "width_ratio": 0.9, "caption": "Network architecture overview"})(),
+            type("FP", (), {"figure_id": "fig-key", "section_id": "s3", "width_ratio": 0.9, "caption": "Detailed structure"})(),
+            type("FP", (), {"figure_id": "fig-left", "section_id": "s4", "width_ratio": 0.9, "caption": "Result figure 1"})(),
+            type("FP", (), {"figure_id": "fig-right", "section_id": "s4", "width_ratio": 0.9, "caption": "Result figure 2"})(),
+        ]
+        renderer = HtmlPosterRenderer()
+        html = renderer.render(bp, doc, tmp_path)
+        assert "formula-box" in html
+        assert "callout" in html
+        assert "Network architecture overview" in html
+        assert "Detailed structure" in html
+        assert "code-cta" in html
+        assert "Paper-to-Poster · Research Reader" in html
+        assert html.count("badge-pill") >= 4
+        assert "Result figure 1" in html
+        assert "Result figure 2" in html
+        assert "Result figure 1 unavailable" not in html
+        assert "Result figure 2 unavailable" not in html
+
+    def test_render_avoids_duplicate_formula_blocks(self, tmp_path):
+        doc = PaperDocument(paper_id="test-999", arxiv_id="9999.99999", title="Test", raw_markdown=".")
+        bp = _make_blueprint()
+        bp.sections[0].content_md = "Problem statement only."
+        bp.sections[1].content_md = "Method overview only."
+        bp.sections[2].content_md = "Key idea only."
+        bp.sections[3].content_md = "| Dataset | PSNR | SSIM |\n| --- | --- | --- |"
+        bp.sections[4].content_md = "Contribution."
+        bp.sections[5].content_md = "Highlight."
+        bp.sections[6].content_md = "Code."
+        bp.figure_placements = []
+        bp.color_scheme = _make_blueprint().color_scheme
+        bp.code_url = ""
+        bp.sections[0].content_md += "\n\n$$ a=b $$"
+        bp.sections[1].content_md += "\n\n$$ c=d $$"
+        renderer = HtmlPosterRenderer()
+        html = renderer.render(bp, doc, tmp_path)
+        assert html.count("formula-box") <= 2
+        assert "inlineMath: [['$', '$']]" in html
 
     def test_resolve_figure_path_prefers_existing_pdf_or_image(self, tmp_path):
         source_dir = tmp_path / "paper"

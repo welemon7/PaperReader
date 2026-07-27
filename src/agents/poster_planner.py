@@ -1,5 +1,6 @@
 ﻿from __future__ import annotations
 
+import html as html_lib
 import logging
 import re
 
@@ -241,7 +242,7 @@ def _build_row2(doc: PaperDocument, analysis: PaperAnalysis) -> list[PosterSecti
 
 
 def _build_motivation_section(analysis: PaperAnalysis) -> PosterSection:
-    motivation = _summarize_motivation(analysis)
+    motivation = _build_motivation_content(analysis)
     return PosterSection(
         section_id="sec-motivation", type="motivation",
         title="Motivation",
@@ -251,22 +252,7 @@ def _build_motivation_section(analysis: PaperAnalysis) -> PosterSection:
 
 
 def _build_method_overview_section(analysis: PaperAnalysis) -> PosterSection:
-    overview_lines = []
-    if analysis.method_overview:
-        overview_lines.append(_clean_poster_text(analysis.method_overview))
-    if analysis.key_formulas:
-        formula_lines = []
-        for f in analysis.key_formulas[:2]:
-            cleaned_latex = _clean_formula_latex(f.latex)
-            if not cleaned_latex:
-                continue
-            if f.semantic_desc:
-                formula_lines.append(f"- $$ {cleaned_latex} $$: {_clean_poster_text(f.semantic_desc)}")
-            else:
-                formula_lines.append(f"- $$ {cleaned_latex} $$")
-        if formula_lines:
-            overview_lines.append("**Key Formulas**\n\n" + "\n".join(formula_lines))
-    content = _join_with_paragraphs(*overview_lines) or "(method overview not provided)"
+    content = _build_method_overview_content(analysis) or "(method overview not provided)"
     return PosterSection(
         section_id="sec-method-overview", type="method_overview",
         title="Method Overview",
@@ -277,18 +263,7 @@ def _build_method_overview_section(analysis: PaperAnalysis) -> PosterSection:
 
 def _build_key_idea_section(analysis: PaperAnalysis) -> PosterSection:
     key_title = _infer_key_idea_title(analysis)
-    bullets: list[str] = []
-    if analysis.contributions:
-        lead = _clean_poster_text(analysis.contributions[0].text)
-        if lead:
-            bullets.append(f"- {lead}")
-    if analysis.key_figures:
-        figure_hint = _clean_poster_text(analysis.key_figures[0].caption)
-        if figure_hint:
-            bullets.append(f"- {figure_hint}")
-    if not bullets and analysis.problem_statement:
-        bullets.append(f"- {_clean_poster_text(analysis.problem_statement)}")
-    content = "\n".join(bullets) if bullets else "(key idea not provided)"
+    content = _build_key_idea_content(analysis) or "(key idea not provided)"
     return PosterSection(
         section_id="sec-key-idea", type="key_idea",
         title=f"Key Idea: {key_title}",
@@ -298,22 +273,10 @@ def _build_key_idea_section(analysis: PaperAnalysis) -> PosterSection:
 
 
 def _build_core_section(doc: PaperDocument, analysis: PaperAnalysis) -> PosterSection:
-    core_parts: list[str] = []
-    if analysis.method_overview:
-        core_parts.append(analysis.method_overview)
-    result_block = _build_result_block(doc, analysis)
-    if result_block:
-        core_parts.append(result_block)
-    if analysis.key_figures:
-        extra = _clean_poster_text(analysis.key_figures[0].caption)
-        if extra:
-            core_parts.append(f"**Core Visual:** {extra}")
-    if analysis.code_url:
-        core_parts.append(f"**Code:** {analysis.code_url}")
-    content = _join_with_paragraphs(*core_parts) or "(core method not provided)"
+    content = _build_core_results_content(doc, analysis) or "(core method not provided)"
     return PosterSection(
         section_id="sec-main-method", type="main_method",
-        title="Core",
+        title="Core Results",
         content_md=content,
         column=1, col_span=3, row=2,
     )
@@ -330,13 +293,7 @@ def _build_results_section(analysis: PaperAnalysis) -> PosterSection:
 
 
 def _build_contributions_section(analysis: PaperAnalysis) -> PosterSection:
-    contrib_lines = []
-    for c in analysis.contributions:
-        prefix = "-"
-        if c.category:
-            prefix = "- **[" + c.category + "]**"
-        contrib_lines.append(prefix + " " + _clean_poster_text(c.text))
-    contrib_content = "\n".join(contrib_lines) if contrib_lines else "(not provided)"
+    contrib_content = _build_contributions_content(analysis) or "(not provided)"
 
     return PosterSection(
         section_id="sec-contributions", type="contributions",
@@ -347,11 +304,7 @@ def _build_contributions_section(analysis: PaperAnalysis) -> PosterSection:
 
 
 def _build_highlights_section(analysis: PaperAnalysis) -> PosterSection:
-    highlights = _build_highlights(analysis)
-    if highlights:
-        content = "\n".join(f"- {item}" for item in highlights)
-    else:
-        content = "- See paper for details."
+    content = _build_highlights_content(analysis) or "- See paper for details."
     return PosterSection(
         section_id="sec-highlights", type="highlights",
         title="Highlights",
@@ -361,14 +314,7 @@ def _build_highlights_section(analysis: PaperAnalysis) -> PosterSection:
 
 
 def _build_project_section(analysis: PaperAnalysis) -> PosterSection:
-    code_url = (analysis.code_url or "").strip()
-    if code_url:
-        content = (
-            "**Code**\n\n"
-            f'<a class="code-link" href="{code_url}" target="_blank" rel="noreferrer noopener">{code_url}</a>'
-        )
-    else:
-        content = "**Code**\n\nCode link not provided in the paper."
+    content = _build_project_content(analysis)
     return PosterSection(
         section_id="sec-project", type="project_link",
         title="Project",
@@ -398,123 +344,258 @@ def _summarize_motivation(analysis: PaperAnalysis, max_words: int = 80) -> str:
     return text.rstrip(" ,;:.-")
 
 
-def _build_result_block(doc: PaperDocument, analysis: PaperAnalysis) -> str:
+def _build_motivation_content(analysis: PaperAnalysis) -> str:
+    paragraphs: list[str] = []
+    problem = _first_sentence(_clean_poster_text(analysis.problem_statement or ""))
+    if problem:
+        paragraphs.append(problem)
+
+    advantage_source = _first_clause(_clean_poster_text(analysis.method_overview or ""))
+    if not advantage_source and analysis.contributions:
+        advantage_source = _first_clause(_clean_poster_text(analysis.contributions[0].text))
+    if advantage_source:
+        paragraphs.append(f"The core advantage is that {advantage_source.rstrip(' ,;:.-')}.")
+
+    formula_html = _format_formula_box(analysis, label="Key Formula", formula_index=0)
+    callout_text = _build_motivation_callout(analysis)
+    parts = [p for p in paragraphs if p]
+    if formula_html:
+        parts.append(formula_html)
+    if callout_text:
+        parts.append(callout_text)
+    return "\n\n".join(parts).strip()
+
+
+def _build_method_overview_content(analysis: PaperAnalysis) -> str:
+    intro = _first_sentence(_clean_poster_text(analysis.method_overview or ""))
+    if not intro:
+        intro = "We summarize the method as a compact pipeline from input to output."
+
+    bullet_points: list[str] = []
+    clause = _first_clause(_clean_poster_text(analysis.method_overview or ""))
+    if clause:
+        bullet_points.append(f"- {clause.rstrip(' ,;:.-')}")
+    if len(bullet_points) < 2:
+        bullets_from_contribs = [_clean_poster_text(c.text) for c in analysis.contributions[:2]]
+        for item in bullets_from_contribs:
+            if item and len(bullet_points) < 2:
+                bullet_points.append(f"- {item}")
+    while len(bullet_points) < 2:
+        bullet_points.append("- See the architecture figure for the overall pipeline.")
+
+    formula_html = _format_formula_box(analysis, label="Main Formula", formula_index=1)
+    content_parts = [intro, "\n".join(bullet_points[:2])]
+    if formula_html:
+        content_parts.append(formula_html)
+    return "\n\n".join(content_parts).strip()
+
+
+def _build_key_idea_content(analysis: PaperAnalysis) -> str:
+    bullets: list[str] = []
+    if analysis.contributions:
+        for contrib in analysis.contributions[:2]:
+            text = _clean_poster_text(contrib.text)
+            if text:
+                bullets.append(f"- {text}")
+            if len(bullets) >= 2:
+                break
+    if analysis.key_figures:
+        figure_hint = _clean_poster_text(analysis.key_figures[0].caption)
+        if figure_hint and len(bullets) < 3:
+            bullets.append(f"- {figure_hint}")
+    while len(bullets) < 3:
+        bullets.append("- The detailed structure figure shows how the module is used.")
+    return "\n".join(bullets[:3]).strip()
+
+
+def _build_core_results_content(doc: PaperDocument, analysis: PaperAnalysis) -> str:
+    intro = _build_core_intro(analysis)
+    table = _build_core_result_table(doc, analysis)
+    parts = [intro]
+    if table:
+        parts.append("[[CORE_TABLE]]")
+        parts.append(table)
+    return "\n\n".join(parts).strip()
+
+
+def _build_core_intro(analysis: PaperAnalysis) -> str:
+    exp = analysis.experiments
+    if not exp:
+        return "Core results are unavailable."
+    summary = _first_sentence(_clean_poster_text(exp.main_results or ""))
+    if not summary:
+        summary = _first_sentence(_clean_poster_text(analysis.method_overview or ""))
+    metrics = ", ".join(exp.metrics[:2]) if exp.metrics else ""
+    if summary and metrics:
+        return f"{summary} The main advantages are reflected in {metrics}."
+    if summary:
+        return summary
+    if metrics:
+        return f"The main advantages are reflected in {metrics}."
+    return "Core results summarize the strongest gains across the paper's benchmarks."
+
+
+def _build_core_result_table(doc: PaperDocument, analysis: PaperAnalysis) -> str:
     exp = analysis.experiments
     if not exp:
         return ""
-    numeric_summary = _extract_numeric_result_summary(doc, analysis)
-    if numeric_summary:
-        return numeric_summary
 
-    lines = ["**Result**"]
-    rows: list[tuple[str, str]] = []
-    if exp.datasets:
-        rows.append(("Datasets", ", ".join(exp.datasets)))
-    if exp.metrics:
-        rows.append(("Metrics", ", ".join(exp.metrics)))
-    if exp.main_results:
-        rows.append(("Main Result", exp.main_results))
+    def _format_value(items: list[str], fallback: str) -> str:
+        cleaned = [html_lib.escape(_clean_poster_text(item)) for item in items if _clean_poster_text(item)]
+        return "<br>".join(cleaned) if cleaned else html_lib.escape(fallback)
 
-    if rows:
-        lines.append("")
-        lines.append("| Item | Details |")
-        lines.append("| --- | --- |")
-        for key, value in rows:
-            lines.append(f"| {key} | {value} |")
+    rows = [
+        ("Datasets", _format_value(exp.datasets, "Not specified")),
+        ("Metrics", _format_value(exp.metrics, "Not specified")),
+        ("Main Results", html_lib.escape(_first_sentence(_clean_poster_text(exp.main_results or "")) or "Not specified")),
+        ("Takeaways", _format_value(exp.takeaways[:3], "Not specified") if exp.takeaways else html_lib.escape("Not specified")),
+    ]
 
-    if exp.takeaways:
-        lines.append("")
-        lines.append("**Takeaway**")
-        for item in exp.takeaways[:2]:
-            lines.append(f"- {_clean_poster_text(item)}")
-    return "\n".join(lines).strip()
+    table_rows = "".join(f"<tr><th>{html_lib.escape(label)}</th><td>{value}</td></tr>" for label, value in rows)
+    return (
+        '<div class="item-details-wrap">'
+        '<div class="item-details-title">Item Details</div>'
+        '<table class="item-details-table">'
+        f"<tbody>{table_rows}</tbody>"
+        '</table>'
+        '</div>'
+    )
 
 
-def _extract_numeric_result_summary(doc: PaperDocument, analysis: PaperAnalysis) -> str:
-    exp = analysis.experiments
-    combined_sources = []
-    combined_sources.append(analysis.full_analysis_md or "")
-    combined_sources.append(doc.raw_markdown or "")
-    for sec in doc.sections:
-        combined_sources.append(sec.raw_latex or "")
-        combined_sources.append(sec.text or "")
+def _build_contributions_content(analysis: PaperAnalysis) -> str:
+    bullets: list[str] = []
+    for contrib in analysis.contributions[:4]:
+        text = _clean_poster_text(contrib.text)
+        if text:
+            bullets.append(f"- {text}")
+    while len(bullets) < 4:
+        fallback = [
+            "- The method improves the core target task.",
+            "- The design stays lightweight and easy to deploy.",
+            "- Results stay consistent across settings.",
+            "- The analysis highlights a clear practical benefit.",
+        ][len(bullets)]
+        bullets.append(fallback)
+    return "\n".join(bullets[:4]).strip()
 
-    lines: list[str] = []
-    for source in combined_sources:
-        if not source:
-            continue
-        lines.extend(line.strip() for line in source.splitlines() if line.strip())
 
-    def _number_count(line: str) -> int:
-        return len(re.findall(r"(?<!\w)(\d+\.\d+)", line))
-
-    def _pick_line(required_terms: tuple[str, ...], min_numbers: int) -> tuple[str, list[str]]:
-        best_line = ""
-        best_numbers: list[str] = []
-        for line in lines:
-            lower = line.lower()
-            if required_terms and not all(term in lower for term in required_terms):
-                continue
-            numbers = re.findall(r"(?<!\w)(\d+\.\d+)", line)
-            if len(numbers) < min_numbers:
-                continue
-            if len(numbers) > len(best_numbers):
-                best_line = line
-                best_numbers = numbers
-        return best_line, best_numbers
-
-    # Main benchmark row: ISTD+, SRD, INS, WSRD+
-    best_line, best_numbers = _pick_line(("ours",), 8)
-    if len(best_numbers) >= 8:
-        datasets = ["ISTD+", "SRD", "INS", "WSRD+"]
-        rows = [
-            (datasets[i], best_numbers[i * 2], best_numbers[i * 2 + 1])
-            for i in range(4)
+def _build_highlights_content(analysis: PaperAnalysis) -> str:
+    items = _build_highlights(analysis)
+    while len(items) < 4:
+        defaults = [
+            "A clean pipeline for the target task.",
+            "Strong quantitative gains on the main benchmarks.",
+            "A compact design with clear interpretability.",
+            "Stable behavior under common variations.",
         ]
-        lines_out = ["**Result**", "", "| Dataset | PSNR | SSIM |", "| --- | --- | --- |"]
-        for name, psnr, ssim in rows:
-            lines_out.append(f"| {name} | {psnr} | {ssim} |")
-        cross_line, cross_numbers = _pick_line(("ours",), 6)
-        if len(cross_numbers) >= 6 and cross_line != best_line:
-            lines_out.extend(["", "**Cross-dataset**", "", "| Setting | PSNR | SSIM |", "| --- | --- | --- |"])
-            cross_rows = [
-                ("ISTD+→SRD", cross_numbers[0], cross_numbers[1]),
-                ("SRD→ISTD+", cross_numbers[2], cross_numbers[3]),
-                ("INS→WSRD+", cross_numbers[4], cross_numbers[5]),
-            ]
-            for name, psnr, ssim in cross_rows:
-                lines_out.append(f"| {name} | {psnr} | {ssim} |")
-        return "\n".join(lines_out)
+        items.append(defaults[len(items)])
+    return "\n".join(f"- {item}" for item in items[:4])
 
-    # Fallback: find any strong numeric row with at least 6 floats.
-    fallback_candidates = []
-    for line in lines:
-        lower = line.lower()
-        if "ours" not in lower and "full" not in lower and "result" not in lower:
+
+def _build_project_content(analysis: PaperAnalysis) -> str:
+    code_url = (analysis.code_url or "").strip()
+    if code_url:
+        link_html = f'<a class="code-link" href="{code_url}" target="_blank" rel="noreferrer noopener">{code_url}</a>'
+    else:
+        link_html = "Code will be release."
+    return (
+        "<div class=\"project-box\">"
+        "<div class=\"qr-placeholder\">[QR]</div>"
+        "<div class=\"code-cta\">"
+        "<div class=\"label\">Code & Project</div>"
+        f"<div>{link_html}</div>"
+        "</div>"
+        "</div>"
+    )
+
+
+def _extract_first_tex_table(doc: PaperDocument) -> str:
+    sources: list[str] = []
+    if doc.raw_markdown:
+        sources.append(doc.raw_markdown)
+    for sec in doc.sections:
+        raw = getattr(sec, "raw_latex", "") or ""
+        if raw:
+            sources.append(raw)
+    if not sources:
+        return ""
+
+    table_block = ""
+    for source in sources:
+        match = re.search(r"\\begin\{table\*?\}(.*?)\\end\{table\*?\}", source, re.DOTALL)
+        if match:
+            table_block = match.group(1)
+            break
+        match = re.search(r"\\begin\{tabular\}(.*?)\\end\{tabular\}", source, re.DOTALL)
+        if match:
+            table_block = match.group(1)
+            break
+    if not table_block:
+        return ""
+
+    table_block = re.sub(r"\\(?:hline|cline\{[^}]*\})", "", table_block)
+    table_block = re.sub(r"\\multirow\{[^}]*\}\{[^}]*\}\{([^}]*)\}", r"\1", table_block)
+    table_block = re.sub(r"\\multicolumn\{[^}]*\}\{[^}]*\}\{([^}]*)\}", r"\1", table_block)
+    table_block = re.sub(r"\\textbf\{([^}]*)\}", r"\1", table_block)
+    table_block = re.sub(r"\\emph\{([^}]*)\}", r"\1", table_block)
+    table_block = re.sub(r"\\begin\{[^}]+\}|\\end\{[^}]+\}", "", table_block)
+
+    rows: list[list[str]] = []
+    for raw_row in re.split(r"\\\\", table_block):
+        row = raw_row.strip()
+        if not row:
             continue
-        numbers = re.findall(r"(?<!\w)(\d+\.\d+)", line)
-        if len(numbers) >= 6:
-            fallback_candidates.append((len(numbers), line, numbers))
-    fallback_candidates.sort(key=lambda item: item[0], reverse=True)
-    if fallback_candidates:
-        _, _, numbers = fallback_candidates[0]
-        rows = []
-        metric_names = (
-            exp.datasets[:4]
-            if exp and len(exp.datasets) >= 4
-            else [f"Set {i+1}" for i in range(len(numbers) // 2)]
-        )
-        for i, name in enumerate(metric_names):
-            if i * 2 + 1 >= len(numbers):
-                break
-            rows.append((name, numbers[i * 2], numbers[i * 2 + 1]))
-        if rows:
-            lines_out = ["**Result**", "", "| Dataset | PSNR | SSIM |", "| --- | --- | --- |"]
-            for name, psnr, ssim in rows:
-                lines_out.append(f"| {name} | {psnr} | {ssim} |")
-            return "\n".join(lines_out)
+        row = re.sub(r"\\[a-zA-Z]+", "", row)
+        row = row.replace("\\", "")
+        cells = [re.sub(r"\s+", " ", _clean_poster_text(cell)).strip() for cell in row.split("&")]
+        cells = [cell for cell in cells if cell]
+        if len(cells) >= 2:
+            rows.append(cells)
 
-    return ""
+    if len(rows) < 2:
+        return ""
+
+    header = rows[0]
+    body = rows[1:]
+    col_count = len(header)
+    if col_count < 2:
+        return ""
+    header = header[:col_count]
+    lines = ["| " + " | ".join(header) + " |", "| " + " | ".join(["---"] * col_count) + " |"]
+    for row in body[:3]:
+        padded = row[:col_count] + [""] * max(0, col_count - len(row))
+        lines.append("| " + " | ".join(padded[:col_count]) + " |")
+    return "\n".join(lines)
+
+
+def _build_motivation_callout(analysis: PaperAnalysis) -> str:
+    insight = _first_sentence(_clean_poster_text(analysis.conclusion or ""))
+    if not insight and analysis.experiments and analysis.experiments.main_results:
+        insight = _first_sentence(_clean_poster_text(analysis.experiments.main_results))
+    if not insight:
+        insight = _first_clause(_clean_poster_text(analysis.problem_statement or ""))
+    if not insight:
+        insight = "The central insight is that the paper trades extra complexity for a cleaner, stronger result."
+    return f'<div class="callout">Key insight: {insight}</div>'
+
+
+def _format_formula_box(analysis: PaperAnalysis, label: str, formula_index: int = 0) -> str:
+    formulas = getattr(analysis, "key_formulas", []) or []
+    if formula_index >= len(formulas):
+        return ""
+    target = formulas[formula_index]
+    cleaned_latex = _clean_formula_latex(target.latex)
+    if not cleaned_latex:
+        return ""
+    semantic = _clean_poster_text(target.semantic_desc or "")
+    semantic_html = f"<div class=\"formula-desc\">{semantic}</div>" if semantic else ""
+    return (
+        '<div class="formula-box">'
+        f'<div class="formula-label">{label}</div>'
+        f'<div>$$ {cleaned_latex} $$</div>'
+        f'{semantic_html}'
+        '</div>'
+    )
 
 
 def _result_hint(analysis: PaperAnalysis) -> str:

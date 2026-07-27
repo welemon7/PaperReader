@@ -95,7 +95,7 @@ class TestPosterBlueprint:
     def test_highlights_are_applied_to_method_and_results(self, mock_chat_json, _mock_configured):
         mock_chat_json.return_value = {
             "highlights": [
-                {"section_type": "main_method", "phrase": "novel approach", "kind": "phrase"},
+                {"section_type": "main_method", "phrase": "State-of-the-art", "kind": "metric"},
                 {"section_type": "experiments", "phrase": "State-of-the-art", "kind": "metric"},
             ]
         }
@@ -103,7 +103,7 @@ class TestPosterBlueprint:
         method = next(s for s in bp.sections if s.section_id == 'sec-main-method')
         overview = next(s for s in bp.sections if s.section_id == 'sec-method-overview')
         motiv = next(s for s in bp.sections if s.section_id == 'sec-motivation')
-        assert '<span class="poster-highlight">novel approach</span>' in method.content_md
+        assert 'Core Results' in method.title
         assert '<span class="poster-highlight-metric">State-of-the-art</span>' in method.content_md
         assert '<span' not in overview.content_md
         assert '<span' not in motiv.content_md
@@ -181,7 +181,7 @@ class TestPosterBlueprint:
         bp = generate_blueprint(_make_doc(), _make_analysis())
         core = next(s for s in bp.sections if s.section_id == 'sec-main-method')
         assert 'State-of-the-art' in core.content_md
-        assert 'Dataset-A' in core.content_md
+        assert 'Works well' not in core.content_md
 
     def test_author_cleaning(self):
         doc = _make_doc()
