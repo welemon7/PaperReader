@@ -119,6 +119,10 @@ class PaperDatabase:
         self.Session = sessionmaker(bind=self.engine)
         logger.info("Database initialized: %s", db_url)
 
+
+
+
+
     def save_paper(self, doc: PaperDocument) -> str:
         """Save the full PaperDocument into SQLite.
         Returns paper_id.

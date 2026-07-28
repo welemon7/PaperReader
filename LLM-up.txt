@@ -1,75 +1,67 @@
-将给定的“初稿”HTML海报的生成逻辑优化为“完美版”样式。严格按以下步骤操作，最终输出一份完整、可直接运行的全英HTML文件。
+You are a professional HTML poster designer. Optimize the generation logic of the given draft HTML poster into a polished final version. Follow the steps below strictly and output a complete, self-contained, fully English HTML file that can be run directly in a browser.
 
-### 1. 全局视觉升级
-- 颜色保持和谐。
-- 容器样式：`padding: 24px; border-radius: 8px;`。
-- 标题字号：`h1` 改为 `34px`，增加 `letter-spacing: -0.3px`。
-- 作者和附属信息字号微调，保持整洁。
+### 1. Global Visual Enhancement
+- Maintain color harmony throughout.
+- Container styles: `padding: 24px; border-radius: 8px;`.
+- Slightly adjust font sizes for author and affiliation information to keep the layout clean.
 
-### 2. 修复网格布局
-- 确保 `grid-template-areas` 精确为：
-"motivation overview key_idea"
-"core core core"
-"contributions highlights project"
-- **禁止**使用 `main_method` 或 `method_overview` 等额外网格区域，所有内容必须放入上述六个区域。
-- 如果存在重复的 `core` 区域，合并为一个，命名为“Core Results”。
-- 在 `core` 区域内，采用三栏布局（`.core-grid`）：
-- 左栏：结果图1
-- 中栏：性能表格（包含具体数据和数据集）
-- 右栏：结果图2
+### 2. Fix Grid Layout
+- Ensure `grid-template-areas` is exactly:
+  ```
+  "motivation overview key_idea"
+  "core core core"
+  "contributions highlights project"
+  ```
+- **Do not** use additional grid areas such as `main_method` or `method_overview`; all content must be placed into the six areas above.
+- If there are duplicate `core` areas, merge them into one, and rename it to "Core Results".
+- Within the `core` area, use a three-column layout (`.core-grid`):
+  - Left column: Result Figure 1
+  - Middle column: Performance table (with data and dataset names; do not fabricate data if not provided)
+  - Right column: Result Figure 2
 
-### 3. 内容重新分配（精确到每个区块）
-- **Motivation**：
-- 第一段：指出现有方法局限性
-- 第二段：提出 本论文其核心优势。
-- 添加一个 `formula-box` 显示关键公式：
-- 添加一个 `callout` 说明关键洞察。
-- **删除**任何关于 benchmark 列表的内容（因为表格里已有）。
-- **Method Overview**：
-- 简述方法大纲。
-- 列两个要点。
-- 插入（网络架构总览）作为单独图片。
-- 在图片下方添加一个带边框的公式块，显示方法中最主要的公式：
-- **Key Idea**：
-- 聚焦最关键的地方，解释它如何使用的。
-- 三个要点。
-- 插入插图（详细结构图）。
-- **Core Results**（即原来的 core 区域）：
-- 标题改为“Core Results”。
-- 顶部一行文字：具体效果和优势指标点。
-- 三栏（`.core-grid`）：
-  - 左：（视觉结果）结果图1
-  - 中：表格，三行数据（找到数据集和对应的一些指标）
-  - 右：（视觉对比和消融）结果图2
-- **Contributions**：
-- 四条要点：
-- **Highlights**：
-- 四条短要点。
-- 添加四个 `badge-pill` 标签（可以加一些符号，比如🌐⚡ 🏆 🔄 🔥🚩等）。
-- **Project**：
-- QR 占位（`[QR]`）。
-- Code & Project 标签，下方显示 GitHub 链接（如果论文中有，没有的话这里Project就说code will be release）。
-- 底部小字“Paper-to-Poster · Research Reader”。
+### 3. Content Redistribution (Precise for Each Block)
+- **Motivation**:
+  - First paragraph: Point out the limitations of existing methods.
+  - Second paragraph: Present the core advantages of this work.
+  - Add a `formula-box` displaying a key formula.
+  - Add a `callout` to highlight a key insight.
+  - **Remove** any benchmark list content.
+- **Method Overview**:
+  - Briefly outline the method.
+  - List two bullet points.
+  - Insert (Network Architecture Overview) as a standalone image.
+  - Below the image, add a bordered formula block showing the most important formula of the method.
+- **Key Idea**:
+  - Focus on the most critical aspect and explain how it is used.
+  - Three bullet points.
+  - Insert an illustration (Detailed Structure Diagram).
+- **Core Results** (formerly the `core` area):
+  - Change title to "Core Results".
+  - Top line: a concise statement highlighting key performance metrics and advantages.
+  - Three columns (`.core-grid`):
+    - Left: (Visual Results) Result Figure 1
+    - Middle: Table with three rows of data (include dataset names)
+    - Right: (Visual Comparison and Ablation) Result Figure 2
+- **Contributions**:
+  - Four bullet points.
+- **Highlights**:
+  - Four short bullet points.
+  - Add four `badge-pill` labels (you may include symbols like 🌐 ⚡ 🏆 🔄 🔥 🚩, etc.).
+- **Project**:
+  - QR placeholder (`[QR]`).
+  - Code & Project tags, with a GitHub link shown below (if available in the paper; otherwise, state "code will be released").
 
-### 4. 图片与文件引用
-- 使用以下图片文件（假设都存在）：
-- `结果图1` → 放在 Core Results 左栏
-- `结果图2` → 放在 Core Results 右栏
-- `模型框架图（网络架构总览）` → 放在 Method Overview
-- `详细结构图` → 放在 Key Idea
-- **删除**任何其他图片引用（如多余的结果图或者内容图等）。
+### 4. Images and File References
+- Use the following image files (assume they all exist):
+  - `Result Figure 1` → placed in the left column of Core Results
+  - `Result Figure 2` → placed in the right column of Core Results
+  - `Model Framework (Network Architecture Overview)` → placed in Method Overview
+  - `Detailed Structure Diagram` → placed in Key Idea
+- **Remove** any other image references (e.g., extra result figures or content diagrams).
 
-### 5. 头部（Header）处理
-- 标题、作者、附属信息保持。
-- 将 GitHub 链接转为“hero-pill”样式，并添加 🔗 图标（或类似）。
-- 删除“Paper-to-Poster Research Reader”附属信息。
-
-### 6. 其他
-- 保留 MathJax 配置（`inlineMath: [['$', '$']]`）。
-- 确保所有 `.section-block` 使用统一的圆角、边框。
-- 响应式适配保持不变（`@media (max-width: 1100px)`）。
-- 可以标记出一些重点词
-- 整体内容精炼一些，并且不要重复内容与图片，切记不得编写数据
-
-开始优化。
-
+### 5. Miscellaneous
+- Keep MathJax configuration (`inlineMath: [['$', '$']]`).
+- Ensure all `.section-block` elements use consistent border-radius and border styles.
+- Keep responsive design unchanged (`@media (max-width: 1100px)`).
+- Highlight key terms appropriately.
+- Overall content must be concise, and avoid duplication of content or images.

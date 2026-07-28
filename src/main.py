@@ -316,14 +316,72 @@ def _run(args: argparse.Namespace) -> None:
                 sys.exit(1)
 
             logger.info(f"Auto-generating initial poster for {arxiv_id}...")
+
             try:
-                # 使用 pipeline-v2 生成初稿
+                from src.storage.sqlite import PaperDatabase
+
+                db = PaperDatabase()
+
+                doc = db.get_paper_by_arxiv(arxiv_id)
+                analysis = db.get_analysis_by_arxiv(arxiv_id)
+
+                db.close()
+
+                # 如果没有解析结果，自动执行 parse
+                if not doc:
+                    logger.info(
+                        "PaperDocument not found. Running parse pipeline..."
+                    )
+
+                    import subprocess
+
+                    subprocess.run(
+                        [
+                            sys.executable,
+                            "-m",
+                            "src.main",
+                            "parse",
+                            arxiv_id,
+                        ],
+                        check=True,
+                    )
+
+                # 如果没有理解分析，自动执行 understand
+                if not analysis:
+                    logger.info(
+                        "PaperAnalysis not found. Running understand pipeline..."
+                    )
+
+                    subprocess.run(
+                        [
+                            sys.executable,
+                            "-m",
+                            "src.main",
+                            "understand",
+                            arxiv_id,
+                        ],
+                        check=True,
+                    )
+
+                # 最后生成 poster
                 output_dir = html_path.parent
-                results = run_poster_v2(arxiv_id, output_dir=output_dir)
-                logger.info(f"Initial poster generated: {html_path}")
+
+                results = run_poster_v2(
+                    arxiv_id,
+                    output_dir=output_dir,
+                )
+
+                logger.info(
+                    f"Initial poster generated: {html_path}"
+                )
+
             except Exception as e:
-                logger.exception(f"Failed to generate initial poster: {e}")
-                logger.info("Please run: python -m src.main pipeline-v2 {arxiv_id} --output-dir output")
+                logger.exception(
+                    f"Failed to generate initial poster: {e}"
+                )
+                logger.info(
+                    "Please run: python -m src.main pipeline-v2 {arxiv_id} --output-dir output"
+                )
                 sys.exit(1)
 
         # 继续优化流程
