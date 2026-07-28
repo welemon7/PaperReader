@@ -6,6 +6,7 @@ import logging
 import sys
 from pathlib import Path
 import re
+import subprocess
 # Ensure project root is on sys.path
 _root = Path(__file__).resolve().parent.parent
 if str(_root) not in sys.path:
@@ -332,8 +333,6 @@ def _run(args: argparse.Namespace) -> None:
                     logger.info(
                         "PaperDocument not found. Running parse pipeline..."
                     )
-
-                    import subprocess
 
                     subprocess.run(
                         [
