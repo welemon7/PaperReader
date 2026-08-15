@@ -8,6 +8,7 @@ from pathlib import Path
 from flask import Flask, request, jsonify, render_template, send_file
 from flask_cors import CORS
 import threading
+import time
 import tempfile
 import zipfile
 from io import BytesIO
@@ -21,8 +22,10 @@ from src.agents.parse_agent import run_parse_paper
 from src.agents.understand_agent import run_understand_paper
 from src.agents.poster_planner import generate_blueprint, normalize_analysis_for_poster
 from src.agents.poster_v2 import run_poster_v2
+from src.agents.poster_harness import run_poster_harness
 from src.renderers.html_renderer import HtmlPosterRenderer
 from src.agents.html_optimizer import optimize_html_with_llm
+from src.schemas.poster_harness import HarnessConfig
 from src.storage.sqlite import PaperDatabase
 from src.utils.output_paths import resolve_paper_output_dir
 from src.config import settings
@@ -68,6 +71,10 @@ class TaskStatus:
         self.output_dir = None
         self.html_draft = None
         self.html_optimized = None
+        self.harness_rounds = []
+        self.harness_status = None
+        self.harness_report = None
+        self.best_png = None
 
     def to_dict(self):
         return {
@@ -80,6 +87,10 @@ class TaskStatus:
             'arxiv_id': self.arxiv_id,
             'html_draft': self.html_draft,
             'html_optimized': self.html_optimized,
+            'harness_rounds': self.harness_rounds,
+            'harness_status': self.harness_status,
+            'harness_report': self.harness_report,
+            'best_png': self.best_png,
         }
 
 
@@ -126,7 +137,14 @@ Please optimize this academic poster HTML with the following improvements:
 Please return the complete optimized HTML document."""
 
 
-def generate_poster_task(task_id: str, arxiv_id: str, custom_prompt: str | None = None):
+def generate_poster_task(
+        task_id: str,
+        arxiv_id: str,
+        custom_prompt: str | None = None,
+        quality_threshold: int | None = None,
+        max_rounds: int | None = None,
+        enable_qa_eval: bool | None = None,
+):
     """后台任务：生成海报"""
     task = tasks.get(task_id)
     if not task:
@@ -148,7 +166,16 @@ def generate_poster_task(task_id: str, arxiv_id: str, custom_prompt: str | None 
         task.message = '正在理解论文内容 (LLM)...'
         task.progress = 40
         logger.info(f"Task {task_id}: Phase 2 - Understand")
-        analysis = run_understand_paper(arxiv_id)
+        analysis = None
+        for attempt in range(1, 4):
+            try:
+                analysis = run_understand_paper(arxiv_id)
+                break
+            except Exception as e:
+                logger.warning(f"Understand attempt {attempt}/3 failed: {e}")
+                if attempt == 3:
+                    raise
+                time.sleep(2)
         analysis = normalize_analysis_for_poster(analysis)
 
         # ---- Phase 3: Plan ----
@@ -166,10 +193,10 @@ def generate_poster_task(task_id: str, arxiv_id: str, custom_prompt: str | None 
         draft_path = output_dir / "poster_draft.html"
         renderer.render_to_file(blueprint, doc, draft_path, optimize_with_llm=False)
 
-        # ---- Phase 5: Optimize (LLM) ----
-        task.message = '正在使用 LLM 优化海报...'
+        # ---- Phase 5: Visual Review Harness (视觉审查循环) ----
+        task.message = '视觉审查循环准备中...'
         task.progress = 85
-        logger.info(f"Task {task_id}: Phase 5 - Optimize")
+        logger.info(f"Task {task_id}: Phase 5 - Visual Harness")
 
         # ✅ 优先使用用户自定义提示词，否则使用项目根目录的 LLM-up.txt
         if custom_prompt:
@@ -185,19 +212,54 @@ def generate_poster_task(task_id: str, arxiv_id: str, custom_prompt: str | None 
                 user_prompt = app.config['TEMP_DIR'] / f"{task_id}_default_prompt.txt"
                 user_prompt.write_text(get_default_prompt(), encoding='utf-8')
 
-        optimized_path = output_dir / "poster_optimized.html"
-        try:
+        def _on_harness_round(round_no: int, total: int, score: int, needs_improvement: bool, summary: str):
+            """回调：每轮视觉审查结束后更新任务进度与轮次历史"""
+            task.message = f'视觉审查第 {round_no}/{total} 轮，评分 {score}/10'
+            task.progress = min(99, 85 + int(round_no / max(total, 1) * 14))
+            task.harness_rounds.append({
+                'round_no': round_no,
+                'quality_score': score,
+                'needs_improvement': needs_improvement,
+                'summary': summary,
+            })
+
+        def _fallback_optimize(old_html: Path, new_html: Path):
+            """视觉不可用时的回退：沿用原来的单次 LLM 优化"""
             optimize_html_with_llm(
-                html_path=draft_path,
+                html_path=old_html,
                 prompt_path=user_prompt,
-                output_path=optimized_path,
+                output_path=new_html,
             )
-            task.html_optimized = str(optimized_path)
-        except Exception as e:
-            logger.warning(f"Optimization failed: {e}")
-            # 如果优化失败，复制初稿作为优化版本
-            shutil.copy(draft_path, optimized_path)
-            task.html_optimized = str(optimized_path)
+
+        harness_config = HarnessConfig(
+            threshold=quality_threshold if quality_threshold is not None else settings.harness_threshold,
+            max_rounds=max_rounds if max_rounds is not None else settings.harness_max_rounds,
+            enable_qa_eval=enable_qa_eval if enable_qa_eval is not None else settings.harness_enable_qa,
+        )
+
+        harness_result = run_poster_harness(
+            doc=doc,
+            analysis=analysis,
+            blueprint=blueprint,
+            html_path=draft_path,
+            output_dir=output_dir,
+            config=harness_config,
+            on_round=_on_harness_round,
+            fallback_optimizer=_fallback_optimize,
+        )
+
+        task.harness_status = (
+            'passed' if harness_result.passed
+            else ('fallback' if harness_result.fallback else 'done')
+        )
+        task.harness_report = harness_result.report_path
+        task.best_png = harness_result.final_png
+        final_html_path = Path(harness_result.final_html)
+        if final_html_path.exists():
+            task.html_optimized = str(final_html_path)
+        else:
+            # 兜底：确保存在可下载/可预览的优化版本
+            task.html_optimized = str(draft_path)
 
         task.html_draft = str(draft_path)
         task.progress = 100
@@ -206,11 +268,15 @@ def generate_poster_task(task_id: str, arxiv_id: str, custom_prompt: str | None 
         task.result = {
             'arxiv_id': arxiv_id,
             'draft': str(draft_path),
-            'optimized': str(optimized_path),
+            'optimized': task.html_optimized,
             'output_dir': str(output_dir),
+            'harness_passed': harness_result.passed,
+            'harness_stop_reason': harness_result.stop_reason,
+            'harness_fallback': harness_result.fallback,
+            'harness_rounds': len(harness_result.rounds),
         }
 
-        logger.info(f"Task {task_id}: Complete")
+        logger.info(f"Task {task_id}: Complete (harness stop_reason={harness_result.stop_reason})")
 
     except Exception as e:
         logger.exception(f"Task {task_id} failed")
@@ -230,12 +296,29 @@ def index():
 @app.route('/api/generate', methods=['POST'])
 def generate():
     """提交生成任务"""
-    data = request.get_json()
+    data = request.get_json() or {}
     arxiv_id = data.get('arxiv_id', '').strip()
     custom_prompt = data.get('custom_prompt', '')
+    quality_threshold = data.get('quality_threshold')
+    max_rounds = data.get('max_rounds')
+    enable_qa_eval = data.get('enable_qa_eval')
 
     if not arxiv_id:
         return jsonify({'error': '请提供 arXiv ID'}), 400
+
+    # 参数校验
+    if quality_threshold is not None:
+        try:
+            quality_threshold = int(quality_threshold)
+        except (TypeError, ValueError):
+            return jsonify({'error': 'quality_threshold 必须是整数'}), 400
+    if max_rounds is not None:
+        try:
+            max_rounds = int(max_rounds)
+        except (TypeError, ValueError):
+            return jsonify({'error': 'max_rounds 必须是整数'}), 400
+    if enable_qa_eval is not None:
+        enable_qa_eval = bool(enable_qa_eval)
 
     # 生成任务 ID
     import uuid
@@ -249,7 +332,14 @@ def generate():
     # 在后台线程中运行
     thread = threading.Thread(
         target=generate_poster_task,
-        args=(task_id, arxiv_id, custom_prompt if custom_prompt else None),
+        args=(
+            task_id,
+            arxiv_id,
+            custom_prompt if custom_prompt else None,
+            quality_threshold,
+            max_rounds,
+            enable_qa_eval,
+        ),
         daemon=True
     )
     thread.start()
@@ -306,7 +396,7 @@ def view_html(task_id, version):
 
     if version == 'draft':
         html_path = task.html_draft
-    elif version == 'optimized':
+    elif version in ('optimized', 'best'):
         html_path = task.html_optimized
     else:
         return jsonify({'error': '无效版本'}), 400
@@ -315,6 +405,48 @@ def view_html(task_id, version):
         return jsonify({'error': '文件不存在'}), 404
 
     return send_file(html_path, mimetype='text/html')
+
+
+@app.route('/api/harness/<task_id>', methods=['GET'])
+def get_harness(task_id):
+    """获取 harness 审查报告与轮次历史"""
+    task = tasks.get(task_id)
+    if not task:
+        return jsonify({'error': '任务不存在'}), 404
+
+    report = None
+    if task.harness_report and Path(task.harness_report).exists():
+        try:
+            report = json.loads(Path(task.harness_report).read_text(encoding='utf-8'))
+        except Exception:
+            report = None
+
+    return jsonify({
+        'task_status': task.status,
+        'harness_status': task.harness_status,
+        'harness_rounds': task.harness_rounds,
+        'harness_report': report,
+        'best_png': task.best_png,
+    })
+
+
+@app.route('/api/round_image/<task_id>/<int:round_no>', methods=['GET'])
+def round_image(task_id, round_no):
+    """获取某一轮视觉审查的海报快照 PNG"""
+    task = tasks.get(task_id)
+    if not task:
+        return jsonify({'error': '任务不存在'}), 404
+
+    if task.status != 'complete':
+        return jsonify({'error': '任务未完成'}), 400
+
+    output_dir = Path(task.result['output_dir'])
+    harness_dir = (output_dir / 'harness').resolve()
+    png_path = (harness_dir / f'round_{round_no}' / 'poster.png').resolve()
+    if not png_path.is_relative_to(harness_dir) or not png_path.exists():
+        return jsonify({'error': '图像不存在'}), 404
+
+    return send_file(png_path, mimetype='image/png')
 
 
 @app.route('/api/prompt', methods=['GET'])

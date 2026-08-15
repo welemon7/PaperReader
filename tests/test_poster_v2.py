@@ -39,8 +39,7 @@ def _make_analysis() -> PaperAnalysis:
 def test_build_layout_tree_fallback_creates_nodes():
     doc = _make_doc()
     analysis = _make_analysis()
-    with patch("src.agents.poster_v2.LLMClient.is_configured", return_value=False):
-        tree = build_layout_tree(doc, analysis)
+    tree = build_layout_tree(doc, analysis)
     assert tree.paper_id == doc.paper_id
     assert tree.nodes
     assert any(node.node_id == "sec-001" for node in tree.nodes)

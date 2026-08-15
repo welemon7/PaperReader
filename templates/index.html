@@ -29,7 +29,7 @@
         <section class="form-section">
             <div class="form-card">
                 <h2>生成学术海报</h2>
-                <p class="subtitle">输入 arXiv ID，自动生成初稿和优化版 HTML 海报</p>
+                <p class="subtitle">输入 arXiv ID，自动生成初稿，并通过「视觉审查循环」反复评审与重渲染直到达标</p>
 
                 <form id="generateForm">
                     <div class="form-group">
@@ -47,6 +47,33 @@
                         <small>支持 arXiv ID 格式: 2212.04711 或 2212.04711v1</small>
                     </div>
 
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="qualityThreshold">质量阈值（0-10）</label>
+                            <input
+                                type="number"
+                                id="qualityThreshold"
+                                min="1"
+                                max="10"
+                                step="1"
+                                value="8"
+                            >
+                            <small>达到该评分即判定达标，停止循环</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="maxRounds">最大审查轮数</label>
+                            <input
+                                type="number"
+                                id="maxRounds"
+                                min="1"
+                                max="20"
+                                step="1"
+                                value="5"
+                            >
+                            <small>超过轮数或评分不再提升时自动停止</small>
+                        </div>
+                    </div>
+
                     <div class="form-group">
                         <label for="customPrompt">自定义优化提示词（可选）</label>
                         <textarea
@@ -54,7 +81,7 @@
                             rows="4"
                             placeholder="输入自定义的优化提示词，或留空使用默认提示词..."
                         ></textarea>
-                        <small>默认提示词位于 LLM-up.txt</small>
+                        <small>默认提示词位于 LLM-up.txt；仅视觉审查不可用（回退）时使用</small>
                     </div>
 
                     <button type="submit" id="submitBtn" class="btn-primary">
@@ -94,8 +121,8 @@
                         <span>生成初稿</span>
                     </div>
                     <div class="step" id="step5">
-                        <span class="step-icon">✨</span>
-                        <span>优化海报</span>
+                        <span class="step-icon">🔍</span>
+                        <span>视觉审查</span>
                     </div>
                 </div>
             </div>
@@ -104,10 +131,11 @@
         <!-- Result Section -->
         <section class="result-section" id="resultSection" style="display: none;">
             <div class="result-card">
-                <h3>✅ 生成完成！</h3>
+                <h3 id="resultTitle">✅ 生成完成！</h3>
                 <div class="result-info">
                     <p><strong>arXiv ID:</strong> <span id="resultArxivId"></span></p>
                     <p><strong>输出目录:</strong> <span id="resultOutputDir"></span></p>
+                    <p id="resultHarnessLine" style="display: none;"><strong>视觉审查:</strong> <span id="resultHarnessStatus"></span></p>
                 </div>
 
                 <div class="preview-container">
@@ -120,12 +148,26 @@
                         </div>
                     </div>
                     <div class="preview-card highlight">
-                        <h4>✨ 优化版</h4>
-                        <p class="preview-desc">经过 LLM 优化后的版本</p>
+                        <h4>✨ 最终版</h4>
+                        <p class="preview-desc">视觉审查循环后的达标版本</p>
                         <div class="preview-actions">
                             <a href="#" id="viewOptimized" class="btn-primary" target="_blank">预览</a>
                             <a href="#" id="downloadOptimized" class="btn-outline">下载</a>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Harness Panel -->
+                <div class="harness-panel" id="harnessPanel" style="display: none;">
+                    <div class="harness-head">
+                        <h4>🔍 视觉审查报告</h4>
+                        <span class="harness-badge" id="harnessBadge"></span>
+                    </div>
+                    <div class="score-history" id="scoreHistory"></div>
+                    <div class="round-grid" id="roundSnapshots"></div>
+                    <div class="issue-list" id="harnessIssues"></div>
+                    <div class="harness-actions">
+                        <a href="#" id="harnessReportLink" class="btn-outline" target="_blank">📊 查看完整报告 (JSON)</a>
                     </div>
                 </div>
 

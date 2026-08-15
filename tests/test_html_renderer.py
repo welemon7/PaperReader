@@ -320,8 +320,10 @@ class TestHtmlPosterRenderer:
         bp.figure_placements = [
             type("FP", (), {"figure_id": "fig-001", "section_id": "s3", "width_ratio": 0.9, "caption": "Plot"})()
         ]
+        renderer = HtmlPosterRenderer()
+        renderer._prepare_figure_assets(bp, doc, tmp_path)
         fig_map = HtmlPosterRenderer._build_figure_map(bp, doc, tmp_path)
-        assert fig_map["s3"][0]["src"] is None
+        assert fig_map["s3"][0]["src"].startswith("figures/")
 
     def test_build_figure_map_rejects_non_figures_sources(self, tmp_path):
         source_dir = tmp_path / "paper"
@@ -340,8 +342,9 @@ class TestHtmlPosterRenderer:
         bp.figure_placements = [
             type("FP", (), {"figure_id": "fig-001", "section_id": "s3", "width_ratio": 0.9, "caption": "Plot"})()
         ]
+        # 未经过 _prepare_figure_assets 的源不在输出 figures 目录内 -> 条目被丢弃（不留占位）
         fig_map = HtmlPosterRenderer._build_figure_map(bp, doc, tmp_path)
-        assert fig_map["s3"][0]["src"] is None
+        assert "s3" not in fig_map
 
     def test_build_figure_map_matches_semantic_blueprint_ids(self, tmp_path, monkeypatch):
         source_dir = tmp_path / "paper"
@@ -399,9 +402,56 @@ class TestHtmlPosterRenderer:
             type("FP", (), {"figure_id": "fig-101", "section_id": "s2", "width_ratio": 0.95, "caption": "Framework overview"})(),
             type("FP", (), {"figure_id": "fig-102", "section_id": "s3", "width_ratio": 0.96, "caption": "Results on benchmarks"})(),
         ]
+        renderer = HtmlPosterRenderer()
+        renderer._prepare_figure_assets(bp, doc, tmp_path)
         fig_map = HtmlPosterRenderer._build_figure_map(bp, doc, tmp_path)
         assert fig_map["s2"][0]["section_type"] == "main_method"
         assert fig_map["s3"][0]["section_type"] == "experiments"
+
+    def test_core_grid_adapts_and_no_unavailable_text(self, tmp_path):
+        source_dir = tmp_path / "paper"
+        source_dir.mkdir()
+        img = source_dir / "plot.png"
+        img.write_bytes(b"fakepng")
+        doc = PaperDocument(
+            paper_id="test-999",
+            arxiv_id="9999.99999",
+            title="Test",
+            raw_markdown=".",
+            source_dir=str(source_dir),
+            figures=[
+                Figure(figure_id="fig-101", caption="Result A", local_path=str(img), section_id="s4"),
+                Figure(figure_id="fig-102", caption="Result B", local_path=str(img), section_id="s4"),
+            ],
+        )
+        bp = _make_blueprint()
+        renderer = HtmlPosterRenderer()
+
+        # 1) 两张核心图 -> 三列默认布局，绝无 "unavailable"/空盒
+        bp.figure_placements = [
+            type("FP", (), {"figure_id": "fig-101", "section_id": "s4", "width_ratio": 0.95, "caption": "Result A"})(),
+            type("FP", (), {"figure_id": "fig-102", "section_id": "s4", "width_ratio": 0.85, "caption": "Result B"})(),
+        ]
+        renderer._prepare_figure_assets(bp, doc, tmp_path)
+        html = renderer.render(bp, doc, tmp_path)
+        assert "unavailable" not in html
+        assert 'class="core-empty"' not in html
+        assert 'class="core-grid "' in html
+        assert html.count('<img src="figures/') >= 2
+
+        # 2) 一张核心图 -> two-col，图加宽
+        bp.figure_placements = [bp.figure_placements[0]]
+        html = renderer.render(bp, doc, tmp_path)
+        assert 'class="core-grid two-col"' in html
+        assert "unavailable" not in html
+        assert 'class="core-empty"' not in html
+
+        # 3) 零核心图 -> one-col（不留任何占位/空盒）
+        bp.figure_placements = []
+        html = renderer.render(bp, doc, tmp_path)
+        assert 'class="core-grid one-col"' in html
+        assert "unavailable" not in html
+        assert 'class="core-empty"' not in html
 
     def test_copy_or_rasterize_asset_retries_on_copy_failure(self, tmp_path, monkeypatch):
         src = tmp_path / "figure.png"

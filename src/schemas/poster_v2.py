@@ -55,7 +55,7 @@ class PosterComment(BaseModel):
     severity: Literal["error", "warning", "info"] = "warning"
     target: str = ""
     suggestion: str = ""
-    action: Literal["resize", "reflow", "rewrite", "replace_figure", "remove", "keep"] = "rewrite"
+    action: Literal["resize", "reflow", "rewrite", "condense", "replace_figure", "remove", "keep"] = "rewrite"
 
 
 class PosterReview(BaseModel):
@@ -64,6 +64,7 @@ class PosterReview(BaseModel):
     issues: list[PosterComment] = Field(default_factory=list)
     summary: str = ""
     layout_feedback: list[str] = Field(default_factory=list)
+    dimension_scores: dict[str, float] = Field(default_factory=dict)
 
 
 class EvaluationQuestion(BaseModel):

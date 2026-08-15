@@ -58,6 +58,7 @@ name = "paper-reader-llm"
  [tool.pytest.ini_options]
  testpaths = ["tests"]
  python_files = ["test_*.py"]
+ addopts = ["-p", "no:cacheprovider"]
  
  [project.scripts]
  parse-paper = "src.main:cli_entry"

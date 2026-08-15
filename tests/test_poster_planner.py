@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 import sys, pytest
 from unittest.mock import patch
 from src.schemas.analysis import PaperAnalysis, Contribution, ExperimentSummary, KeyFormula, KeyFigure
@@ -90,38 +90,42 @@ class TestPosterBlueprint:
         assert len(motiv.content_md.split()) <= 80
         assert '……' not in motiv.content_md
 
-    @patch("src.agents.poster_planner.LLMClient.is_configured", return_value=True)
-    @patch("src.agents.poster_planner.LLMClient.chat_json")
-    def test_highlights_are_applied_to_method_and_results(self, mock_chat_json, _mock_configured):
-        mock_chat_json.return_value = {
-            "highlights": [
-                {"section_type": "main_method", "phrase": "State-of-the-art", "kind": "metric"},
-                {"section_type": "experiments", "phrase": "State-of-the-art", "kind": "metric"},
-            ]
-        }
+    def test_highlights_are_content_based(self):
         bp = generate_blueprint(_make_doc(), _make_analysis())
         method = next(s for s in bp.sections if s.section_id == 'sec-main-method')
         overview = next(s for s in bp.sections if s.section_id == 'sec-method-overview')
         motiv = next(s for s in bp.sections if s.section_id == 'sec-motivation')
+        highlights = next(s for s in bp.sections if s.section_id == 'sec-highlights')
         assert 'Core Results' in method.title
-        assert '<span class="poster-highlight-metric">State-of-the-art</span>' in method.content_md
-        assert '<span' not in overview.content_md
-        assert '<span' not in motiv.content_md
+        assert 'State-of-the-art' in method.content_md
+        assert 'First contribution' in highlights.content_md
+        # 当前架构为静态渲染：核心内容不带 LLM 注入的 span 标记
+        assert '<span class="poster-highlight' not in method.content_md
+        assert '<span class="poster-highlight' not in overview.content_md
+        assert '<span class="poster-highlight' not in motiv.content_md
 
     def test_figure_placement(self):
         bp = generate_blueprint(_make_doc(), _make_analysis())
         placements = {p.figure_id: p.section_id for p in bp.figure_placements}
         assert placements['fig-001'] == 'sec-main-method'
         assert placements['fig-002'] == 'sec-method-overview'
-        assert placements['fig-101'] == 'sec-method-overview'
-        assert placements['fig-102'] == 'sec-main-method'
+        # 图分配策略：hero 1 张（overview）、core 2 张（结果）、示意 1 张（key_idea）
+        assert placements['fig-101'] == 'sec-main-method'
+        assert placements['fig-102'] == 'sec-key-idea'
 
     def test_doc_figures_can_feed_placements(self):
         bp = generate_blueprint(_make_doc(), _make_analysis())
         placements = {p.figure_id: p.section_id for p in bp.figure_placements}
-        assert placements['fig-101'] == 'sec-method-overview'
-        assert placements['fig-102'] == 'sec-main-method'
+        assert placements['fig-101'] == 'sec-main-method'
+        assert placements['fig-102'] == 'sec-key-idea'
         assert len(bp.figure_placements) == 4
+
+    def test_core_section_gets_two_figures_when_available(self):
+        bp = generate_blueprint(_make_doc(), _make_analysis())
+        core_figs = [p for p in bp.figure_placements if p.section_id == 'sec-main-method']
+        assert len(core_figs) == 2  # core 左右列均有图，避免空白
+        overview_figs = [p for p in bp.figure_placements if p.section_id == 'sec-method-overview']
+        assert len(overview_figs) == 1  # hero 只放一张
 
     def test_formula_display(self):
         bp = generate_blueprint(_make_doc(), _make_analysis())
@@ -177,11 +181,12 @@ class TestPosterBlueprint:
         highlights = next(s for s in bp.sections if s.section_id == 'sec-highlights')
         assert 'First contribution' in highlights.content_md
 
-    def test_results_do_not_include_takeaways_text(self):
+    def test_results_include_takeaways_in_table(self):
         bp = generate_blueprint(_make_doc(), _make_analysis())
         core = next(s for s in bp.sections if s.section_id == 'sec-main-method')
         assert 'State-of-the-art' in core.content_md
-        assert 'Works well' not in core.content_md
+        # 当前设计：takeaways 作为 Core Results 的明细表行呈现
+        assert 'Works well' in core.content_md
 
     def test_author_cleaning(self):
         doc = _make_doc()
@@ -218,4 +223,23 @@ class TestPosterBlueprint:
         method_figs = [p for p in bp.figure_placements if p.section_id == 'sec-main-method']
         assert method_figs
         assert max(p.width_ratio for p in method_figs) >= 0.9
+
+    def test_planner_respects_word_budget(self):
+        from src.agents.content_policy import TOTAL_WORD_BUDGET, count_words, section_budget
+        analysis = _make_analysis()
+        analysis.problem_statement = ' '.join(['word'] * 300)
+        analysis.method_overview = ' '.join(['word'] * 300)
+        analysis.contributions = [Contribution(text=' '.join(['word'] * 80), category='method') for _ in range(5)]
+        analysis.experiments.main_results = ' '.join(['word'] * 200)
+        analysis.experiments.takeaways = [' '.join(['word'] * 60)] * 5
+        bp = generate_blueprint(_make_doc(), analysis)
+        total = 0
+        for sec in bp.sections:
+            if sec.type == 'title':
+                continue
+            words = count_words(sec.content_md)
+            total += words
+            tolerance = 25 if sec.type == 'main_method' else 10  # 结果表/公式容差
+            assert words <= section_budget(sec.type) + tolerance, f"{sec.section_id}: {words} words"
+        assert total <= TOTAL_WORD_BUDGET + 40
 

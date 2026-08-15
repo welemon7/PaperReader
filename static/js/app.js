@@ -5,6 +5,8 @@ const API_BASE = '/api';
 const form = document.getElementById('generateForm');
 const arxivInput = document.getElementById('arxivId');
 const promptTextarea = document.getElementById('customPrompt');
+const thresholdInput = document.getElementById('qualityThreshold');
+const maxRoundsInput = document.getElementById('maxRounds');
 const submitBtn = document.getElementById('submitBtn');
 
 const progressSection = document.getElementById('progressSection');
@@ -15,6 +17,14 @@ const progressPercent = document.getElementById('progressPercent');
 const resultSection = document.getElementById('resultSection');
 const errorSection = document.getElementById('errorSection');
 const errorMessage = document.getElementById('errorMessage');
+
+// Harness 面板
+const harnessPanel = document.getElementById('harnessPanel');
+const harnessBadge = document.getElementById('harnessBadge');
+const scoreHistoryEl = document.getElementById('scoreHistory');
+const roundSnapshotsEl = document.getElementById('roundSnapshots');
+const harnessIssuesEl = document.getElementById('harnessIssues');
+const harnessReportLink = document.getElementById('harnessReportLink');
 
 // 任务轮询
 let pollInterval = null;
@@ -59,7 +69,11 @@ form.addEventListener('submit', async (e) => {
 
     // 隐藏旧结果
     resultSection.style.display = 'none';
+    harnessPanel.style.display = 'none';
     errorSection.style.display = 'none';
+
+    const qualityThreshold = parseInt(thresholdInput.value, 10) || 8;
+    const maxRounds = parseInt(maxRoundsInput.value, 10) || 5;
 
     try {
         const response = await fetch(`${API_BASE}/generate`, {
@@ -67,7 +81,10 @@ form.addEventListener('submit', async (e) => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 arxiv_id: arxivId,
-                custom_prompt: promptTextarea.value.trim()
+                custom_prompt: promptTextarea.value.trim(),
+                quality_threshold: qualityThreshold,
+                max_rounds: maxRounds,
+                enable_qa_eval: true
             })
         });
 
@@ -146,7 +163,7 @@ function updateProgress(data) {
         40: 1,  // 理解
         55: 2,  // 设计
         70: 3,  // 初稿
-        85: 4,  // 优化
+        85: 4,  // 视觉审查
         100: 4  // 完成
     };
 
@@ -185,8 +202,136 @@ function showResult(data) {
         window.location.href = `${API_BASE}/download/${taskId}`;
     };
 
+    // Harness 状态行
+    const harnessStatus = data.harness_status;
+    const harnessLine = document.getElementById('resultHarnessLine');
+    const harnessStatusEl = document.getElementById('resultHarnessStatus');
+    if (harnessStatus) {
+        harnessLine.style.display = '';
+        harnessStatusEl.textContent = harnessStatusLabel(harnessStatus);
+    } else {
+        harnessLine.style.display = 'none';
+    }
+
+    // 加载视觉审查报告
+    loadHarness(taskId);
+
     // 滚动到结果
     resultSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function harnessStatusLabel(status) {
+    if (status === 'passed') return '✅ 已达标（视觉审查通过）';
+    if (status === 'fallback') return '🔄 视觉审查不可用，已回退到单次优化';
+    return '⚠️ 未完全达标，已保留最优版本';
+}
+
+// 加载并渲染 harness 报告
+async function loadHarness(taskId) {
+    try {
+        const response = await fetch(`${API_BASE}/harness/${taskId}`);
+        const data = await response.json();
+        if (!data || data.error) return;
+
+        harnessPanel.style.display = 'block';
+        const report = data.harness_report;
+        const rounds = (report && report.rounds) || data.harness_rounds || [];
+
+        if (!rounds.length) {
+            // 回退模式：没有逐轮审查记录
+            harnessBadge.textContent = '未执行视觉审查（回退模式）';
+            harnessBadge.className = 'harness-badge fallback';
+            scoreHistoryEl.innerHTML = '';
+            roundSnapshotsEl.innerHTML = '';
+            harnessIssuesEl.innerHTML = '<p class="muted-note">当前输出为单次 LLM 优化结果，无逐轮评分历史。</p>';
+            harnessReportLink.href = `${API_BASE}/harness/${taskId}`;
+            return;
+        }
+
+        // 状态徽标
+        harnessBadge.textContent = harnessStatusLabel(data.harness_status);
+        harnessBadge.className = 'harness-badge ' + (data.harness_status || 'done');
+
+        // 评分历史
+        const scores = report.scores || rounds.map(r => r.quality_score);
+        renderScoreHistory(scores, report.threshold || 8);
+
+        // 逐轮快照
+        renderSnapshots(rounds, taskId);
+
+        // 问题列表
+        renderIssues(rounds);
+
+        harnessReportLink.href = `${API_BASE}/harness/${taskId}`;
+
+    } catch (error) {
+        console.warn('Harness report load failed:', error);
+    }
+}
+
+function renderScoreHistory(scores, threshold) {
+    if (!scoreHistoryEl) return;
+    const max = Math.max(10, ...scores, threshold);
+    const bars = scores.map((score, idx) => {
+        const height = Math.max(4, Math.round((score / max) * 100));
+        const reached = score >= threshold;
+        return `
+            <div class="score-col" title="第 ${idx + 1} 轮评分 ${score}/10">
+                <div class="score-bar ${reached ? 'reached' : ''}" style="height: ${height}%">
+                    <span class="score-val">${score}</span>
+                </div>
+                <div class="score-label">R${idx + 1}</div>
+            </div>`;
+    }).join('');
+    const thresholdLine = `<div class="threshold-line" style="bottom: ${Math.max(4, Math.round((threshold / max) * 100))}%">
+        <span>阈值 ${threshold}</span></div>`;
+    scoreHistoryEl.innerHTML = `
+        <div class="score-chart">
+            ${thresholdLine}
+            <div class="score-bars">${bars}</div>
+        </div>`;
+}
+
+function renderSnapshots(rounds, taskId) {
+    if (!roundSnapshotsEl) return;
+    const cards = rounds.map(r => `
+        <div class="round-card ${r.needs_improvement ? '' : 'passed'}">
+            <div class="round-head">
+                <strong>第 ${r.round_no} 轮</strong>
+                <span class="round-score ${r.quality_score >= 8 ? 'good' : ''}">${r.quality_score}/10</span>
+            </div>
+            <img class="round-img" src="${API_BASE}/round_image/${taskId}/${r.round_no}"
+                 alt="round ${r.round_no} poster" loading="lazy"
+                 onerror="this.style.display='none'">
+            ${r.summary ? `<p class="round-summary">${escapeHtml(r.summary)}</p>` : ''}
+        </div>`).join('');
+    roundSnapshotsEl.innerHTML = cards;
+}
+
+function renderIssues(rounds) {
+    if (!harnessIssuesEl) return;
+    const sections = rounds.map(r => {
+        const issues = (r.issues || []).map(issue => `
+            <li class="issue-item ${issue.severity || 'warning'}">
+                <span class="issue-sev">${(issue.severity || 'info').toUpperCase()}</span>
+                <span class="issue-text">${escapeHtml(issue.issue)}</span>
+                ${issue.target ? `<code>${escapeHtml(issue.target)}</code>` : ''}
+                ${issue.suggestion ? `<span class="issue-suggestion">→ ${escapeHtml(issue.suggestion)}</span>` : ''}
+                <span class="issue-action">[${escapeHtml(issue.action || 'rewrite')}]</span>
+            </li>`).join('');
+        return `
+            <div class="issue-round">
+                <h5>第 ${r.round_no} 轮 · 评分 ${r.quality_score}/10</h5>
+                ${issues ? `<ul>${issues}</ul>` : '<p class="muted-note">无问题记录</p>'}
+            </div>`;
+    }).join('');
+    harnessIssuesEl.innerHTML = `<h5 class="issue-heading">逐轮问题与反馈</h5>${sections}`;
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text || '';
+    return div.innerHTML;
 }
 
 // 显示错误
@@ -209,6 +354,7 @@ document.getElementById('retryBtn').addEventListener('click', () => {
 // 新任务
 document.getElementById('newTaskBtn').addEventListener('click', () => {
     resultSection.style.display = 'none';
+    harnessPanel.style.display = 'none';
     window.scrollTo({ top: 0, behavior: 'smooth' });
     arxivInput.focus();
 });

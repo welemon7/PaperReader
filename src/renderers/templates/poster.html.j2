@@ -108,16 +108,16 @@ body {
     flex-shrink: 0;
 }
 .section-content {
-    padding: 12px 14px;
+    padding: 10px 12px;
     font-size: 13px;
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
 }
 .section-content p { margin: 0; }
-.section-content ul, .section-content ol { padding-left: 18px; margin: 5px 0; }
-.section-content li { margin-bottom: 5px; }
+.section-content ul, .section-content ol { padding-left: 18px; margin: 4px 0; }
+.section-content li { margin-bottom: 4px; }
 .section-content strong { color: var(--poster-blue); }
 .highlight-orange { color: var(--accent-orange); font-weight: 700; }
 .muted { color: var(--text-muted); }
@@ -193,6 +193,12 @@ body {
     gap: 12px;
     align-items: start;
 }
+.core-grid.two-col {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+}
+.core-grid.one-col {
+    grid-template-columns: minmax(0, 1fr);
+}
 .core-column {
     min-width: 0;
     display: flex;
@@ -256,28 +262,10 @@ body {
     font-weight: 700;
 }
 .core-empty {
-    min-height: 120px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    padding: 16px;
-    background: #f6f8fb;
-    color: #748191;
-    border: 1px dashed #c6d3df;
-    border-radius: 6px;
+    display: none;
 }
 .figure-placeholder {
-    min-height: 110px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    padding: 16px;
-    background: #f6f8fb;
-    color: #748191;
-    border: 1px dashed #c6d3df;
-    border-radius: 6px;
+    display: none;
 }
 .table-wrap { overflow-x: auto; }
 table {
@@ -421,7 +409,7 @@ th {
             {% endif %}
         {% endfor %}
 
-        <div class="section-block" style="grid-area: motivation;">
+        <div class="section-block" id="sec-motivation" style="grid-area: motivation;">
             <div class="section-title">{{ ns.motivation.title if ns.motivation else 'Motivation' }}</div>
             <div class="section-content">
                 {% if ns.motivation %}
@@ -432,7 +420,7 @@ th {
             </div>
         </div>
 
-        <div class="section-block" style="grid-area: overview;">
+        <div class="section-block" id="sec-method-overview" style="grid-area: overview;">
             <div class="section-title">{{ ns.overview.title if ns.overview else 'Method Overview' }}</div>
             <div class="section-content">
                 {% if ns.overview %}
@@ -444,21 +432,19 @@ th {
                 {% if overview_figs %}
                 <div class="figure-stack one">
                     {% for fig in overview_figs[:1] %}
+                    {% if fig.src %}
                     <div class="figure-card method-card">
-                        {% if fig.src %}
                         <img src="{{ fig.src }}" alt="{{ fig.caption }}">
-                        {% else %}
-                        <div class="figure-placeholder">Figure unavailable: {{ fig.caption }}</div>
-                        {% endif %}
                         {% if fig.caption %}<div class="figure-caption">{{ fig.caption }}</div>{% endif %}
                     </div>
+                    {% endif %}
                     {% endfor %}
                 </div>
                 {% endif %}
             </div>
         </div>
 
-        <div class="section-block" style="grid-area: key_idea;">
+        <div class="section-block" id="sec-key-idea" style="grid-area: key_idea;">
             <div class="section-title">{{ ns.key_idea.title if ns.key_idea else 'Key Idea' }}</div>
             <div class="section-content">
                 {% if ns.key_idea %}
@@ -470,21 +456,19 @@ th {
                 {% if key_figs %}
                 <div class="figure-stack one">
                     {% for fig in key_figs[:1] %}
+                    {% if fig.src %}
                     <div class="figure-card">
-                        {% if fig.src %}
                         <img src="{{ fig.src }}" alt="{{ fig.caption }}">
-                        {% else %}
-                        <div class="figure-placeholder">Figure unavailable: {{ fig.caption }}</div>
-                        {% endif %}
                         {% if fig.caption %}<div class="figure-caption">{{ fig.caption }}</div>{% endif %}
                     </div>
+                    {% endif %}
                     {% endfor %}
                 </div>
                 {% endif %}
             </div>
         </div>
 
-        <div class="section-block core-band" style="grid-area: core;">
+        <div class="section-block core-band" id="sec-main-method" style="grid-area: core;">
             <div class="section-title core-band-title">Core Results</div>
             <div class="section-content">
                 {% set core_figs = namespace(items=[]) %}
@@ -498,48 +482,49 @@ th {
                         {% set _ = core_figs.items.append(fig) %}
                     {% endfor %}
                 {% endif %}
-                {% set left_fig = core_figs.items[0] if core_figs.items|length > 0 else None %}
-                {% set right_fig = core_figs.items[1] if core_figs.items|length > 1 else None %}
+                {# 仅保留可渲染（有 src）的图，按实际图数自适应列布局，绝不留空列 #}
+                {% set core_ok = namespace(items=[]) %}
+                {% for fig in core_figs.items %}
+                    {% if fig.src %}{% set _ = core_ok.items.append(fig) %}{% endif %}
+                {% endfor %}
+                {% set left_fig = core_ok.items[0] if core_ok.items|length > 0 else None %}
+                {% set right_fig = core_ok.items[1] if core_ok.items|length > 1 else None %}
+                {% set n_figs = core_ok.items|length %}
                 {% set center_source = ns.core_results if ns.core_results else ns.core_method %}
+                {% set has_table = center_source and center_source.content_html and '[[CORE_TABLE]]' in center_source.content_html %}
                 {% if center_source %}
                 <div class="section-copy">{{ center_source.content_html.split('[[CORE_TABLE]]')[0]|safe }}</div>
                 {% endif %}
-                <div class="core-grid">
+                <div class="core-grid {{ 'two-col' if n_figs == 1 else ('one-col' if n_figs == 0 else '') }}">
+                    {% if left_fig %}
                     <div class="core-column">
                         <div class="figure-card result-card">
-                            {% if left_fig and left_fig.src %}
                             <img src="{{ left_fig.src }}" alt="{{ left_fig.caption }}">
-                            {% else %}
-                            <div class="core-empty">Result figure 1 unavailable</div>
-                            {% endif %}
-                            {% if left_fig and left_fig.caption %}<div class="figure-caption">{{ left_fig.caption }}</div>{% endif %}
+                            {% if left_fig.caption %}<div class="figure-caption">{{ left_fig.caption }}</div>{% endif %}
                         </div>
                     </div>
+                    {% endif %}
+                    {% if has_table %}
                     <div class="core-column">
                         <div class="core-table-wrap">
-                            {% if center_source and center_source.content_html and '[[CORE_TABLE]]' in center_source.content_html %}
-                                {% set core_table = center_source.content_html.split('[[CORE_TABLE]]')[-1].strip() %}
-                                {{ core_table|safe }}
-                            {% else %}
-                                <div class="core-empty">Item details unavailable</div>
-                            {% endif %}
+                            {% set core_table = center_source.content_html.split('[[CORE_TABLE]]')[-1].strip() %}
+                            {{ core_table|safe }}
                         </div>
                     </div>
+                    {% endif %}
+                    {% if right_fig %}
                     <div class="core-column">
                         <div class="figure-card result-card">
-                            {% if right_fig and right_fig.src %}
                             <img src="{{ right_fig.src }}" alt="{{ right_fig.caption }}">
-                            {% else %}
-                            <div class="core-empty">Result figure 2 unavailable</div>
-                            {% endif %}
-                            {% if right_fig and right_fig.caption %}<div class="figure-caption">{{ right_fig.caption }}</div>{% endif %}
+                            {% if right_fig.caption %}<div class="figure-caption">{{ right_fig.caption }}</div>{% endif %}
                         </div>
                     </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
 
-        <div class="section-block" style="grid-area: contributions;">
+        <div class="section-block" id="sec-contributions" style="grid-area: contributions;">
             <div class="section-title">{{ ns.contributions.title if ns.contributions else 'Contributions' }}</div>
             <div class="section-content">
                 {% if ns.contributions %}
@@ -550,7 +535,7 @@ th {
             </div>
         </div>
 
-        <div class="section-block" style="grid-area: highlights;">
+        <div class="section-block" id="sec-highlights" style="grid-area: highlights;">
             <div class="section-title">{{ ns.highlights.title if ns.highlights else 'Highlights' }}</div>
             <div class="section-content">
                 {% if ns.highlights %}
@@ -567,7 +552,7 @@ th {
             </div>
         </div>
 
-        <div class="section-block" style="grid-area: project;">
+        <div class="section-block" id="sec-project" style="grid-area: project;">
             <div class="section-title">{{ ns.project.title if ns.project else 'Project' }}</div>
             <div class="section-content">
                 <div class="project-box">

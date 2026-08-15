@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import html as html_lib
 import logging
@@ -14,6 +14,7 @@ from src.schemas.poster import (
     PosterSection,
 )
 from src.schemas.analysis import KeyFigure
+from src.agents.content_policy import BULLET_WORD_BUDGET, trim_to_budget
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,15 @@ POSTER_WIDTH_MM = 841
 POSTER_HEIGHT_MM = 1189
 POSTER_WIDTH_PX = 1200
 POSTER_HEIGHT_PX = 1697
+
+
+def _short_bullet(text: str, max_words: int = BULLET_WORD_BUDGET) -> str:
+    """One short, scannable bullet: first sentence, capped at max_words."""
+    text = _clean_poster_text(text)
+    if not text:
+        return ""
+    sentence = _first_sentence(text)
+    return trim_to_budget(sentence, max_words)
 
 def _clean_poster_text(text: str) -> str:
     text = (text or "").strip()
@@ -371,13 +381,18 @@ def _build_motivation_content(analysis: PaperAnalysis) -> str:
     if advantage_source:
         paragraphs.append(f"The core advantage is that {advantage_source.rstrip(' ,;:.-')}.")
 
+    prose = " ".join(p for p in paragraphs if p).strip()
+    prose = trim_to_budget(prose, 40)
+
     formula_html = _format_formula_box(analysis, label="Key Formula", formula_index=0)
-    callout_text = _build_motivation_callout(analysis)
-    parts = [p for p in paragraphs if p]
+    parts = [prose] if prose else []
     if formula_html:
         parts.append(formula_html)
-    if callout_text:
-        parts.append(callout_text)
+    else:
+        # 无公式时才用 callout 补充关键洞见，避免文字堆叠
+        callout_text = _build_motivation_callout(analysis)
+        if callout_text:
+            parts.append(callout_text)
     return "\n\n".join(parts).strip()
 
 
@@ -389,17 +404,17 @@ def _build_method_overview_content(analysis: PaperAnalysis) -> str:
     bullet_points: list[str] = []
     clause = _first_clause(_clean_poster_text(analysis.method_overview or ""))
     if clause:
-        bullet_points.append(f"- {clause.rstrip(' ,;:.-')}")
+        bullet_points.append(f"- {_short_bullet(clause, 18)}")
     if len(bullet_points) < 2:
-        bullets_from_contribs = [_clean_poster_text(c.text) for c in analysis.contributions[:2]]
-        for item in bullets_from_contribs:
+        for contrib in analysis.contributions[:2]:
+            item = _short_bullet(contrib.text, 18)
             if item and len(bullet_points) < 2:
                 bullet_points.append(f"- {item}")
     while len(bullet_points) < 2:
         bullet_points.append("- See the architecture figure for the overall pipeline.")
 
     formula_html = _format_formula_box(analysis, label="Main Formula", formula_index=1)
-    content_parts = [intro, "\n".join(bullet_points[:2])]
+    content_parts = [trim_to_budget(intro, 24), "\n".join(bullet_points[:2])]
     if formula_html:
         content_parts.append(formula_html)
     return "\n\n".join(content_parts).strip()
@@ -407,19 +422,16 @@ def _build_method_overview_content(analysis: PaperAnalysis) -> str:
 
 def _build_key_idea_content(analysis: PaperAnalysis) -> str:
     bullets: list[str] = []
-    if analysis.contributions:
-        for contrib in analysis.contributions[:2]:
-            text = _clean_poster_text(contrib.text)
-            if text:
-                bullets.append(f"- {text}")
-            if len(bullets) >= 2:
-                break
+    for contrib in analysis.contributions[:3]:
+        item = _short_bullet(contrib.text, 18)
+        if item:
+            bullets.append(f"- {item}")
     if analysis.key_figures:
         figure_hint = _clean_poster_text(analysis.key_figures[0].caption)
         if figure_hint and len(bullets) < 3:
-            bullets.append(f"- {figure_hint}")
-    while len(bullets) < 3:
-        bullets.append("- The detailed structure figure shows how the module is used.")
+            bullets.append(f"- {_short_bullet(figure_hint, 18)}")
+    while len(bullets) < 2:
+        bullets.append("- See the architecture figure for the overall pipeline.")
     return "\n".join(bullets[:3]).strip()
 
 
@@ -442,9 +454,9 @@ def _build_core_intro(analysis: PaperAnalysis) -> str:
         summary = _first_sentence(_clean_poster_text(analysis.method_overview or ""))
     metrics = ", ".join(exp.metrics[:2]) if exp.metrics else ""
     if summary and metrics:
-        return f"{summary} The main advantages are reflected in {metrics}."
+        return trim_to_budget(f"{summary} The main advantages are reflected in {metrics}.", 30)
     if summary:
-        return summary
+        return trim_to_budget(summary, 24)
     if metrics:
         return f"The main advantages are reflected in {metrics}."
     return "Core results summarize the strongest gains across the paper's benchmarks."
@@ -456,13 +468,15 @@ def _build_core_result_table(doc: PaperDocument, analysis: PaperAnalysis) -> str
         return ""
 
     def _format_value(items: list[str], fallback: str) -> str:
-        cleaned = [html_lib.escape(_clean_poster_text(item)) for item in items if _clean_poster_text(item)]
+        cleaned = [trim_to_budget(_clean_poster_text(item), 15) for item in items if _clean_poster_text(item)]
         return "<br>".join(cleaned) if cleaned else html_lib.escape(fallback)
 
     rows = [
         ("Datasets", _format_value(exp.datasets, "Not specified")),
         ("Metrics", _format_value(exp.metrics, "Not specified")),
-        ("Main Results", html_lib.escape(_first_sentence(_clean_poster_text(exp.main_results or "")) or "Not specified")),
+        ("Main Results", html_lib.escape(
+            trim_to_budget(_first_sentence(_clean_poster_text(exp.main_results or "")) or "Not specified", 20)
+        )),
         ("Takeaways", _format_value(exp.takeaways[:3], "Not specified") if exp.takeaways else html_lib.escape("Not specified")),
     ]
 
@@ -480,9 +494,9 @@ def _build_core_result_table(doc: PaperDocument, analysis: PaperAnalysis) -> str
 def _build_contributions_content(analysis: PaperAnalysis) -> str:
     bullets: list[str] = []
     for contrib in analysis.contributions[:4]:
-        text = _clean_poster_text(contrib.text)
-        if text:
-            bullets.append(f"- {text}")
+        item = _short_bullet(contrib.text, BULLET_WORD_BUDGET)
+        if item:
+            bullets.append(f"- {item}")
     while len(bullets) < 4:
         fallback = [
             "- The method improves the core target task.",
@@ -495,7 +509,8 @@ def _build_contributions_content(analysis: PaperAnalysis) -> str:
 
 
 def _build_highlights_content(analysis: PaperAnalysis) -> str:
-    items = _build_highlights(analysis)
+    items = [_short_bullet(x, BULLET_WORD_BUDGET) for x in _build_highlights(analysis)]
+    items = [x for x in items if x]
     while len(items) < 4:
         defaults = [
             "A clean pipeline for the target task.",
@@ -722,44 +737,71 @@ def _build_row3(analysis: PaperAnalysis) -> list[PosterSection]:
 
 
 def _place_figures(doc: PaperDocument, analysis: PaperAnalysis, sections: list[PosterSection]) -> list[FigurePlacement]:
-    placements = []
-    method_hero_taken = False
-    key_idea_taken = False
+    """Distribute up to 4 figures: 1 hero (method overview), 2 results (core),
+    1 illustrative (key idea). The core section gets 2 figures whenever
+    possible so the rendered poster never leaves an empty figure column.
+    """
+    placements: list[FigurePlacement] = []
+    core_slots = 0      # sec-main-method: 最多 2 张结果图（左右列）
+    hero_taken = False  # sec-method-overview: 最多 1 张 hero 图
+    idea_taken = False  # sec-key-idea: 最多 1 张示意/示例图
+
+    def _add(fig, target: str, width_ratio: float) -> None:
+        nonlocal core_slots, hero_taken, idea_taken
+        placements.append(FigurePlacement(
+            figure_id=getattr(fig, "figure_id", ""),
+            section_id=target,
+            width_ratio=width_ratio,
+            caption=_figure_caption(fig),
+        ))
+        if target == "sec-main-method":
+            core_slots += 1
+        elif target == "sec-method-overview":
+            hero_taken = True
+        elif target == "sec-key-idea":
+            idea_taken = True
+
     prioritized = sorted(
         _figure_candidates(doc, analysis),
         key=lambda f: _figure_priority(_figure_caption(f), _figure_role(f)),
     )
     seen_signatures: set[str] = set()
+    candidates: list = []
     for fig in prioritized:
-        caption = _figure_caption(fig)
-        role = _figure_role(fig)
-        signature = _figure_signature(caption, role, getattr(fig, "figure_id", ""))
+        signature = _figure_signature(_figure_caption(fig), _figure_role(fig), getattr(fig, "figure_id", ""))
         if signature in seen_signatures:
             continue
         seen_signatures.add(signature)
-        if _is_result_figure(caption, role):
-            target = "sec-main-method"
-            width_ratio = 0.96 if method_hero_taken else 0.86
-            method_hero_taken = True
-        elif _is_method_figure(caption, role):
-            target = "sec-method-overview"
-            width_ratio = 0.98 if not method_hero_taken else 0.74
-            method_hero_taken = True
-        else:
-            if not key_idea_taken:
-                target = "sec-key-idea"
-                width_ratio = 0.76
-                key_idea_taken = True
-            else:
-                target = "sec-main-method"
-                width_ratio = 0.72 if method_hero_taken else 0.82
-                method_hero_taken = True
+        candidates.append(fig)
+        if len(candidates) >= 8:
+            break
+
+    for fig in candidates:
         if len(placements) >= 4:
             break
-        placements.append(FigurePlacement(
-            figure_id=getattr(fig, "figure_id", ""), section_id=target,
-            width_ratio=width_ratio, caption=caption,
-        ))
+        caption = _figure_caption(fig)
+        role = _figure_role(fig)
+        if _is_result_figure(caption, role):
+            if core_slots < 2:
+                _add(fig, "sec-main-method", 0.95 if core_slots == 0 else 0.85)
+            elif not hero_taken:
+                _add(fig, "sec-method-overview", 0.9)
+            elif not idea_taken:
+                _add(fig, "sec-key-idea", 0.8)
+        elif _is_method_figure(caption, role):
+            if not hero_taken:
+                _add(fig, "sec-method-overview", 0.9)
+            elif core_slots < 2:
+                _add(fig, "sec-main-method", 0.95 if core_slots == 0 else 0.85)
+            elif not idea_taken:
+                _add(fig, "sec-key-idea", 0.8)
+        else:
+            if not idea_taken:
+                _add(fig, "sec-key-idea", 0.8)
+            elif core_slots < 2:
+                _add(fig, "sec-main-method", 0.95 if core_slots == 0 else 0.85)
+            elif not hero_taken:
+                _add(fig, "sec-method-overview", 0.9)
     return placements
 
 

@@ -432,3 +432,274 @@ header {
         justify-content: center;
     }
 }
+
+/* ============ Harness (视觉审查) ============ */
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.form-row .form-group input {
+    width: 100%;
+}
+
+.harness-panel {
+    margin-top: 24px;
+    padding: 20px;
+    background: #f8fafc;
+    border: 1px solid #d8e1ea;
+    border-radius: 12px;
+}
+
+.harness-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.harness-head h4 {
+    margin: 0;
+    color: #1a365d;
+}
+
+.harness-badge {
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    background: #e2e8f0;
+    color: #2d3748;
+}
+
+.harness-badge.passed {
+    background: #c6f6d5;
+    color: #22543d;
+}
+
+.harness-badge.fallback {
+    background: #fefcbf;
+    color: #744210;
+}
+
+.harness-badge.done {
+    background: #fed7d7;
+    color: #822727;
+}
+
+.score-history {
+    margin: 12px 0 16px;
+}
+
+.score-chart {
+    position: relative;
+    height: 140px;
+    padding: 8px 8px 0;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+}
+
+.score-bars {
+    position: absolute;
+    inset: 16px 12px 22px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-around;
+    gap: 8px;
+}
+
+.score-col {
+    flex: 1;
+    max-width: 64px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
+    position: relative;
+}
+
+.score-bar {
+    width: 100%;
+    min-height: 4px;
+    background: #90cdf4;
+    border-radius: 4px 4px 0 0;
+    position: relative;
+    transition: height 0.4s ease;
+}
+
+.score-bar.reached {
+    background: #48bb78;
+}
+
+.score-val {
+    position: absolute;
+    top: -18px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: #2d3748;
+}
+
+.score-label {
+    margin-top: 4px;
+    font-size: 11px;
+    color: #718096;
+}
+
+.threshold-line {
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    border-top: 2px dashed #e53e3e;
+    z-index: 2;
+}
+
+.threshold-line span {
+    position: absolute;
+    right: 4px;
+    top: -18px;
+    font-size: 10px;
+    color: #e53e3e;
+    font-weight: 700;
+}
+
+.round-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 14px;
+    margin: 12px 0 16px;
+}
+
+.round-card {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.round-card.passed {
+    border-color: #48bb78;
+}
+
+.round-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    background: #edf3f8;
+    font-size: 13px;
+}
+
+.round-score {
+    font-weight: 800;
+    color: #c53030;
+}
+
+.round-score.good {
+    color: #2f855a;
+}
+
+.round-img {
+    width: 100%;
+    height: auto;
+    display: block;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.round-summary {
+    padding: 8px 10px;
+    margin: 0;
+    font-size: 11px;
+    color: #4a5568;
+}
+
+.issue-heading {
+    margin: 0 0 10px;
+    color: #1a365d;
+}
+
+.issue-round {
+    margin-bottom: 14px;
+}
+
+.issue-round h5 {
+    margin: 0 0 6px;
+    font-size: 13px;
+    color: #2d3748;
+}
+
+.issue-round ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.issue-item {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: wrap;
+    font-size: 12px;
+    padding: 6px 10px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-left-width: 4px;
+    border-radius: 6px;
+}
+
+.issue-item.error { border-left-color: #e53e3e; }
+.issue-item.warning { border-left-color: #dd6b20; }
+.issue-item.info { border-left-color: #3182ce; }
+
+.issue-sev {
+    font-size: 10px;
+    font-weight: 800;
+    color: #4a5568;
+    letter-spacing: 0.5px;
+}
+
+.issue-item.error .issue-sev { color: #e53e3e; }
+.issue-item.warning .issue-sev { color: #dd6b20; }
+.issue-item.info .issue-sev { color: #3182ce; }
+
+.issue-text {
+    flex: 1;
+    min-width: 180px;
+}
+
+.issue-item code {
+    background: #edf3f8;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    color: #1a365d;
+}
+
+.issue-suggestion {
+    color: #2f855a;
+}
+
+.issue-action {
+    font-size: 11px;
+    color: #718096;
+    font-weight: 600;
+}
+
+.harness-actions {
+    margin-top: 12px;
+}
+
+.muted-note {
+    color: #718096;
+    font-size: 12px;
+}

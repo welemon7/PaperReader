@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import html as html_lib
 import logging
@@ -321,10 +321,34 @@ class HtmlPosterRenderer:
             if cls._normalize_figure_key(getattr(fig, "caption", "")) == cls._normalize_figure_key(fp.caption):
                 return fig
 
+        # 最后兜底：caption 关键词重叠匹配（容错 label/id 不完全一致的情况）
+        fp_tokens = cls._caption_tokens(fp.caption)
+        if fp_tokens:
+            best_fig = None
+            best_score = 0
+            for fig in figures:
+                if getattr(fig, "figure_id", None) in used_ids:
+                    continue
+                score = len(fp_tokens & cls._caption_tokens(getattr(fig, "caption", "")))
+                if score > best_score:
+                    best_score = score
+                    best_fig = fig
+            if best_score >= 2 and best_fig is not None:
+                return best_fig
+
         for fig in figures:
             if getattr(fig, "figure_id", None) not in used_ids:
                 return fig
         return None
+
+    @classmethod
+    def _caption_tokens(cls, text: str | None) -> set[str]:
+        if not text:
+            return set()
+        return {
+            t for t in re.sub(r"[^a-z0-9 ]+", " ", text.lower()).split()
+            if len(t) > 2
+        }
 
     @classmethod
     def _iter_placement_figures(
@@ -402,7 +426,9 @@ class HtmlPosterRenderer:
                         else:
                             logger.warning("Dropping non-normalized figure asset for %s", fp.figure_id)
                             entry["src"] = None
-            fig_map.setdefault(fp.section_id, []).append(entry)
+            # 只保留可渲染的图条目；无法解析的图不留占位、不占版面
+            if entry["src"]:
+                fig_map.setdefault(fp.section_id, []).append(entry)
         return fig_map
 
     @staticmethod

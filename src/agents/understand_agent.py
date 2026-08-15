@@ -114,6 +114,8 @@ def call_llm_node(state: UnderstandState) -> dict:
         result = client.chat_json(system=_SYSTEM_PROMPT, user=prompt)
         # ✅ 修复 LLM 响应格式问题
         result = _fix_llm_response(result)
+        if not isinstance(result, dict) or not result:
+            return {"error": "LLM returned an empty/invalid response"}
         logger.info("LLM response received (%d keys)", len(result))
         return {"llm_response": result}
     except LLMError as e:
@@ -126,7 +128,8 @@ def validate_node(state: UnderstandState) -> dict:
     doc = state.get("paper_document")
     llm_resp = state.get("llm_response")
     if not doc or not llm_resp:
-        return {"error": "Missing paper document or LLM response"}
+        # 保留上游节点设置的真实错误，避免用笼统信息掩盖根因
+        return {"error": state.get("error") or "Missing paper document or LLM response"}
     try:
         analysis = _parse_analysis(doc, llm_resp)
         return {"paper_analysis": analysis}
@@ -159,23 +162,23 @@ _SYSTEM_PROMPT = (
     "with the following fields:"
     "\n- title_zh: Chinese translation of the paper title for internal reference only"
     "\n- problem_statement: The core problem this paper solves, in English, using wording close to the paper (1-2 sentences)"
-    "\n- contributions: List of contributions, each with:"
-    "\n  - text: contribution description"
+    "\n- contributions: List of contributions (3-5 items), each with:"
+    "\n  - text: contribution description, at most 15 words, one short claim"
     "\n  - category: method/theory/system/dataset/application/other"
-    "\n- method_overview: High-level method description, in English and faithful to the paper (2-4 sentences)"
+    "\n- method_overview: High-level method description, in English and faithful to the paper (at most 2 sentences)"
     "\n- key_formulas: List of most important formulas (max 5), each with:"
     "\n  - formula_id: the formula ID from the paper"
     "\n  - latex: the LaTeX source"
-    "\n  - semantic_desc: plain-language meaning"
+    "\n  - semantic_desc: plain-language meaning, at most 12 words"
     "\n- key_figures: List of most important figures (max 4), each with:"
-    "\n  - figure_id: the figure ID"
+    "\n  - figure_id: the figure ID or label"
     "\n  - caption: the figure caption"
-    "\n  - role: what this figure illustrates"
-    "\n- experiments: Object with datasets (list of strings), metrics (list of strings), main_results (string), takeaways (list of strings)"
-    "\n- conclusion: Summary of the paper conclusion"
+    "\n  - role: what this figure illustrates (overview/architecture/result)"
+    "\n- experiments: Object with datasets (list of strings), metrics (list of strings), main_results (ONE short sentence), takeaways (at most 3 short items)"
+    "\n- conclusion: Summary of the paper conclusion (at most 2 sentences)"
     "\n- code_url: Project code repository URL extracted from the paper body (e.g. GitHub link). Leave empty string if not found."
     "\n- full_analysis_md: Complete markdown analysis of the paper"
-    "\n\nAll narrative fields that will appear in the poster must be in English only. Do not mix Chinese into problem_statement, contributions, method_overview, key_figures, experiments, or conclusion. Be precise, concise, and faithful to the source text."
+    "\n\nAll narrative fields that will appear in the poster must be in English only. Do not mix Chinese into problem_statement, contributions, method_overview, key_figures, experiments, or conclusion. Be precise, concise, and faithful to the source text. Poster copy must stay short: contributions <= 15 words each, method_overview <= 2 sentences, main_results 1 sentence."
 )
 
 

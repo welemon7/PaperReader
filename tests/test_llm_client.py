@@ -6,13 +6,13 @@ from src.llm.client import LLMClient, LLMError
 
 class TestLLMClient:
     def test_is_configured_empty(self):
-        with patch.object(settings, 'openai_api_key', ''):
+        with patch.object(settings, 'llm_api_key', ''):
             assert not LLMClient.is_configured()
     def test_is_configured_valid(self):
-        with patch.object(settings, 'openai_api_key', 'sk-real'):
+        with patch.object(settings, 'llm_api_key', 'sk-real'):
             assert LLMClient.is_configured()
     def test_planner_is_configured_valid(self):
-        with patch.object(settings, 'planner_api_key', 'sk-planner'):
+        with patch.object(settings, 'llm_api_key', 'sk-planner'):
             assert LLMClient.planner_is_configured()
     @patch('src.llm.client.httpx.post')
     def test_chat_json_success(self, mock_post):
