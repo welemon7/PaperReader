@@ -17,6 +17,7 @@ from src.agents.poster_harness import (
     _normalize_severity,
     _rewrite_section,
     _should_stop,
+    evaluate_poster_visual_qa,
     run_poster_harness,
 )
 from src.agents.content_policy import count_words, section_budget
@@ -154,9 +155,16 @@ def test_review_rendered_poster_parses_vlm_json(tmp_path):
         png_path.write_bytes(b"fake-png")
         return {}
 
+    captured_images: list[tuple[str, str]] = []
+
+    def _fake_vlm(system, images, user_text="", model=None):
+        captured_images.extend(images)
+        return fake_review
+
     with patch("src.agents.poster_harness.capture_poster_full_and_sections", side_effect=_fake_capture), \
          patch("src.agents.poster_harness.downscale_image", side_effect=lambda p, max_width=1400: p), \
-         patch("src.agents.poster_harness.multimodal_analyze_labeled", return_value=fake_review):
+         patch("src.agents.poster_harness.inspect_rendered_poster", return_value={"available": True, "hard_failures": []}), \
+         patch("src.agents.poster_harness.multimodal_analyze_labeled", side_effect=_fake_vlm):
         review = review_rendered_poster(html_path, tmp_path, HarnessConfig(), blueprint)
 
     assert review is not None
@@ -166,6 +174,9 @@ def test_review_rendered_poster_parses_vlm_json(tmp_path):
     assert review.issues[0].target == "sec-motivation"
     assert review.issues[0].action == "resize"
     assert review.dimension_scores["layout"] == 6.0
+    # Regression test for the former (label, path) ordering bug: the actual
+    # local PNG path must be first so the multimodal client can open it.
+    assert captured_images == [(str(tmp_path / "poster.png"), "poster (full view)")]
 
 
 def test_review_rendered_poster_returns_none_when_vlm_fails(tmp_path):
@@ -179,6 +190,7 @@ def test_review_rendered_poster_returns_none_when_vlm_fails(tmp_path):
 
     with patch("src.agents.poster_harness.capture_poster_full_and_sections", side_effect=_fake_capture), \
          patch("src.agents.poster_harness.downscale_image", side_effect=lambda p, max_width=1400: p), \
+         patch("src.agents.poster_harness.inspect_rendered_poster", return_value={"available": True, "hard_failures": []}), \
          patch("src.agents.poster_harness.multimodal_analyze_labeled", return_value=None):
         review = review_rendered_poster(html_path, tmp_path, HarnessConfig(), blueprint)
     assert review is None
@@ -258,6 +270,37 @@ def test_should_stop():
     assert _should_stop(_review(6, needs_improvement=True), 5, HarnessConfig(max_rounds=5), [6]) == "max_rounds"
     assert _should_stop(_review(6, needs_improvement=True), 3, HarnessConfig(max_rounds=5), [6, 6, 6]) == "plateau"
     assert _should_stop(_review(7, needs_improvement=True), 3, HarnessConfig(max_rounds=5), [6, 7, 8]) is None
+
+
+def test_should_stop_rejects_high_score_with_hard_failure():
+    review = _review(10, needs_improvement=False)
+    review.hard_failures = ["broken_images"]
+    assert _should_stop(review, 1, HarnessConfig(threshold=9), [10]) is None
+
+
+def test_image_grounded_qa_uses_poster_png_only(tmp_path):
+    poster_png = tmp_path / "poster.png"
+    poster_png.write_bytes(b"fake-image")
+    seen: list[tuple[str, str]] = []
+
+    def _fake_vlm(system, images, user_text="", model=None):
+        seen.extend(images)
+        return {
+            "answers": [
+                {"question_id": "q-problem", "answer": "We solve classification."},
+                {"question_id": "q-method", "answer": "We use a new architecture."},
+                {"question_id": "q-contrib-1", "answer": "A better backbone"},
+                {"question_id": "q-result", "answer": "99% accuracy"},
+                {"question_id": "q-takeaway", "answer": "It works well"},
+            ]
+        }
+
+    with patch("src.agents.poster_harness.multimodal_analyze_labeled", side_effect=_fake_vlm):
+        qa = evaluate_poster_visual_qa(_make_doc(), _make_analysis(), poster_png)
+
+    assert qa is not None
+    assert qa.accuracy == 1.0
+    assert seen == [(str(poster_png), "final candidate poster")]
 
 
 def test_apply_css_patches_injects_before_head_close():

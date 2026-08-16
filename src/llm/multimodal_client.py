@@ -69,6 +69,9 @@ def multimodal_analyze_labeled(
     content: list[dict] = [
         {"type": "text", "text": system_prompt + "\n\n" + user_text}
     ]
+    # Keep this canonical order explicit.  The old review caller accidentally
+    # passed (label, path), which silently caused every image to be skipped and
+    # made the "visual" loop fall back to text-only optimisation.
     for idx, (img_path, label) in enumerate(images, start=1):
         p = Path(img_path)
         if not p.exists():
@@ -163,8 +166,9 @@ def capture_poster(html_path: Path, png_path: Path, width: int = 1200, height: i
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             page = browser.new_page(viewport={"width": width, "height": height}, device_scale_factor=1)
-            page.goto(_as_file_uri(html_path))
-            page.wait_for_timeout(5000)
+            page.goto(_as_file_uri(html_path), wait_until="load")
+            page.wait_for_timeout(1500)
+            page.evaluate("document.fonts && document.fonts.ready")
             page.screenshot(path=str(png_path), full_page=True)
             browser.close()
         logger.info("Poster captured: %s (%d KB)", png_path, png_path.stat().st_size // 1024)
@@ -203,8 +207,9 @@ def capture_poster_full_and_sections(
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             page = browser.new_page(viewport={"width": width, "height": height}, device_scale_factor=1)
-            page.goto(_as_file_uri(html_path))
-            page.wait_for_timeout(5000)
+            page.goto(_as_file_uri(html_path), wait_until="load")
+            page.wait_for_timeout(1500)
+            page.evaluate("document.fonts && document.fonts.ready")
             page.screenshot(path=str(png_path), full_page=True)
             for name, selector in section_selectors.items():
                 try:

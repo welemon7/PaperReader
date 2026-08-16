@@ -33,10 +33,13 @@ class PosterBlueprint(BaseModel):
     poster_title: str = ''
     authors_str: str = ''
     code_url: str = ''
-    width_px: int = 1200
-    height_px: int = 1697
-    width_mm: int = 841
-    height_mm: int = 1189
+    # The primary deliverable is a landscape academic poster.  48 x 27 inches
+    # matches the aspect ratio used by the visual reference set and gives the
+    # renderer a stable, print-friendly canvas to audit.
+    width_px: int = 1920
+    height_px: int = 1080
+    width_mm: int = 1219
+    height_mm: int = 686
     sections: list[PosterSection] = Field(default_factory=list)
     figure_placements: list[FigurePlacement] = Field(default_factory=list)
     formula_displays: list[FormulaDisplay] = Field(default_factory=list)

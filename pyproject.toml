@@ -35,8 +35,12 @@ name = "paper-reader-llm"
  
      # API
      "fastapi>=0.110",
+    "flask>=3.0",
+    "flask-cors>=4.0",
     "jinja2>=3.0",
     "Markdown>=3.5",
+    # Required for the rendered-image QA gate (also run: playwright install chromium)
+    "playwright>=1.51",
      "uvicorn[standard]>=0.27",
  ]
  

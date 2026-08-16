@@ -18,10 +18,13 @@ from src.agents.content_policy import BULLET_WORD_BUDGET, trim_to_budget
 
 logger = logging.getLogger(__name__)
 
-POSTER_WIDTH_MM = 841
-POSTER_HEIGHT_MM = 1189
-POSTER_WIDTH_PX = 1200
-POSTER_HEIGHT_PX = 1697
+# 48 x 27 inch landscape canvas.  The previous A0 portrait defaults made the
+# generated layout fundamentally different from a conference-poster reading
+# path (wide title band -> three columns -> prominent centre panel).
+POSTER_WIDTH_MM = 1219
+POSTER_HEIGHT_MM = 686
+POSTER_WIDTH_PX = 1920
+POSTER_HEIGHT_PX = 1080
 
 
 def _short_bullet(text: str, max_words: int = BULLET_WORD_BUDGET) -> str:

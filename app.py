@@ -235,6 +235,10 @@ def generate_poster_task(
             threshold=quality_threshold if quality_threshold is not None else settings.harness_threshold,
             max_rounds=max_rounds if max_rounds is not None else settings.harness_max_rounds,
             enable_qa_eval=enable_qa_eval if enable_qa_eval is not None else settings.harness_enable_qa,
+            qa_threshold=settings.harness_qa_threshold,
+            zoom_crops=settings.harness_zoom_crops,
+            max_crops=settings.harness_max_crops,
+            vision_model=settings.harness_vision_model or None,
         )
 
         harness_result = run_poster_harness(
@@ -264,7 +268,9 @@ def generate_poster_task(
         task.html_draft = str(draft_path)
         task.progress = 100
         task.status = 'complete'
-        task.message = '海报生成完成！'
+        task.message = '海报已通过视觉与内容门禁！' if harness_result.passed else (
+            '已生成最优候选，但未达到交付门槛；请查看视觉审查报告。'
+        )
         task.result = {
             'arxiv_id': arxiv_id,
             'draft': str(draft_path),

@@ -55,7 +55,7 @@ class TestPosterBlueprint:
     def test_generate_returns_blueprint(self):
         bp = generate_blueprint(_make_doc(), _make_analysis())
         assert isinstance(bp, PosterBlueprint)
-        assert bp.width_px == 1200 and bp.height_px == 1697
+        assert bp.width_px == 1920 and bp.height_px == 1080
         assert len(bp.sections) >= 5
 
     def test_title_section(self):

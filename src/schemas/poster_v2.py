@@ -65,6 +65,11 @@ class PosterReview(BaseModel):
     summary: str = ""
     layout_feedback: list[str] = Field(default_factory=list)
     dimension_scores: dict[str, float] = Field(default_factory=dict)
+    # Non-negotiable render failures found without asking a model (for example
+    # broken figures or clipped text).  A high VLM score must never override
+    # these failures.
+    hard_failures: list[str] = Field(default_factory=list)
+    deterministic_checks: dict[str, object] = Field(default_factory=dict)
 
 
 class EvaluationQuestion(BaseModel):

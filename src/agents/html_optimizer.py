@@ -18,7 +18,7 @@ Your task is to improve the given HTML based on the user's optimization instruct
 Rules:
 1. Keep the core content and structure intact
 2. Improve visual hierarchy and readability
-3. Optimize for academic poster presentation (A0 portrait: 841mm × 1189mm)
+3. Optimize for a 48 × 27 inch landscape academic poster
 4. Maintain all existing figures, formulas, and data
 5. Preserve the original semantic meaning
 6. Output ONLY valid HTML, no markdown or explanations
@@ -85,6 +85,9 @@ def optimize_html_with_llm(
         # 清理响应（移除可能的 markdown 包裹）
         optimized_html = _clean_response(response)
         optimized_html = _normalize_figure_sources(optimized_html, allowed_figures)
+
+        if not optimized_html or "<html" not in optimized_html.lower() or "</html>" not in optimized_html.lower():
+            raise RuntimeError("LLM response did not contain a complete HTML document")
 
         logger.info(f"Received optimized HTML: {len(optimized_html)} chars")
 

@@ -81,6 +81,13 @@ _QA_SYSTEM_PROMPT = (
     "Return JSON with answer, short_reason, and confidence."
 )
 
+_VISUAL_QA_SYSTEM_PROMPT = """You are a strict scientific-poster comprehension evaluator.
+Answer each question using ONLY what is legible in the supplied poster image. Do not use
+outside knowledge and do not guess. Return JSON ONLY in this exact format:
+{"answers": [{"question_id": "...", "answer": "...", "confidence": 0.0}]}
+If the answer is absent or unreadable, return an empty answer with confidence 0.
+"""
+
 # ---------------------------------------------------------------------------
 # Normalization helpers (review JSON -> PosterReview)
 # ---------------------------------------------------------------------------
@@ -210,6 +217,120 @@ def _heuristic_density_issues(blueprint: PosterBlueprint) -> list[PosterComment]
     return issues
 
 
+def inspect_rendered_poster(
+        html_path: Path,
+        blueprint: PosterBlueprint,
+) -> dict[str, Any]:
+    """Run deterministic browser checks before trusting a VLM score.
+
+    A VLM is useful for composition and visual storytelling but not dependable
+    enough to waive broken assets, clipping, or a canvas with the wrong aspect
+    ratio.  This audit intentionally returns evidence rather than raising, so
+    the report remains useful even when a local browser is unavailable.
+    """
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        return {"available": False, "reason": "playwright_not_installed", "hard_failures": []}
+
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page(
+                viewport={"width": blueprint.width_px, "height": blueprint.height_px},
+                device_scale_factor=1,
+            )
+            page.goto(html_path.resolve().as_uri(), wait_until="load")
+            page.wait_for_timeout(1500)
+            page.evaluate("document.fonts && document.fonts.ready")
+            data = page.evaluate(
+                """() => {
+                    const poster = document.querySelector('.poster-container');
+                    const sections = [...document.querySelectorAll('.section-block')];
+                    const px = value => Number.parseFloat(value || '0') || 0;
+                    const clipped = sections.filter(section => {
+                        const content = section.querySelector('.section-content');
+                        if (!content) return false;
+                        const style = getComputedStyle(section);
+                        return style.overflow !== 'visible' && (
+                            content.scrollHeight > content.clientHeight + 2 ||
+                            content.scrollWidth > content.clientWidth + 2
+                        );
+                    }).map(section => section.id);
+                    const empty = sections.filter(section => {
+                        const content = section.querySelector('.section-content');
+                        if (!content) return false;
+                        const text = (content.innerText || '').replace(/\\s+/g, ' ').trim();
+                        const hasImage = !!content.querySelector('img');
+                        return !hasImage && (!text || text === '(not provided)');
+                    }).map(section => section.id);
+                    const brokenImages = [...document.images]
+                        .filter(image => !image.complete || image.naturalWidth === 0)
+                        .map(image => image.alt || image.src || 'unnamed-image');
+                    const fontSizes = sections.map(section => {
+                        const content = section.querySelector('.section-content');
+                        return content ? px(getComputedStyle(content).fontSize) : 0;
+                    }).filter(Boolean);
+                    const rect = poster ? poster.getBoundingClientRect() : null;
+                    return {
+                        section_count: sections.length,
+                        clipped_sections: clipped,
+                        empty_sections: empty,
+                        broken_images: brokenImages,
+                        min_body_font_px: fontSizes.length ? Math.min(...fontSizes) : 0,
+                        canvas_width: rect ? Math.round(rect.width) : 0,
+                        canvas_height: rect ? Math.round(rect.height) : 0,
+                    };
+                }"""
+            )
+            browser.close()
+    except Exception as exc:
+        logger.warning("Deterministic browser audit unavailable: %s", exc)
+        return {"available": False, "reason": f"browser_error: {exc}", "hard_failures": []}
+
+    failures: list[str] = []
+    if data["broken_images"]:
+        failures.append("broken_images")
+    if data["clipped_sections"]:
+        failures.append("text_or_layout_clipping")
+    if data["empty_sections"]:
+        failures.append("empty_required_sections")
+    expected_ratio = blueprint.width_px / max(blueprint.height_px, 1)
+    actual_ratio = data["canvas_width"] / max(data["canvas_height"], 1)
+    if data["canvas_width"] <= 0 or abs(actual_ratio - expected_ratio) > 0.08:
+        failures.append("canvas_aspect_ratio_mismatch")
+    if data["min_body_font_px"] and data["min_body_font_px"] < 12:
+        failures.append("body_text_too_small")
+    return {"available": True, "hard_failures": failures, **data}
+
+
+def _merge_deterministic_issues(review: PosterReview, audit: dict[str, Any]) -> None:
+    """Expose browser failures as actionable comments and hard pass blockers."""
+    review.deterministic_checks = audit
+    review.hard_failures = list(audit.get("hard_failures") or [])
+    existing = {comment.target for comment in review.issues}
+    for section_id in audit.get("clipped_sections") or []:
+        if section_id not in existing:
+            review.issues.append(PosterComment(
+                issue="Detected clipped or overflowing content in this section",
+                severity="error", target=section_id, action="condense",
+                suggestion="Reduce body copy or reflow this panel before the next render.",
+            ))
+    for section_id in audit.get("empty_sections") or []:
+        if section_id not in existing:
+            review.issues.append(PosterComment(
+                issue="This required section is visibly empty",
+                severity="error", target=section_id, action="reflow",
+                suggestion="Fill it with relevant paper evidence or reallocate the panel.",
+            ))
+    if audit.get("broken_images"):
+        review.issues.append(PosterComment(
+            issue="One or more figure assets did not render",
+            severity="error", target="", action="replace_figure",
+            suggestion="Use a valid local raster asset and preserve its source caption.",
+        ))
+
+
 def review_rendered_poster(
         html_path: Path,
         round_dir: Path,
@@ -225,7 +346,11 @@ def review_rendered_poster(
     png_path = round_dir / "poster.png"
     selectors = _section_selectors(blueprint)
     crops = capture_poster_full_and_sections(
-        html_path, png_path, selectors, width=1200, height=1697,
+        html_path,
+        png_path,
+        selectors,
+        width=blueprint.width_px,
+        height=blueprint.height_px,
     )
     if not png_path.exists():
         logger.warning("Poster PNG capture failed; vision review unavailable")
@@ -233,14 +358,15 @@ def review_rendered_poster(
 
     full_small = downscale_image(png_path, max_width=1400) or png_path
 
-    images: list[tuple[str, str]] = [("poster (full view)", str(full_small))]
+    # multimodal_analyze_labeled takes (image_path, label), not the reverse.
+    images: list[tuple[str, str]] = [(str(full_small), "poster (full view)")]
     if config.zoom_crops:
         for sec_id in _dense_section_ids(blueprint, config.max_crops):
             crop = crops.get(sec_id)
             if crop and crop.exists():
                 sec = next((s for s in blueprint.sections if s.section_id == sec_id), None)
                 label = f"section: {sec.title if sec else sec_id}"
-                images.append((label, str(crop)))
+                images.append((str(crop), label))
 
     user_text = (
         "Review the rendered scientific poster for visual quality. Report concrete issues "
@@ -262,7 +388,7 @@ def review_rendered_poster(
         if issue:
             issues.append(issue)
 
-    return PosterReview(
+    review = PosterReview(
         quality_score=_normalize_quality_score(raw.get("quality_score")),
         needs_improvement=bool(raw.get("needs_improvement", True)),
         issues=issues,
@@ -270,6 +396,8 @@ def review_rendered_poster(
         layout_feedback=[str(x) for x in (raw.get("layout_feedback") or []) if x],
         dimension_scores=_normalize_dimension_scores(raw.get("dimension_scores")),
     )
+    _merge_deterministic_issues(review, inspect_rendered_poster(html_path, blueprint))
+    return review
 
 
 # ---------------------------------------------------------------------------
@@ -510,7 +638,11 @@ def _apply_feedback(
 
 
 def _should_stop(review: PosterReview, round_no: int, config: HarnessConfig, scores: list[int]) -> Optional[str]:
-    if not review.needs_improvement and review.quality_score >= config.threshold:
+    if (
+        not review.hard_failures
+        and not review.needs_improvement
+        and review.quality_score >= config.threshold
+    ):
         return "passed"
     if round_no >= config.max_rounds:
         return "max_rounds"
@@ -528,6 +660,7 @@ def _default_config() -> HarnessConfig:
         zoom_crops=settings.harness_zoom_crops,
         max_crops=settings.harness_max_crops,
         enable_qa_eval=settings.harness_enable_qa,
+        qa_threshold=settings.harness_qa_threshold,
         vision_model=settings.harness_vision_model or None,
     )
 
@@ -637,6 +770,63 @@ def evaluate_poster_qa(
     )
 
 
+def evaluate_poster_visual_qa(
+        doc: PaperDocument,
+        analysis: PaperAnalysis,
+        poster_png: Path,
+        visual_score: int = 0,
+        model: Optional[str] = None,
+) -> Optional[PosterQAEval]:
+    """Run PaperQuiz-lite against the rendered image, never the HTML source.
+
+    This closes a key loophole in the earlier implementation: an item could be
+    present in hidden HTML while being clipped or too small to communicate on
+    the actual poster.  Reference answers remain local evidence; the VLM only
+    sees the image and the questions.
+    """
+    questions = generate_paperquiz_questions(doc, analysis)
+    if not questions or not poster_png.exists():
+        return None
+    qa_image = downscale_image(poster_png, max_width=1400) or poster_png
+    question_text = "\n".join(
+        f"- {question.question_id}: {question.question}" for question in questions
+    )
+    raw = multimodal_analyze_labeled(
+        _VISUAL_QA_SYSTEM_PROMPT,
+        [(str(qa_image), "final candidate poster")],
+        user_text=f"Questions:\n{question_text}",
+        model=model,
+    )
+    if not raw:
+        return None
+    by_id = {
+        str(item.get("question_id", "")): str(item.get("answer", "")).strip()
+        for item in (raw.get("answers") or [])
+        if isinstance(item, dict)
+    }
+    answers = [by_id.get(question.question_id, "") for question in questions]
+    correct = sum(
+        1 for question, answer in zip(questions, answers)
+        if answer and _answer_overlap(question.answer, answer)
+    )
+    total = len(questions)
+    accuracy = correct / total if total else 0.0
+    return PosterQAEval(
+        paper_id=doc.paper_id,
+        arxiv_id=doc.arxiv_id,
+        questions=questions,
+        poster_answers=answers,
+        correct_count=correct,
+        total_count=total,
+        accuracy=accuracy,
+        coverage=accuracy,
+        recall=accuracy,
+        visual_score=visual_score,
+        qa_score=int(round(accuracy * 10)),
+        summary=f"Image-grounded PaperQuiz answered {correct}/{total} questions.",
+    )
+
+
 # ---------------------------------------------------------------------------
 # Harness orchestrator
 # ---------------------------------------------------------------------------
@@ -685,6 +875,7 @@ def run_poster_harness(
 
     stop_reason = "unknown"
     passed = False
+    passing_qa_eval: Optional[PosterQAEval] = None
 
     for round_no in range(1, config.max_rounds + 1):
         round_dir = harness_dir / f"round_{round_no}"
@@ -723,6 +914,38 @@ def run_poster_harness(
             review.issues.extend(c for c in heuristic if c.target not in existing_targets)
             if "text_density" not in review.dimension_scores:
                 review.dimension_scores["text_density"] = max(1.0, 10.0 - len(heuristic) * 1.5)
+
+        # A visually high-scoring candidate is not qualified until the core
+        # paper claims can be recovered from the *image*.  Run this expensive
+        # check only for a provisional pass candidate.
+        if (
+            config.enable_qa_eval
+            and not review.hard_failures
+            and not review.needs_improvement
+            and review.quality_score >= config.threshold
+        ):
+            candidate_qa = evaluate_poster_visual_qa(
+                doc, analysis, round_png, visual_score=review.quality_score,
+                model=vision_model,
+            )
+            if candidate_qa is None:
+                review.hard_failures.append("image_grounded_qa_unavailable")
+                review.needs_improvement = True
+                review.issues.append(PosterComment(
+                    issue="Image-grounded content QA was unavailable",
+                    severity="error", target="", action="keep",
+                    suggestion="Check the configured vision endpoint before certifying this poster.",
+                ))
+            elif candidate_qa.accuracy < config.qa_threshold:
+                review.needs_improvement = True
+                review.issues.append(PosterComment(
+                    issue=(f"Poster-image content coverage is {candidate_qa.accuracy:.0%}; "
+                           f"required {config.qa_threshold:.0%}"),
+                    severity="error", target="sec-main-method", action="rewrite",
+                    suggestion="Make the problem, method and main result legible in the visible poster copy.",
+                ))
+            else:
+                passing_qa_eval = candidate_qa
         review_json_path.write_text(review.model_dump_json(indent=2), encoding="utf-8")
 
         # 4) Record round.
@@ -733,6 +956,8 @@ def run_poster_harness(
             round_no=round_no,
             quality_score=score,
             dimension_scores=review.dimension_scores,
+            hard_failures=review.hard_failures,
+            deterministic_checks=review.deterministic_checks,
             needs_improvement=review.needs_improvement,
             issues=review.issues,
             summary=review.summary,
@@ -780,7 +1005,7 @@ def run_poster_harness(
             fallback_reason=fallback_note,
             total_rounds=0,
         )
-        _write_report(output_dir, result)
+        _write_report(output_dir, result, config)
         return result
 
     # -- Select best round and write final artifacts --------------------------------
@@ -807,27 +1032,24 @@ def run_poster_harness(
         total_rounds=len(rounds),
     )
 
-    # -- Optional PaperQuiz-style QA evaluation on the final poster ------------------
-    if config.enable_qa_eval and best_html and best_html.exists():
-        try:
-            poster_text = best_html.read_text(encoding="utf-8")
-            qa_eval = evaluate_poster_qa(doc, analysis, poster_text, visual_score=best_score, llm=llm)
-            qa_path = output_dir / "poster_qa_eval.json"
-            qa_path.write_text(qa_eval.model_dump_json(indent=2), encoding="utf-8")
-            result.qa_eval_path = str(qa_path)
-        except Exception as e:
-            logger.warning("QA evaluation skipped: %s", e)
+    # -- Persist only image-grounded QA.  HTML-source QA is deliberately not a
+    #    certification signal because it cannot prove the information is visible.
+    if passing_qa_eval is not None:
+        qa_path = output_dir / "poster_qa_eval.json"
+        qa_path.write_text(passing_qa_eval.model_dump_json(indent=2), encoding="utf-8")
+        result.qa_eval_path = str(qa_path)
 
-    _write_report(output_dir, result)
+    _write_report(output_dir, result, config)
     return result
 
 
-def _write_report(output_dir: Path, result: HarnessResult) -> Path:
+def _write_report(output_dir: Path, result: HarnessResult, config: Optional[HarnessConfig] = None) -> Path:
     report = {
         "passed": result.passed,
         "stop_reason": result.stop_reason,
-        "threshold": None,
-        "max_rounds": None,
+        "threshold": config.threshold if config else None,
+        "max_rounds": config.max_rounds if config else None,
+        "qa_threshold": config.qa_threshold if config else None,
         "scores": [r.quality_score for r in result.rounds],
         "best_round_no": result.best_round_no,
         "best_score": result.best_score,
@@ -842,6 +1064,8 @@ def _write_report(output_dir: Path, result: HarnessResult) -> Path:
                 "round_no": r.round_no,
                 "quality_score": r.quality_score,
                 "dimension_scores": r.dimension_scores,
+                "hard_failures": r.hard_failures,
+                "deterministic_checks": r.deterministic_checks,
                 "needs_improvement": r.needs_improvement,
                 "summary": r.summary,
                 "issues": [c.model_dump() for c in r.issues],

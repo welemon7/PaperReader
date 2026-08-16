@@ -72,7 +72,7 @@ form.addEventListener('submit', async (e) => {
     harnessPanel.style.display = 'none';
     errorSection.style.display = 'none';
 
-    const qualityThreshold = parseInt(thresholdInput.value, 10) || 8;
+    const qualityThreshold = parseInt(thresholdInput.value, 10) || 9;
     const maxRounds = parseInt(maxRoundsInput.value, 10) || 5;
 
     try {
