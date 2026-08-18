@@ -48,8 +48,8 @@ You are a professional HTML poster designer. Optimize the generation logic of th
   - Four short bullet points.
   - Add four `badge-pill` labels (you may include symbols like 🌐 ⚡ 🏆 🔄 🔥 🚩, etc.).
 - **Project**:
-  - QR placeholder (`[QR]`).
-  - Code & Project tags, with a GitHub link shown below (if available in the paper; otherwise, state "code will be released").
+  - No QR code needed.
+  - Code & Project tags, with a GitHub link shown below (if available in the paper; otherwise, state "Code will be released").
 
 ### 4. Images and File References
 - Use the following image files (assume they all exist):

@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Detail-Preserving Latent Diffusion for Stable Shadow Removal - Poster</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+    --poster-blue: #16324f;
+    --poster-dark-blue: #072245;
+    --poster-bg: #fbfcfe;
+    --panel-bg: #e8eef4;
+    --border-color: #cfd8e3;
+    --text-main: #182433;
+    --text-muted: #4a5568;
+    --header-text: #ffffff;
+    --accent-orange: #c75300;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { margin: 0; padding: 0; background: #fff; }
+body { display: flex; justify-content: center; }
+
+/* Fixed print canvas: 48 x 36 in at 40 dpi = 1920 x 1440 px */
+.poster-container {
+    position: relative;
+    width: 1920px;
+    height: 1440px;
+    background: var(--poster-bg);
+    font-family: 'Inter', sans-serif;
+    color: var(--text-main);
+    line-height: 1.42;
+    overflow: hidden;
+}
+
+/* ---- title band ---- */
+.header {
+    position: absolute;
+    left: 24px;
+    top: 24px;
+    width: calc(1920px - 48px);
+    height: 150px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    border-bottom: 2px solid var(--border-color);
+    padding: 4px 24px 10px;
+    overflow: hidden;
+}
+.header h1 {
+    font-size: 54px;
+    font-weight: 800;
+    letter-spacing: -0.3px;
+    color: var(--poster-blue);
+    line-height: 1.12;
+    text-wrap: balance;
+}
+.header .authors {
+    font-size: 22px;
+    color: var(--text-muted);
+    font-weight: 600;
+    margin-top: 4px;
+}
+.hero-pill {
+    display: inline-block;
+    margin-top: 6px;
+    max-width: 60%;
+    padding: 4px 12px;
+    border: 1px solid rgba(11, 47, 101, 0.18);
+    border-radius: 999px;
+    color: var(--poster-blue);
+    background: rgba(11, 47, 101, 0.06);
+    font-size: 13px;
+    font-weight: 700;
+    text-decoration: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ---- panels ---- */
+.section-block {
+    position: absolute;
+    border: 1px solid var(--border-color);
+    background: var(--panel-bg);
+    border-radius: 4px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+.section-title {
+    background: var(--poster-blue);
+    color: var(--header-text);
+    height: 52px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-size: 24px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 0 12px;
+    line-height: 1.1;
+    overflow: hidden;
+}
+.section-content {
+    flex: 1;
+    min-height: 0;
+    padding: 16px;
+    font-size: 17px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.text-block { width: 100%; }
+.text-block p { margin: 0 0 6px; }
+.text-block ul, .text-block ol { padding-left: 20px; margin: 4px 0; }
+.text-block li { margin-bottom: 6px; }
+.text-block strong { color: var(--poster-blue); }
+
+/* ---- figures: uniform frames, captions intentionally absent ---- */
+.figure-card {
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: #fff;
+    padding: 6px;
+}
+.figure-frame { width: 100%; height: 100%; }
+.figure-frame img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+    border-radius: 2px;
+    background: #fbfcfe;
+}
+
+/* ---- formula / table / callout ---- */
+.formula-box {
+    background: #f8fafc;
+    border: 1px solid #d8e1ea;
+    border-left: 3px solid var(--poster-blue);
+    padding: 10px 12px;
+    border-radius: 6px;
+    font-size: 16px;
+    width: 100%;
+}
+.formula-label {
+    font-size: 13.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--poster-blue);
+    font-weight: 800;
+    margin-bottom: 6px;
+}
+.formula-desc { margin-top: 6px; color: var(--text-muted); font-size: 15px; }
+.callout {
+    background: #f8fafc;
+    border-left: 4px solid var(--poster-blue);
+    padding: 8px 12px;
+    font-size: 16px;
+    width: 100%;
+}
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 15px;
+}
+th, td {
+    border: 1px solid #d8e1ea;
+    padding: 6px 8px;
+    text-align: left;
+    vertical-align: top;
+}
+th {
+    background: #edf3f8;
+    color: var(--poster-blue);
+    font-weight: 700;
+}
+.core-table-wrap { width: 100%; overflow-x: auto; }
+.item-details-title {
+    font-size: 13.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--poster-blue);
+    font-weight: 800;
+    margin-bottom: 4px;
+}
+.item-details-table th, .item-details-table td {
+    border: 1px solid #d8e1ea;
+    padding: 4px 6px;
+    text-align: left;
+    vertical-align: top;
+    font-size: 13.5px;
+    line-height: 1.35;
+}
+.item-details-table th {
+    width: 26%;
+    background: #edf3f8;
+    color: var(--poster-blue);
+    font-weight: 700;
+}
+.item-details-table td { color: var(--text-main); }
+
+/* ---- badges / project ---- */
+.badge-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.badge-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid #d8e1ea;
+    background: #f6f8fb;
+    color: var(--poster-blue);
+    border-radius: 999px;
+    padding: 5px 10px;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1;
+}
+.qr-placeholder {
+    width: 116px;
+    height: 116px;
+    background: #000;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    margin: 0 auto;
+}
+.code-cta { text-align: center; width: 100%; }
+.code-cta .label {
+    font-size: 15px;
+    color: var(--text-muted);
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+.code-link {
+    word-break: break-all;
+    color: var(--poster-blue);
+    font-weight: 700;
+    font-size: 15px;
+    text-decoration: none;
+}
+.link-text { font-size: 15px; font-weight: 600; color: var(--poster-blue); word-break: break-all; }
+</style>
+</head>
+<body>
+<div class="poster-container">
+    <header class="header">
+        <h1>Detail-Preserving Latent Diffusion for Stable Shadow Removal</h1>
+        <div class="authors">Jiamin Xu\\ Hangzhou Dianzi University\\ superxjm@yeah.net</div>
+        
+    </header>
+
+    
+    <div class="section-block" id="sec-motivation"
+         style="left:24px; top:190px; width:478px; height:890px;">
+        <div class="section-title">Motivation</div>
+        <div class="section-content">
+            
+            
+                
+                <div class="text-block" style="font-size: 17.0px; line-height: 1.42;">
+                    <p>The paper addresses high-quality shadow removal under complex global illumination, where methods trained on limited datasets often overfit and generalize poorly to unseen scenes.</p>
+<div class="formula-box"><div class="formula-label">Key Formula</div><div>$$ \hat{\mathbf{z}}^\mathbf{y} = f_\theta(\mathbf{z^y_t}, \mathbf{z^x}, t). $$</div><div class="formula-desc">U-Net predicts the clean latent from noisy input.</div></div>
+                </div>
+                
+            
+                
+                <div class="fixed-block" style="width:446px;">
+                    <div class="formula-box"><div class="formula-label">Key Formula</div><div>$$ \mathbf{z^y_{\tau-1}} = \sqrt{\overline{\alpha}_{\tau-1}} \mathbf{\hat{z}^y_\tau} + \text{direction} $$</div><div class="formula-desc">DDIM updates the latent one denoising step.</div></div>
+                </div>
+                
+            
+        </div>
+    </div>
+    
+    <div class="section-block" id="sec-method-overview"
+         style="left:518px; top:190px; width:773px; height:890px;">
+        <div class="section-title">Method Overview</div>
+        <div class="section-content">
+            
+            
+                
+                <div class="text-block" style="font-size: 17.0px; line-height: 1.42;">
+                    <p>The method adapts Stable Diffusion v2 for shadow removal in two stages.</p>
+<ul>
+<li>The method adapts Stable Diffusion v2 for shadow removal in two stages.</li>
+<li>Two-stage fine-tuning converts Stable Diffusion into a shadow-free generator.</li>
+</ul>
+<div class="formula-box"><div class="formula-label">Main Formula</div><div>$$ \mathbf{z^y_{\tau-1}} = \sqrt{\overline{\alpha}_{\tau-1}} \mathbf{\hat{z}^y_\tau} + \text{direction} $$</div><div class="formula-desc">DDIM updates the latent one denoising step.</div></div>
+                </div>
+                
+            
+                
+                <div class="figure-card" style="width:741px; height:436px;">
+                    <div class="figure-frame">
+                        <img src="figures/fig-001.png" alt="">
+                    </div>
+                </div>
+                
+            
+                
+                <div class="fixed-block" style="width:741px;">
+                    <div class="formula-box"><div class="formula-label">Main Formula</div><div>$$ \hat{\mathbf{z}}^\mathbf{y} = f_\theta(\mathbf{z^y_t}, \mathbf{z^x}, t). $$</div><div class="formula-desc">U-Net predicts the clean latent from noisy input.</div></div>
+                </div>
+                
+            
+        </div>
+    </div>
+    
+    <div class="section-block" id="sec-key-idea"
+         style="left:1307px; top:190px; width:589px; height:303px;">
+        <div class="section-title">Key Idea: Detail Injection</div>
+        <div class="section-content">
+            
+            
+                
+                <div class="text-block" style="font-size: 17.0px; line-height: 1.42;">
+                    <ul>
+<li>Two-stage fine-tuning converts Stable Diffusion into a shadow-free generator.</li>
+<li>Shadow-aware detail injection restores fine textures lost in latent diffusion.</li>
+<li>The method removes shadows without requiring an input shadow mask.</li>
+</ul>
+                </div>
+                
+            
+        </div>
+    </div>
+    
+    <div class="section-block" id="sec-main-method"
+         style="left:1307px; top:509px; width:589px; height:587px;">
+        <div class="section-title">Core Results</div>
+        <div class="section-content">
+            
+            
+                
+                <div class="text-block" style="font-size: 17.0px; line-height: 1.42;">
+                    <p>The method achieves state-of-the-art shadow removal quality and better cross-dataset generalization. The main advantages are reflected in PSNR, SSIM.</p>
+                </div>
+                
+            
+                
+                <div class="figure-card" style="width:273px; height:136px;">
+                    <div class="figure-frame">
+                        <img src="figures/fig-005.png" alt="">
+                    </div>
+                </div>
+                
+            
+                
+                <div class="figure-card" style="width:273px; height:136px;">
+                    <div class="figure-frame">
+                        <img src="figures/fig-006.png" alt="">
+                    </div>
+                </div>
+                
+            
+                
+                <div class="fixed-block" style="width:557px;">
+                    <div class="item-details-wrap"><div class="item-details-title">Item Details</div><table class="item-details-table"><tbody><tr><th>Datasets</th><td>ISTD+ / SRD / WSRD+ / INS</td></tr><tr><th>Main Results</th><td>The method achieves state-of-the-art shadow removal quality and better…</td></tr><tr><th>Takeaways</th><td>Latent-space diffusion improves global shadow removal. / Detail injection…</td></tr></tbody></table></div>
+                </div>
+                
+            
+        </div>
+    </div>
+    
+    <div class="section-block" id="sec-contributions"
+         style="left:24px; top:1096px; width:602px; height:320px;">
+        <div class="section-title">Contributions</div>
+        <div class="section-content">
+            
+            
+                
+                <div class="text-block" style="font-size: 17.0px; line-height: 1.42;">
+                    <ul>
+<li>Two-stage fine-tuning converts Stable Diffusion into a shadow-free generator.</li>
+<li>Shadow-aware detail injection restores fine textures lost in latent diffusion.</li>
+<li>The method removes shadows without requiring an input shadow mask.</li>
+<li>It supports high-resolution shadow removal efficiently in latent space.</li>
+</ul>
+                </div>
+                
+            
+        </div>
+    </div>
+    
+    <div class="section-block" id="sec-highlights"
+         style="left:642px; top:1096px; width:602px; height:320px;">
+        <div class="section-title">Highlights</div>
+        <div class="section-content">
+            
+            
+                
+                <div class="text-block" style="font-size: 17.0px; line-height: 1.42;">
+                    <ul>
+<li>Two-stage fine-tuning converts Stable Diffusion into a shadow-free generator.</li>
+<li>Shadow-aware detail injection restores fine textures lost in latent diffusion.</li>
+<li>The method achieves state-of-the-art shadow removal quality and better cross-dataset generalization.</li>
+<li>Latent-space diffusion improves global shadow removal.</li>
+</ul>
+                </div>
+                
+            
+        </div>
+    </div>
+    
+    <div class="section-block" id="sec-project"
+         style="left:1260px; top:1096px; width:604px; height:320px;">
+        <div class="section-title">Project</div>
+        <div class="section-content">
+            
+            
+                
+                <div class="qr-placeholder">[QR]</div>
+                
+            
+                
+                <div class="code-cta">
+                    <div class="label">Code &amp; Project</div>
+                    
+                    <div class="link-text">Code will be released.</div>
+                    
+                </div>
+                
+            
+                
+                <div class="qr-placeholder">[QR]</div>
+                
+            
+                
+                <div class="code-cta">
+                    <div class="label">Code &amp; Project</div>
+                    
+                    <div class="link-text">Code will be released.</div>
+                    
+                </div>
+                
+            
+        </div>
+    </div>
+    
+
+    <script>
+    MathJax = { tex: { inlineMath: [['$', '$']] } };
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</div>
+</body>
+</html>

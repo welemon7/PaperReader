@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ poster_title }} - Poster</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+{% set cs = color_scheme or {} %}
+<style>
+:root {
+    /* ---- design tokens (theme + blueprint overrides, with safe fallbacks) ---- */
+    --poster-primary: {{ cs.get('primary') or '#16324f' }};
+    --poster-blue: var(--poster-primary);
+    --poster-accent: {{ cs.get('accent') or '#c9a84c' }};
+    --accent-orange: var(--poster-accent);
+    --accent-text: {{ cs.get('accent_text') or '#a8842c' }};
+    --poster-dark-blue: {{ cs.get('band_bottom') or '#1f4a75' }};
+    --poster-bg: {{ cs.get('background') or '#ffffff' }};
+    --panel-bg: {{ cs.get('panel_soft') or cs.get('section_header_bg') or '#f7f9fc' }};
+    --panel-soft: var(--panel-bg);
+    --text-main: {{ cs.get('text') or '#182433' }};
+    --text-muted: {{ cs.get('muted') or '#4a5568' }};
+    --border-color: {{ cs.get('border') or '#cfd8e3' }};
+    --highlight: {{ cs.get('highlight') or '#8fb3d9' }};
+    --header-text: {{ cs.get('header_text') or cs.get('section_header_text') or '#ffffff' }};
+    --band-top: {{ cs.get('band_top') or cs.get('primary') or '#16324f' }};
+    --band-bottom: {{ cs.get('band_bottom') or cs.get('band_top') or '#1f4a75' }};
+    --radius: {{ cs.get('radius') or '10px' }};
+    --radius-sm: 7px;
+    --shadow: {{ cs.get('shadow') or '0 6px 16px rgba(22, 50, 79, 0.10)' }};
+    --font-display: {{ cs.get('font_display') or "'Inter', 'Segoe UI', sans-serif" }};
+    --font-body: {{ cs.get('font_body') or "'Inter', 'Segoe UI', sans-serif" }};
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { margin: 0; padding: 0; background: #fff; }
+body { display: flex; justify-content: center; }
+
+/* Fixed print canvas: 48 x 36 in at 40 dpi = {{ canvas_width }} x {{ canvas_height }} px */
+.poster-container {
+    position: relative;
+    flex-shrink: 0;
+    width: {{ canvas_width }}px;
+    height: {{ canvas_height }}px;
+    background: var(--poster-bg);
+    font-family: var(--font-body);
+    color: var(--text-main);
+    line-height: 1.42;
+    overflow: hidden;
+    border-top: 6px solid var(--poster-accent);
+}
+
+/* ---- title band ---- */
+.header {
+    position: absolute;
+    left: 24px;
+    top: 24px;
+    width: calc({{ canvas_width }}px - 48px);
+    height: 150px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    border-bottom: 1px solid var(--border-color);
+    padding: 4px 24px 12px;
+    overflow: hidden;
+}
+.header h1 {
+    font-family: var(--font-display);
+    font-size: 54px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    color: var(--poster-primary);
+    line-height: 1.1;
+    text-wrap: balance;
+}
+.header-rule {
+    width: 84px;
+    height: 5px;
+    border-radius: 3px;
+    background: var(--poster-accent);
+    margin: 10px auto 8px;
+}
+.header .authors {
+    font-size: 22px;
+    color: var(--text-muted);
+    font-weight: 600;
+    margin-top: 2px;
+}
+.hero-pill {
+    display: inline-block;
+    margin-top: 6px;
+    max-width: 60%;
+    padding: 4px 12px;
+    border: 1px solid color-mix(in srgb, var(--poster-primary) 22%, transparent);
+    border-radius: 999px;
+    color: var(--poster-primary);
+    background: color-mix(in srgb, var(--poster-primary) 6%, transparent);
+    font-size: 13px;
+    font-weight: 700;
+    text-decoration: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ---- panels ---- */
+.section-block {
+    position: absolute;
+    border: 1px solid var(--border-color);
+    background: var(--panel-bg);
+    border-radius: var(--radius);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 2px 6px rgba(16, 36, 64, 0.04);
+}
+.section-title {
+    background: linear-gradient(180deg, var(--band-top), var(--band-bottom));
+    color: var(--header-text);
+    height: 52px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-align: left;
+    font-size: 22px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 0 16px;
+    border-bottom: 3px solid var(--poster-accent);
+    line-height: 1.1;
+    overflow: hidden;
+}
+.section-title .sym { color: var(--poster-accent); font-size: 16px; line-height: 1; }
+.section-content {
+    position: absolute;
+    left: 0;
+    top: {{ panel_title_h }}px;
+    width: 100%;
+    height: calc(100% - {{ panel_title_h }}px);
+    overflow: hidden;
+}
+.text-block { position: absolute; overflow: hidden; }
+.text-block p { margin: 0 0 6px; }
+.text-block ul, .text-block ol { padding-left: 20px; margin: 4px 0; }
+.text-block li { margin-bottom: 6px; }
+.text-block li::marker { color: var(--poster-accent); }
+.text-block strong { color: var(--poster-primary); }
+.text-block em { color: var(--accent-text); }
+.text-block a {
+    color: var(--poster-primary);
+    font-weight: 600;
+    text-decoration: underline;
+    text-decoration-color: var(--poster-accent);
+    text-underline-offset: 2px;
+}
+
+/* ---- figures: uniform frames, captions intentionally absent ---- */
+.figure-card {
+    position: absolute;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: #fff;
+    padding: 6px;
+}
+.figure-frame { width: 100%; height: 100%; }
+.figure-frame img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+    border-radius: 4px;
+    background: #fbfcfe;
+}
+
+/* ---- formula / table / callout ---- */
+.formula-box {
+    background: var(--panel-soft);
+    border: 1px solid var(--border-color);
+    border-left: 3px solid var(--poster-accent);
+    padding: 10px 13px;
+    border-radius: var(--radius-sm);
+    font-size: 15px;
+    width: 100%;
+    height: 100%;
+}
+.fixed-block { position: absolute; overflow: hidden; }
+.formula-label {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--accent-text);
+    font-weight: 800;
+    margin-bottom: 6px;
+}
+.formula-desc { margin-top: 6px; color: var(--text-muted); font-size: 14px; }
+.callout {
+    background: var(--panel-soft);
+    border-left: 4px solid var(--poster-accent);
+    padding: 8px 12px;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    font-size: 15px;
+    width: 100%;
+}
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+th, td {
+    border: 1px solid var(--border-color);
+    padding: 6px 8px;
+    text-align: left;
+    vertical-align: top;
+}
+th {
+    background: var(--panel-soft);
+    color: var(--poster-primary);
+    font-weight: 700;
+    border-bottom: 2px solid var(--poster-accent);
+}
+tbody tr:nth-child(even) { background: color-mix(in srgb, var(--panel-soft) 55%, transparent); }
+.core-table-wrap { width: 100%; overflow-x: auto; }
+.item-details-title {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--accent-text);
+    font-weight: 800;
+    margin-bottom: 4px;
+}
+.item-details-table th, .item-details-table td {
+    border: 1px solid var(--border-color);
+    padding: 4px 6px;
+    text-align: left;
+    vertical-align: top;
+    font-size: 13px;
+    line-height: 1.35;
+}
+.item-details-table th {
+    width: 26%;
+    background: var(--panel-soft);
+    color: var(--poster-primary);
+    font-weight: 700;
+}
+.item-details-table td { color: var(--text-main); }
+
+/* ---- badges / project ---- */
+.badge-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.badge-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--border-color);
+    background: var(--panel-soft);
+    color: var(--accent-text);
+    border-radius: 999px;
+    padding: 5px 11px;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1;
+}
+.qr-frame {
+    position: absolute;
+    border: 2px solid var(--poster-primary);
+    border-radius: 10px;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+.qr-frame.code-card { flex-direction: column; gap: 8px; padding: 10px; }
+.qr-code { font-size: 14px; color: var(--poster-primary); font-weight: 700; word-break: break-all; text-align: center; max-width: 100%; }
+.code-cta { position: absolute; text-align: center; }
+.code-cta .label {
+    font-size: 15px;
+    color: var(--text-muted);
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+.code-link {
+    word-break: break-all;
+    color: var(--poster-primary);
+    font-weight: 700;
+    font-size: 15px;
+    text-decoration: none;
+    border-bottom: 1px solid var(--poster-accent);
+    padding-bottom: 1px;
+}
+.link-text { font-size: 15px; font-weight: 600; color: var(--poster-primary); word-break: break-all; }
+
+@media print {
+    @page { size: {{ (canvas_width / 96.0)|round(2) }}in {{ (canvas_height / 96.0)|round(2) }}in; margin: 0; }
+    body { background: #fff; }
+    .poster-container { border-top: none; }
+}
+</style>
+</head>
+<body>
+<div class="poster-container">
+    <header class="header">
+        <h1>{{ poster_title }}</h1>
+        <div class="header-rule"></div>
+        {% if authors_str %}<div class="authors">{{ authors_str }}</div>{% endif %}
+        {% if code_url %}<a class="hero-pill" href="{{ code_url }}" target="_blank" rel="noreferrer noopener">{{ code_url }}</a>{% endif %}
+    </header>
+
+    {% set sym = cs.get('section_symbol') or '▸ ' %}
+    {% for panel in panels %}
+    <div class="section-block" id="{{ panel.panel_id }}"
+         style="left:{{ panel.x }}px; top:{{ panel.y }}px; width:{{ panel.w }}px; height:{{ panel.h }}px;">
+        <div class="section-title"><span class="sym">{{ sym }}</span>{{ panels_meta[panel.panel_id].title if panels_meta.get(panel.panel_id) else panel.panel_id }}</div>
+        <div class="section-content">
+            {% set panel_id = panel.panel_id %}
+            {% for el in elements if el.element_id.startswith(panel_id ~ '.') %}
+                {% set el_left = el.x - panel.x %}
+                {% set el_top = el.y - panel.y - panel_title_h %}
+                {% if el.kind == 'figure' and el.figure_src %}
+                <div class="figure-card" style="left:{{ el_left }}px; top:{{ el_top }}px; width:{{ el.w }}px; height:{{ el.h }}px;">
+                    <div class="figure-frame">
+                        <img src="{{ el.figure_src }}" alt="{{ el.notes }}">
+                    </div>
+                </div>
+                {% elif el.kind == 'text' %}
+                <div class="text-block" style="left:{{ el_left }}px; top:{{ el_top }}px; width:{{ el.w }}px; height:{{ el.h }}px; font-size: {{ body_font * el.font_scale }}px; line-height: 1.42;">
+                    {{ element_html.get(el.element_id, el.content_md)|safe }}
+                </div>
+                {% elif el.kind in ('formula', 'table', 'callout') %}
+                <div class="fixed-block" style="left:{{ el_left }}px; top:{{ el_top }}px; width:{{ el.w }}px; height:{{ el.h }}px;">
+                    {{ element_html.get(el.element_id, el.content_html)|safe }}
+                </div>
+                {% elif el.kind == 'qr' %}
+                {# 不再生成二维码：任何遗留 qr 元素降级为纯文本代码链接 #}
+                <div class="code-cta" style="left:{{ el_left }}px; top:{{ el_top }}px; width:{{ el.w }}px; height:{{ el.h }}px;">
+                    <div class="label">Code &amp; Project</div>
+                    {% if code_url %}
+                    <a class="code-link" href="{{ code_url }}" target="_blank" rel="noreferrer noopener">{{ code_url }}</a>
+                    {% else %}
+                    <div class="link-text">{{ el.content_md or 'Code will be released.' }}</div>
+                    {% endif %}
+                </div>
+                {% elif el.kind == 'link' %}
+                <div class="code-cta" style="left:{{ el_left }}px; top:{{ el_top }}px; width:{{ el.w }}px; height:{{ el.h }}px;">
+                    <div class="label">Code &amp; Project</div>
+                    {% if code_url %}
+                    <a class="code-link" href="{{ code_url }}" target="_blank" rel="noreferrer noopener">{{ code_url }}</a>
+                    {% else %}
+                    <div class="link-text">{{ el.content_md }}</div>
+                    {% endif %}
+                </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+
+    <script>
+    MathJax = { tex: { inlineMath: [['$', '$']] } };
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</div>
+</body>
+</html>

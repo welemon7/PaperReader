@@ -6,26 +6,41 @@
 <title>{{ poster_title }} - Poster</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+{% set cs = color_scheme or {} %}
 <style>
 :root {
-    --poster-blue: #0b2f65;
-    --poster-dark-blue: #072245;
-    --poster-bg: #ffffff;
-    --border-color: {{ color_scheme.border }};
-    --text-main: {{ color_scheme.text }};
-    --text-muted: #4a5568;
-    --accent-orange: #c75300;
-    --panel-soft: #f7f9fc;
+    /* ---- design tokens (theme + blueprint overrides, with safe fallbacks) ---- */
+    --poster-primary: {{ cs.get('primary') or '#16324f' }};
+    --poster-blue: var(--poster-primary);
+    --poster-accent: {{ cs.get('accent') or '#c9a84c' }};
+    --accent-orange: var(--poster-accent);
+    --accent-text: {{ cs.get('accent_text') or '#a8842c' }};
+    --poster-dark-blue: {{ cs.get('band_bottom') or '#1f4a75' }};
+    --poster-bg: {{ cs.get('background') or '#ffffff' }};
+    --panel-soft: {{ cs.get('panel_soft') or cs.get('section_header_bg') or '#f7f9fc' }};
+    --text-main: {{ cs.get('text') or '#182433' }};
+    --text-muted: {{ cs.get('muted') or '#4a5568' }};
+    --border-color: {{ cs.get('border') or '#cfd8e3' }};
+    --highlight: {{ cs.get('highlight') or '#8fb3d9' }};
+    --header-text: {{ cs.get('header_text') or cs.get('section_header_text') or '#ffffff' }};
+    --band-top: {{ cs.get('band_top') or cs.get('primary') or '#16324f' }};
+    --band-bottom: {{ cs.get('band_bottom') or cs.get('band_top') or '#1f4a75' }};
+    --section-symbol: "{{ cs.get('section_symbol') or '▸ ' }}";
+    --radius: {{ cs.get('radius') or '10px' }};
+    --radius-sm: 7px;
+    --shadow: {{ cs.get('shadow') or '0 6px 16px rgba(22, 50, 79, 0.10)' }};
+    --font-display: {{ cs.get('font_display') or "'Inter', 'Segoe UI', sans-serif" }};
+    --font-body: {{ cs.get('font_body') or "'Inter', 'Segoe UI', sans-serif" }};
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { min-height: 100%; margin: 0; }
 body {
-    background: #fff;
-    font-family: 'Inter', sans-serif;
+    background: #eef1f5;
+    font-family: var(--font-body);
     color: var(--text-main);
     line-height: 1.5;
-    padding: 0;
+    padding: 26px 18px;
     display: flex;
     justify-content: center;
 }
@@ -33,52 +48,78 @@ body {
     width: {{ poster_width }}px;
     min-height: {{ poster_height }}px;
     max-width: none;
+    flex-shrink: 0;
     background: var(--poster-bg);
-    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-    padding: 26px 30px 22px;
-    border-radius: 0;
+    box-shadow: var(--shadow);
+    border-radius: var(--radius);
+    padding: 0;
+    overflow: hidden;
+    border-top: 6px solid var(--poster-accent);
+    position: relative;
 }
+
+/* ================= header ================= */
 .header {
     text-align: center;
-    padding: 2px 24px 18px;
-    border-bottom: 2px solid var(--border-color);
-    margin-bottom: 15px;
+    padding: 34px 48px 20px;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 18px;
+    background:
+        linear-gradient(180deg, color-mix(in srgb, var(--poster-primary) 4%, transparent), transparent 120px);
 }
 .hero-pill {
     display: inline-flex;
     align-items: center;
-    justify-content: center;
-    min-height: 28px;
-    padding: 5px 10px;
-    border: 1px solid rgba(11, 47, 101, 0.18);
+    gap: 7px;
+    min-height: 30px;
+    padding: 6px 14px;
+    border: 1px solid color-mix(in srgb, var(--poster-primary) 22%, transparent);
     border-radius: 999px;
-    color: var(--poster-blue);
-    background: rgba(11, 47, 101, 0.06);
-    font-size: 12px;
+    color: var(--poster-primary);
+    background: color-mix(in srgb, var(--poster-primary) 6%, transparent);
+    font-size: 13px;
     font-weight: 700;
     line-height: 1;
     text-decoration: none;
     white-space: nowrap;
+    transition: background 0.15s ease;
 }
-.hero-link:hover { background: rgba(11, 47, 101, 0.1); }
+.hero-link:hover { background: color-mix(in srgb, var(--poster-primary) 12%, transparent); }
 .header h1 {
-    font-size: 52px;
-    color: var(--poster-blue);
+    font-family: var(--font-display);
+    font-size: 46px;
+    color: var(--poster-primary);
     font-weight: 800;
-    letter-spacing: -0.3px;
-    margin-bottom: 8px;
+    letter-spacing: -0.5px;
+    line-height: 1.12;
     text-wrap: balance;
 }
+.header-rule {
+    width: 76px;
+    height: 5px;
+    border-radius: 3px;
+    background: var(--poster-accent);
+    margin: 14px auto 10px;
+}
 .header .authors {
-    font-size: 21px;
+    font-size: 20px;
     color: var(--text-muted);
     font-weight: 600;
-    margin-top: 2px;
+    margin-top: 4px;
 }
 .header .affiliation {
-    font-size: 17px;
+    font-size: 15px;
     color: var(--text-muted);
 }
+.header .header-meta {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+/* ================= grid ================= */
 .grid-container {
     display: grid;
     grid-template-columns: 1fr 1.2fr 1fr;
@@ -87,77 +128,98 @@ body {
         "core core core"
         "contributions highlights project";
     gap: 18px;
+    padding: 0 22px 22px;
+    align-items: stretch;
 }
 .section-block {
     border: 1px solid var(--border-color);
-    background: #fff;
-    border-radius: 4px;
+    background: var(--poster-bg);
+    border-radius: var(--radius);
     overflow: hidden;
     display: flex;
     flex-direction: column;
     min-height: 0;
+    box-shadow: 0 2px 6px rgba(16, 36, 64, 0.04);
 }
 .section-title {
-    background: var(--poster-blue);
-    color: #fff;
-    font-size: 22px;
+    background: linear-gradient(180deg, var(--band-top), var(--band-bottom));
+    color: var(--header-text);
+    font-size: 19px;
     font-weight: 800;
     text-transform: uppercase;
-    text-align: center;
-    padding: 11px 14px;
-    letter-spacing: 0.5px;
+    letter-spacing: 1px;
+    padding: 12px 18px;
+    border-bottom: 3px solid var(--poster-accent);
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-align: left;
+}
+.section-title .sym {
+    color: var(--poster-accent);
+    font-size: 15px;
+    line-height: 1;
 }
 .section-content {
     padding: 16px 18px;
-    font-size: 18px;
+    font-size: 16px;
+    line-height: 1.5;
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 9px;
 }
 .section-content p { margin: 0; }
-.section-content ul, .section-content ol { padding-left: 18px; margin: 4px 0; }
-.section-content li { margin-bottom: 8px; }
-.section-content strong { color: var(--poster-blue); }
-.highlight-orange { color: var(--accent-orange); font-weight: 700; }
-.muted { color: var(--text-muted); }
-.callout {
-    background: #f8fafc;
-    border-left: 4px solid var(--poster-blue);
-    padding: 8px 12px;
-    font-size: 16px;
+.section-content ul, .section-content ol { padding-left: 20px; margin: 2px 0; }
+.section-content li { margin-bottom: 6px; }
+.section-content li::marker { color: var(--poster-accent); }
+.section-content strong { color: var(--poster-primary); font-weight: 700; }
+.section-content em { color: var(--accent-text); }
+.section-content a {
+    color: var(--poster-primary);
+    font-weight: 600;
+    text-decoration: underline;
+    text-decoration-color: var(--poster-accent);
+    text-underline-offset: 2px;
 }
-.callout.alt { border-left-color: var(--accent-orange); }
+.accent-text, .highlight-orange { color: var(--accent-text); font-weight: 700; }
+.muted { color: var(--text-muted); }
+
+/* ================= callouts / formulas ================= */
+.callout {
+    background: var(--panel-soft);
+    border-left: 4px solid var(--poster-accent);
+    padding: 9px 13px;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    font-size: 15px;
+}
+.callout.alt { border-left-color: var(--poster-primary); }
 .formula-box {
-    background: #f8fafc;
-    border: 1px solid #d8e1ea;
-    border-left: 3px solid var(--poster-blue);
-    padding: 10px 12px;
-    border-radius: 6px;
-    font-size: 16px;
+    background: var(--panel-soft);
+    border: 1px solid var(--border-color);
+    border-left: 3px solid var(--poster-accent);
+    padding: 10px 13px;
+    border-radius: var(--radius-sm);
+    font-size: 15px;
 }
 .formula-label {
-    font-size: 14px;
+    font-size: 13px;
     text-transform: uppercase;
-    letter-spacing: 0.4px;
-    color: var(--poster-blue);
+    letter-spacing: 0.6px;
+    color: var(--accent-text);
     font-weight: 800;
     margin-bottom: 6px;
 }
-.formula-desc {
-    margin-top: 6px;
-    color: var(--text-muted);
-}
-.figure-stack {
-    display: grid;
-    gap: 10px;
-}
+.formula-desc { margin-top: 6px; color: var(--text-muted); font-size: 14px; }
+
+/* ================= figures ================= */
+.figure-stack { display: grid; gap: 10px; }
 .figure-stack.one { grid-template-columns: 1fr; }
 .figure-stack.two { grid-template-columns: 1fr 1fr; }
 .figure-card {
     border: 1px solid var(--border-color);
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     background: #fff;
     padding: 7px;
 }
@@ -165,28 +227,20 @@ body {
     width: 100%;
     height: auto;
     display: block;
-    border-radius: 3px;
+    border-radius: 5px;
     object-fit: contain;
     background: #fbfcfe;
 }
-.figure-card.method-card img,
-.figure-card.result-card img {
-    max-height: 260px;
-}
-.figure-caption {
-    margin-top: 6px;
-    font-size: 14px;
-    line-height: 1.35;
-    color: var(--text-muted);
-}
-.core-band {
-    grid-area: core;
-}
-.core-band .section-content {
-    gap: 12px;
-}
+.figure-card.method-card img { max-height: 360px; }
+.figure-card.result-card img { max-height: 300px; }
+.figure-card.method-card { border-color: color-mix(in srgb, var(--poster-accent) 60%, var(--border-color)); }
+
+/* ================= core band ================= */
+.core-band { grid-area: core; }
+.core-band .section-content { gap: 12px; }
 .core-band-title {
-    background: linear-gradient(180deg, rgba(11, 47, 101, 0.98), rgba(11, 47, 101, 0.92));
+    background: linear-gradient(180deg, var(--band-top), var(--band-bottom));
+    border-bottom: 3px solid var(--poster-accent);
 }
 .core-grid {
     display: grid;
@@ -194,165 +248,82 @@ body {
     gap: 12px;
     align-items: start;
 }
-.core-grid.two-col {
-    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+.core-grid.two-col { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
+.core-grid.one-col { grid-template-columns: minmax(0, 1fr); }
+.core-column { min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.core-column .section-copy { font-size: 16px; line-height: 1.5; }
+
+/* ================= tables ================= */
+.core-table-wrap, .table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; margin: 4px 0 0; font-size: 14px; }
+th, td { border: 1px solid var(--border-color); padding: 7px 9px; text-align: left; vertical-align: top; }
+th {
+    background: var(--panel-soft);
+    color: var(--poster-primary);
+    font-weight: 700;
+    border-bottom: 2px solid var(--poster-accent);
 }
-.core-grid.one-col {
-    grid-template-columns: minmax(0, 1fr);
-}
-.core-column {
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-.core-column .section-copy {
-    font-size: 18px;
-    line-height: 1.5;
-}
-.core-table-wrap {
-    overflow-x: auto;
-}
-.core-table-wrap table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 15px;
-    margin: 0;
-}
-.item-details-wrap {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
+tbody tr:nth-child(even) { background: color-mix(in srgb, var(--panel-soft) 55%, transparent); }
+.core-table-wrap th, .core-table-wrap td { border: 1px solid var(--border-color); padding: 7px 9px; text-align: left; vertical-align: top; }
+.core-table-wrap th { background: var(--panel-soft); color: var(--poster-primary); font-weight: 700; }
+
+/* ================= item details (key-value) ================= */
+.item-details-wrap { display: flex; flex-direction: column; gap: 8px; }
 .item-details-title {
-    font-size: 14px;
+    font-size: 13px;
     text-transform: uppercase;
-    letter-spacing: 0.4px;
-    color: var(--poster-blue);
+    letter-spacing: 0.6px;
+    color: var(--accent-text);
     font-weight: 800;
 }
-.item-details-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 15px;
-    margin: 0;
-}
-.item-details-table th,
-.item-details-table td {
-    border: 1px solid #d8e1ea;
-    padding: 7px 8px;
-    text-align: left;
-    vertical-align: top;
-}
-.item-details-table th {
-    width: 28%;
-    background: #edf3f8;
-    color: var(--poster-blue);
-    font-weight: 700;
-}
-.core-table-wrap th,
-.core-table-wrap td {
-    border: 1px solid #d8e1ea;
-    padding: 7px 8px;
-    text-align: left;
-    vertical-align: top;
-}
-.core-table-wrap th {
-    background: #edf3f8;
-    color: var(--poster-blue);
-    font-weight: 700;
-}
-.core-empty {
-    display: none;
-}
-.figure-placeholder {
-    display: none;
-}
-.table-wrap { overflow-x: auto; }
-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 4px 0 0;
-    font-size: 15px;
-}
-th, td {
-    border: 1px solid #d8e1ea;
-    padding: 7px 8px;
-    text-align: left;
-    vertical-align: top;
-}
-th {
-    background: #edf3f8;
-    color: var(--poster-blue);
-    font-weight: 700;
-}
-.code-link {
-    word-break: break-all;
-    color: var(--poster-blue);
-    font-weight: 700;
-    text-decoration: none;
-}
-.code-link:hover { text-decoration: underline; }
+.item-details-table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 0; }
+.item-details-table th, .item-details-table td { border: 1px solid var(--border-color); padding: 7px 8px; text-align: left; vertical-align: top; }
+.item-details-table th { width: 28%; background: var(--panel-soft); color: var(--poster-primary); font-weight: 700; }
+
+.core-empty, .figure-placeholder { display: none; }
+
+/* ================= project / code link ================= */
 .project-box {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 8px;
+    gap: 10px;
     text-align: center;
     flex: 1;
     min-height: 0;
 }
-.qr-placeholder {
-    width: 120px;
-    height: 120px;
-    background: #000;
-    color: #fff;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 16px;
-}
-.link-text {
-    font-size: 16px;
-    font-weight: 600;
-    color: var(--poster-blue);
+.code-cta { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+.code-cta .label { font-size: 15px; color: var(--text-muted); font-weight: 600; }
+.code-link {
     word-break: break-all;
+    color: var(--poster-primary);
+    font-weight: 700;
+    text-decoration: none;
+    border-bottom: 1px solid var(--poster-accent);
+    padding-bottom: 1px;
 }
-.code-cta {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    width: 100%;
-}
-.code-cta .label {
-    font-size: 16px;
-    color: var(--text-muted);
-    font-weight: 600;
-}
-.badge-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-}
+.code-link:hover { text-decoration: underline; }
+.link-text { font-size: 15px; font-weight: 600; color: var(--poster-primary); word-break: break-all; }
+
+/* ================= badges ================= */
+.badge-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .badge-pill {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    border: 1px solid #d8e1ea;
-    background: #f6f8fb;
-    color: var(--poster-blue);
+    border: 1px solid var(--border-color);
+    background: var(--panel-soft);
+    color: var(--accent-text);
     border-radius: 999px;
-    padding: 5px 10px;
-    font-size: 14px;
+    padding: 5px 11px;
+    font-size: 13px;
     font-weight: 700;
     line-height: 1;
 }
-.project-footer {
-    margin-top: 8px;
-    font-size: 14px;
-    color: var(--text-muted);
-}
+.project-footer { margin-top: 8px; font-size: 13px; color: var(--text-muted); letter-spacing: 0.3px; }
+
+/* ================= responsive ================= */
 @media (max-width: 1100px) {
     .grid-container {
         grid-template-columns: 1fr;
@@ -367,10 +338,12 @@ th {
     }
     .figure-stack.two { grid-template-columns: 1fr; }
 }
+
+/* ================= print ================= */
 @media print {
-    @page { size: 48in 27in; margin: 0; }
+    @page { size: {{ (poster_width / 96.0)|round(2) }}in {{ (poster_height / 96.0)|round(2) }}in; margin: 0; }
     body { background: white; padding: 0; }
-    .poster-container { box-shadow: none; border: none; }
+    .poster-container { box-shadow: none; border-radius: 0; border-top: none; }
 }
 </style>
 </head>
@@ -379,15 +352,15 @@ th {
 <div class="poster-container">
     <header class="header">
         <h1>{{ poster_title }}</h1>
+        <div class="header-rule"></div>
         {% if authors_str %}
         <div class="authors">{{ authors_str }}</div>
         {% endif %}
-        {% if code_url %}
-        <div class="grid-area-project" style="margin-top: 8px; margin-bottom: 2px;">
-            <a class="hero-pill hero-link" href="{{ code_url }}" target="_blank" rel="noreferrer noopener">{{ code_url }}</a>
+        <div class="header-meta">
+            {% if code_url %}
+            <a class="hero-pill hero-link" href="{{ code_url }}" target="_blank" rel="noreferrer noopener">🔗 {{ code_url }}</a>
+            {% endif %}
         </div>
-        {% endif %}
-        <div class="affiliation">Paper-to-Poster Research Reader</div>
     </header>
 
     <div class="grid-container">
@@ -411,9 +384,10 @@ th {
                 {% set ns.project = sec %}
             {% endif %}
         {% endfor %}
+        {% set sym = cs.get('section_symbol') or '▸ ' %}
 
         <div class="section-block" id="sec-motivation" style="grid-area: motivation;">
-            <div class="section-title">{{ ns.motivation.title if ns.motivation else 'Motivation' }}</div>
+            <div class="section-title"><span class="sym">{{ sym }}</span>{{ ns.motivation.title if ns.motivation else 'Motivation' }}</div>
             <div class="section-content">
                 {% if ns.motivation %}
                     {{ ns.motivation.content_html|safe }}
@@ -424,7 +398,7 @@ th {
         </div>
 
         <div class="section-block" id="sec-method-overview" style="grid-area: overview;">
-            <div class="section-title">{{ ns.overview.title if ns.overview else 'Method Overview' }}</div>
+            <div class="section-title"><span class="sym">{{ sym }}</span>{{ ns.overview.title if ns.overview else 'Method Overview' }}</div>
             <div class="section-content">
                 {% if ns.overview %}
                     {{ ns.overview.content_html|replace('[[METHOD_FORMULA]]', '')|safe }}
@@ -437,8 +411,7 @@ th {
                     {% for fig in overview_figs[:1] %}
                     {% if fig.src %}
                     <div class="figure-card method-card">
-                        <img src="{{ fig.src }}" alt="{{ fig.caption }}">
-                        {% if fig.caption %}<div class="figure-caption">{{ fig.caption }}</div>{% endif %}
+                        <img src="{{ fig.src }}" alt="">
                     </div>
                     {% endif %}
                     {% endfor %}
@@ -448,7 +421,7 @@ th {
         </div>
 
         <div class="section-block" id="sec-key-idea" style="grid-area: key_idea;">
-            <div class="section-title">{{ ns.key_idea.title if ns.key_idea else 'Key Idea' }}</div>
+            <div class="section-title"><span class="sym">{{ sym }}</span>{{ ns.key_idea.title if ns.key_idea else 'Key Idea' }}</div>
             <div class="section-content">
                 {% if ns.key_idea %}
                     {{ ns.key_idea.content_html|safe }}
@@ -461,8 +434,7 @@ th {
                     {% for fig in key_figs[:1] %}
                     {% if fig.src %}
                     <div class="figure-card">
-                        <img src="{{ fig.src }}" alt="{{ fig.caption }}">
-                        {% if fig.caption %}<div class="figure-caption">{{ fig.caption }}</div>{% endif %}
+                        <img src="{{ fig.src }}" alt="">
                     </div>
                     {% endif %}
                     {% endfor %}
@@ -472,7 +444,7 @@ th {
         </div>
 
         <div class="section-block core-band" id="sec-main-method" style="grid-area: core;">
-            <div class="section-title core-band-title">Core Results</div>
+            <div class="section-title core-band-title"><span class="sym">{{ sym }}</span>Core Results</div>
             <div class="section-content">
                 {% set core_figs = namespace(items=[]) %}
                 {% if ns.core_results %}
@@ -502,8 +474,7 @@ th {
                     {% if left_fig %}
                     <div class="core-column">
                         <div class="figure-card result-card">
-                            <img src="{{ left_fig.src }}" alt="{{ left_fig.caption }}">
-                            {% if left_fig.caption %}<div class="figure-caption">{{ left_fig.caption }}</div>{% endif %}
+                            <img src="{{ left_fig.src }}" alt="">
                         </div>
                     </div>
                     {% endif %}
@@ -518,8 +489,7 @@ th {
                     {% if right_fig %}
                     <div class="core-column">
                         <div class="figure-card result-card">
-                            <img src="{{ right_fig.src }}" alt="{{ right_fig.caption }}">
-                            {% if right_fig.caption %}<div class="figure-caption">{{ right_fig.caption }}</div>{% endif %}
+                            <img src="{{ right_fig.src }}" alt="">
                         </div>
                     </div>
                     {% endif %}
@@ -528,7 +498,7 @@ th {
         </div>
 
         <div class="section-block" id="sec-contributions" style="grid-area: contributions;">
-            <div class="section-title">{{ ns.contributions.title if ns.contributions else 'Contributions' }}</div>
+            <div class="section-title"><span class="sym">{{ sym }}</span>{{ ns.contributions.title if ns.contributions else 'Contributions' }}</div>
             <div class="section-content">
                 {% if ns.contributions %}
                     {{ ns.contributions.content_html|safe }}
@@ -539,7 +509,7 @@ th {
         </div>
 
         <div class="section-block" id="sec-highlights" style="grid-area: highlights;">
-            <div class="section-title">{{ ns.highlights.title if ns.highlights else 'Highlights' }}</div>
+            <div class="section-title"><span class="sym">{{ sym }}</span>{{ ns.highlights.title if ns.highlights else 'Highlights' }}</div>
             <div class="section-content">
                 {% if ns.highlights %}
                     {{ ns.highlights.content_html|safe }}
@@ -547,25 +517,24 @@ th {
                     (not provided)
                 {% endif %}
                 <div class="badge-row">
-                    <span class="badge-pill">Cross-benchmark</span>
-                    <span class="badge-pill">Fast</span>
-                    <span class="badge-pill">Best-in-class</span>
-                    <span class="badge-pill">Robust</span>
+                    <span class="badge-pill">🌐 Cross-benchmark</span>
+                    <span class="badge-pill">⚡ Fast</span>
+                    <span class="badge-pill">🏆 Best-in-class</span>
+                    <span class="badge-pill">🛡️ Robust</span>
                 </div>
             </div>
         </div>
 
         <div class="section-block" id="sec-project" style="grid-area: project;">
-            <div class="section-title">{{ ns.project.title if ns.project else 'Project' }}</div>
+            <div class="section-title"><span class="sym">{{ sym }}</span>{{ ns.project.title if ns.project else 'Project' }}</div>
             <div class="section-content">
                 <div class="project-box">
-                    <div class="qr-placeholder">[QR]</div>
                     <div class="code-cta">
                         <div class="label">Code & Project</div>
                         {% if code_url %}
                         <a class="code-link" href="{{ code_url }}" target="_blank" rel="noreferrer noopener">{{ code_url }}</a>
                         {% else %}
-                        <div class="link-text">Code will be release.</div>
+                        <div class="link-text">Code will be released.</div>
                         {% endif %}
                     </div>
                 </div>

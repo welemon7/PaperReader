@@ -533,7 +533,6 @@ def _build_project_content(analysis: PaperAnalysis) -> str:
         link_html = "Code will be release."
     return (
         "<div class=\"project-box\">"
-        "<div class=\"qr-placeholder\">[QR]</div>"
         "<div class=\"code-cta\">"
         "<div class=\"label\">Code & Project</div>"
         f"<div>{link_html}</div>"
@@ -1070,15 +1069,26 @@ def _join_with_paragraphs(*parts: str) -> str:
 
 
 def _default_colors() -> dict:
+    """Full academic design-token set (also used by src.layout.themes)."""
     return {
         "primary": "#16324f",
-        "accent": "#5a7d9a",
-        "background": "#fbfcfe",
+        "accent": "#c9a84c",
+        "accent_text": "#a8842c",
+        "background": "#ffffff",
         "text": "#182433",
-        "section_header_bg": "#e8eef4",
-        "section_header_text": "#16324f",
+        "muted": "#4a5568",
+        "section_header_bg": "#f7f9fc",
+        "section_header_text": "#ffffff",
         "border": "#cfd8e3",
         "highlight": "#8fb3d9",
+        "header_text": "#ffffff",
+        "font_display": "'Inter', 'Segoe UI', sans-serif",
+        "font_body": "'Inter', 'Segoe UI', sans-serif",
+        "section_symbol": "\u25b8 ",
+        "band_top": "#16324f",
+        "band_bottom": "#1f4a75",
+        "radius": "10px",
+        "shadow": "0 6px 16px rgba(22, 50, 79, 0.10)",
     }
 
 
