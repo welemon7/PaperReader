@@ -103,6 +103,16 @@ class HtmlPosterRenderer:
                 lines.append("")
         return "\n".join(lines).strip()
 
+    @staticmethod
+    def _remove_core_takeaway_rows(content: str) -> str:
+        """Ensure externally supplied Core Results tables follow the poster policy."""
+        return re.sub(
+            r"<tr\b[^>]*>\s*<th\b[^>]*>\s*(?:Key\s+)?Takeaways?\s*</th>.*?</tr>",
+            "",
+            content or "",
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+
     def render(
         self,
         blueprint: PosterBlueprint,
@@ -134,6 +144,8 @@ class HtmlPosterRenderer:
 
         for sec in layout:
             sec.content_md = self._clean_html_text(sec.content_md)
+            if sec.type in {"main_method", "experiments"}:
+                sec.content_md = self._remove_core_takeaway_rows(sec.content_md)
             sec.content_html = self._markdown_with_latex(sec.content_md)
 
         html = self.template.render(

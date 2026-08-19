@@ -130,7 +130,31 @@ class TestPosterBlueprint:
     def test_formula_display(self):
         bp = generate_blueprint(_make_doc(), _make_analysis())
         assert len(bp.formula_displays) == 1
-        assert bp.formula_displays[0].section_id == 'sec-method-overview'
+        assert bp.formula_displays[0].section_id == 'sec-key-idea'
+
+    def test_motivation_restores_original_prose_and_key_idea_receives_formulas(self):
+        bp = generate_blueprint(_make_doc(), _make_analysis())
+        sections = {section.section_id: section for section in bp.sections}
+        assert 'A challenging problem.' in sections['sec-motivation'].content_md
+        assert 'The core advantage is that We propose a novel approach.' in sections['sec-motivation'].content_md
+        assert 'First contribution' not in sections['sec-motivation'].content_md
+        assert 'formula-box' in sections['sec-key-idea'].content_md
+        assert 'E=mc^2' in sections['sec-key-idea'].content_md
+        assert '<div class="formula-label">Energy</div>' in sections['sec-key-idea'].content_md
+        assert 'Formula 1' not in sections['sec-key-idea'].content_md
+        assert 'formula-box' not in sections['sec-method-overview'].content_md
+
+    def test_key_idea_limits_formula_boxes_to_four(self):
+        analysis = _make_analysis()
+        analysis.key_formulas = [
+            KeyFormula(formula_id=f'f-{index}', latex=f'x_{index}=y_{index}', semantic_desc=f'Formula meaning {index}')
+            for index in range(5)
+        ]
+        bp = generate_blueprint(_make_doc(), analysis)
+        key_idea = next(section for section in bp.sections if section.section_id == 'sec-key-idea')
+        assert key_idea.content_md.count('class="formula-box"') == 4
+        assert len(bp.formula_displays) == 4
+        assert 'Formula meaning 4' not in key_idea.content_md
 
     def test_formula_display_backfills_from_document_when_underfilled(self):
         doc = _make_doc()
@@ -181,12 +205,12 @@ class TestPosterBlueprint:
         highlights = next(s for s in bp.sections if s.section_id == 'sec-highlights')
         assert 'First contribution' in highlights.content_md
 
-    def test_results_include_takeaways_in_table(self):
+    def test_results_omit_takeaways_from_core_table(self):
         bp = generate_blueprint(_make_doc(), _make_analysis())
         core = next(s for s in bp.sections if s.section_id == 'sec-main-method')
         assert 'State-of-the-art' in core.content_md
-        # 当前设计：takeaways 作为 Core Results 的明细表行呈现
-        assert 'Works well' in core.content_md
+        assert 'Takeaways' not in core.content_md
+        assert 'Works well' not in core.content_md
 
     def test_author_cleaning(self):
         doc = _make_doc()

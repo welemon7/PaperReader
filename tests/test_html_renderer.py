@@ -150,6 +150,7 @@ class TestHtmlPosterRenderer:
         assert "grid-area: highlights" in html
         assert "grid-area: project" in html
         assert 'grid-template-areas:' in html
+        assert 'grid-template-columns: 1fr 1.2fr 1.2fr;' in html
         assert '"motivation overview key_idea"' in html
         assert '"core core core"' in html
         assert '"contributions highlights project"' in html
@@ -211,7 +212,6 @@ class TestHtmlPosterRenderer:
             "<tr><th>Datasets</th><td>Dataset-A<br>Dataset-B</td></tr>"
             "<tr><th>Metrics</th><td>Accuracy<br>F1</td></tr>"
             "<tr><th>Main Results</th><td>State-of-the-art</td></tr>"
-            "<tr><th>Takeaways</th><td>Works well</td></tr>"
             "</tbody></table></div>"
         )
         renderer = HtmlPosterRenderer()
@@ -220,7 +220,7 @@ class TestHtmlPosterRenderer:
         assert "Datasets" in html
         assert "Metrics" in html
         assert "Main Results" in html
-        assert "Takeaways" in html
+        assert "<th>Takeaways</th>" not in html
         assert "Dataset-A" in html
         assert "Accuracy" in html
 
@@ -293,6 +293,36 @@ class TestHtmlPosterRenderer:
         html = renderer.render(bp, doc, tmp_path)
         assert html.count("formula-box") <= 2
         assert "inlineMath: [['$', '$']]" in html
+
+    def test_render_places_formula_meaning_above_formula(self, tmp_path):
+        doc = PaperDocument(paper_id="test-999", arxiv_id="9999.99999", title="Test", raw_markdown=".")
+        bp = _make_blueprint()
+        bp.sections[2].content_md = (
+            '<div class="formula-box"><div class="formula-label">Energy conservation</div>'
+            '<div>$$ a=b $$</div></div>'
+        )
+        renderer = HtmlPosterRenderer()
+        html = renderer.render(bp, doc, tmp_path)
+        formula_index = html.index("$$ a=b $$")
+        label_index = html.index('class="formula-label">Energy conservation')
+        assert label_index < formula_index
+        assert "Formula 1" not in html
+        assert "formula-caption" not in html
+
+    def test_render_uses_two_columns_for_key_idea_formulas(self, tmp_path):
+        doc = PaperDocument(paper_id="test-999", arxiv_id="9999.99999", title="Test", raw_markdown=".")
+        bp = _make_blueprint()
+        bp.sections[2].content_md = (
+            '<div class="key-idea-formulas">'
+            '<div class="formula-box">First</div><div class="formula-box">Second</div>'
+            '<div class="formula-box">Third</div><div class="formula-box">Fourth</div>'
+            '</div>'
+        )
+        renderer = HtmlPosterRenderer()
+        html = renderer.render(bp, doc, tmp_path)
+        assert 'grid-template-columns: repeat(2, minmax(0, 1fr));' in html
+        assert 'font-size: 0.82em !important;' in html
+        assert html.count('class="formula-box"') == 4
 
     def test_resolve_figure_path_prefers_existing_pdf_or_image(self, tmp_path):
         source_dir = tmp_path / "paper"

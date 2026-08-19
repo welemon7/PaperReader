@@ -25,6 +25,7 @@ POSTER_WIDTH_MM = 1219
 POSTER_HEIGHT_MM = 686
 POSTER_WIDTH_PX = 1920
 POSTER_HEIGHT_PX = 1080
+MAX_KEY_IDEA_FORMULAS = 4
 
 
 def _short_bullet(text: str, max_words: int = BULLET_WORD_BUDGET) -> str:
@@ -373,6 +374,7 @@ def _summarize_motivation(analysis: PaperAnalysis, max_words: int = 80) -> str:
 
 
 def _build_motivation_content(analysis: PaperAnalysis) -> str:
+    """Build the original problem-and-advantage motivation summary."""
     paragraphs: list[str] = []
     problem = _first_sentence(_clean_poster_text(analysis.problem_statement or ""))
     if problem:
@@ -384,19 +386,7 @@ def _build_motivation_content(analysis: PaperAnalysis) -> str:
     if advantage_source:
         paragraphs.append(f"The core advantage is that {advantage_source.rstrip(' ,;:.-')}.")
 
-    prose = " ".join(p for p in paragraphs if p).strip()
-    prose = trim_to_budget(prose, 40)
-
-    formula_html = _format_formula_box(analysis, label="Key Formula", formula_index=0)
-    parts = [prose] if prose else []
-    if formula_html:
-        parts.append(formula_html)
-    else:
-        # 无公式时才用 callout 补充关键洞见，避免文字堆叠
-        callout_text = _build_motivation_callout(analysis)
-        if callout_text:
-            parts.append(callout_text)
-    return "\n\n".join(parts).strip()
+    return trim_to_budget(" ".join(paragraphs), 40)
 
 
 def _build_method_overview_content(analysis: PaperAnalysis) -> str:
@@ -416,14 +406,20 @@ def _build_method_overview_content(analysis: PaperAnalysis) -> str:
     while len(bullet_points) < 2:
         bullet_points.append("- See the architecture figure for the overall pipeline.")
 
-    formula_html = _format_formula_box(analysis, label="Main Formula", formula_index=1)
     content_parts = [trim_to_budget(intro, 24), "\n".join(bullet_points[:2])]
-    if formula_html:
-        content_parts.append(formula_html)
     return "\n\n".join(content_parts).strip()
 
 
 def _build_key_idea_content(analysis: PaperAnalysis) -> str:
+    """Reserve Key Idea for every formula selected for the poster."""
+    formula_boxes = _format_all_formula_boxes(analysis)
+    if formula_boxes:
+        return '<div class="key-idea-formulas">' + "".join(formula_boxes) + "</div>"
+    return "(no key formula provided)"
+
+
+def _build_key_idea_bullets(analysis: PaperAnalysis) -> str:
+    """Build the short explanatory bullets formerly shown in Key Idea."""
     bullets: list[str] = []
     for contrib in analysis.contributions[:3]:
         item = _short_bullet(contrib.text, 18)
@@ -480,7 +476,6 @@ def _build_core_result_table(doc: PaperDocument, analysis: PaperAnalysis) -> str
         ("Main Results", html_lib.escape(
             trim_to_budget(_first_sentence(_clean_poster_text(exp.main_results or "")) or "Not specified", 20)
         )),
-        ("Takeaways", _format_value(exp.takeaways[:3], "Not specified") if exp.takeaways else html_lib.escape("Not specified")),
     ]
 
     table_rows = "".join(f"<tr><th>{html_lib.escape(label)}</th><td>{value}</td></tr>" for label, value in rows)
@@ -611,7 +606,7 @@ def _build_motivation_callout(analysis: PaperAnalysis) -> str:
     return f'<div class="callout">Key insight: {insight}</div>'
 
 
-def _format_formula_box(analysis: PaperAnalysis, label: str, formula_index: int = 0) -> str:
+def _format_formula_box(analysis: PaperAnalysis, formula_index: int = 0) -> str:
     formulas = getattr(analysis, "key_formulas", []) or []
     if formula_index >= len(formulas):
         return ""
@@ -619,15 +614,23 @@ def _format_formula_box(analysis: PaperAnalysis, label: str, formula_index: int 
     cleaned_latex = _clean_formula_latex(target.latex)
     if not cleaned_latex:
         return ""
-    semantic = _clean_poster_text(target.semantic_desc or "")
-    semantic_html = f"<div class=\"formula-desc\">{semantic}</div>" if semantic else ""
+    title = _clean_poster_text(target.semantic_desc or "") or "Key Formula"
     return (
         '<div class="formula-box">'
-        f'<div class="formula-label">{label}</div>'
+        f'<div class="formula-label">{html_lib.escape(title)}</div>'
         f'<div>$$ {cleaned_latex} $$</div>'
-        f'{semantic_html}'
         '</div>'
     )
+
+
+def _format_all_formula_boxes(analysis: PaperAnalysis) -> list[str]:
+    """Format at most four selected formulas for the dedicated Key Idea panel."""
+    boxes: list[str] = []
+    for index, _formula in enumerate((getattr(analysis, "key_formulas", []) or [])[:MAX_KEY_IDEA_FORMULAS]):
+        box = _format_formula_box(analysis, formula_index=index)
+        if box:
+            boxes.append(box)
+    return boxes
 
 
 def _result_hint(analysis: PaperAnalysis) -> str:
@@ -809,12 +812,12 @@ def _place_figures(doc: PaperDocument, analysis: PaperAnalysis, sections: list[P
 
 def _place_formulas(analysis: PaperAnalysis) -> list[FormulaDisplay]:
     displays = []
-    for f in analysis.key_formulas:
+    for f in analysis.key_formulas[:MAX_KEY_IDEA_FORMULAS]:
         cleaned_latex = _clean_formula_latex(f.latex)
         if not cleaned_latex:
             continue
         displays.append(FormulaDisplay(
-            formula_id=f.formula_id, section_id="sec-method-overview",
+            formula_id=f.formula_id, section_id="sec-key-idea",
             latex=cleaned_latex, semantic_desc=_clean_poster_text(f.semantic_desc),
         ))
     return displays
@@ -852,13 +855,13 @@ def _augment_key_formulas(doc: PaperDocument, analysis: PaperAnalysis) -> None:
             latex=cleaned_latex,
             semantic_desc="",
         ))
-        if len(existing) + len(fallbacks) >= 5:
+        if len(existing) + len(fallbacks) >= MAX_KEY_IDEA_FORMULAS:
             break
 
     if len(existing) < 2 and fallbacks:
-        analysis.key_formulas = (existing + fallbacks)[:5]
+        analysis.key_formulas = (existing + fallbacks)[:MAX_KEY_IDEA_FORMULAS]
     else:
-        analysis.key_formulas = existing[:5]
+        analysis.key_formulas = existing[:MAX_KEY_IDEA_FORMULAS]
 
 
 def _formula_key(text: str) -> str:
