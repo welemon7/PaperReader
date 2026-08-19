@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import json
 from pathlib import Path
 from typing import Annotated, Optional, TypedDict
 
@@ -20,6 +21,7 @@ from src.schemas.paper import (
     PaperDocument,
     Reference,
     Section,
+    Table,
 )
 from src.storage.minio import ImageStorage
 from src.storage.sqlite import PaperDatabase
@@ -85,7 +87,7 @@ def parse_node(state: ParseState) -> dict:
 
 
 def extract_node(state: ParseState) -> dict:
-    """Extract formulas, figures, and references."""
+    """Extract formulas, figures, references, and complete tables."""
     parse_result = state.get("parse_result")
     if not parse_result:
         return {"error": "No parse result available"}
@@ -94,10 +96,11 @@ def extract_node(state: ParseState) -> dict:
         extractor = ComponentExtractor()
         components = extractor.extract_all(parse_result)
         logger.info(
-            "Extracted %d formulas, %d figures, %d references",
+            "Extracted %d formulas, %d figures, %d references, %d tables",
             len(components["formulas"]),
             len(components["figures"]),
             len(components["references"]),
+            len(components["tables"]),
         )
         return {"components": components}
     except Exception as e:
@@ -134,6 +137,7 @@ def build_node(state: ParseState) -> dict:
         references = []
         for comp in components.get("references", []):
             references.append(Reference(**comp))
+        tables = [Table(**comp) for comp in components.get("tables", [])]
 
         authors = [
             Author(**a) for a in parse_result.authors
@@ -149,6 +153,7 @@ def build_node(state: ParseState) -> dict:
             formulas=formulas,
             figures=figures,
             references=references,
+            tables=tables,
             raw_markdown=raw_markdown,
             source_dir=state.get("source_dir", ""),
         )
@@ -167,13 +172,20 @@ def store_node(state: ParseState) -> dict:
         return {"error": "No paper document to store"}
 
     try:
+        source_dir = state.get("source_dir", "")
+        if source_dir:
+            tables_path = Path(source_dir) / "tables.json"
+            tables_path.write_text(
+                json.dumps([table.model_dump() for table in doc.tables], ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            logger.info("Saved %d complete tables to %s", len(doc.tables), tables_path)
         # SQLite
         db = PaperDatabase()
         db.save_paper(doc)
         db.close()
 
         # MinIO (only if available)
-        source_dir = state.get("source_dir", "")
         if source_dir:
             image_map = {}
             for fig in doc.figures:

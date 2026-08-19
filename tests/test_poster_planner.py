@@ -212,6 +212,31 @@ class TestPosterBlueprint:
         assert 'Takeaways' not in core.content_md
         assert 'Works well' not in core.content_md
 
+    def test_core_results_use_real_numeric_tex_table_without_item_details_label(self):
+        doc = _make_doc()
+        doc.raw_markdown = r'''
+        \begin{table}
+        \caption{Comparison on the benchmark.}
+        \begin{tabular}{lccc}
+        \toprule
+        Method & Params & FLOPs & Accuracy \\
+        Baseline & 1.01B & 0.52T & 73.0\% \\
+        \textbf{Ours} & \textbf{0.62B} & \textbf{0.32T} & \textbf{73.1\%} \\
+        \bottomrule
+        \end{tabular}
+        \end{table}
+        '''
+        core = next(section for section in generate_blueprint(doc, _make_analysis()).sections if section.section_id == 'sec-main-method')
+        assert 'core-metrics-table' in core.content_md
+        assert 'Method' in core.content_md and '0.62B' in core.content_md and '73.1%' in core.content_md
+        assert 'Item Details' not in core.content_md
+
+    def test_core_results_omit_table_when_source_has_no_numeric_tex_table(self):
+        doc = _make_doc()
+        doc.raw_markdown = r'\begin{table}\begin{tabular}{ll}Name & Type \\ A & B \\ \end{tabular}\end{table}'
+        core = next(section for section in generate_blueprint(doc, _make_analysis()).sections if section.section_id == 'sec-main-method')
+        assert '[[CORE_TABLE]]' not in core.content_md
+
     def test_author_cleaning(self):
         doc = _make_doc()
         doc.authors[0].name = r'Gongfan Fang\textsuperscript{1}'

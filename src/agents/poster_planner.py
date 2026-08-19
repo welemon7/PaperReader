@@ -462,30 +462,27 @@ def _build_core_intro(analysis: PaperAnalysis) -> str:
 
 
 def _build_core_result_table(doc: PaperDocument, analysis: PaperAnalysis) -> str:
-    exp = analysis.experiments
-    if not exp:
+    """Render only a real numeric table extracted from the paper source.
+
+    We intentionally do not synthesize a results table from LLM analysis.  When
+    the arXiv source does not expose a parseable numeric table, this returns an
+    empty string and the poster simply omits the table.
+    """
+    table = _extract_core_tex_table(doc, analysis)
+    if not table:
         return ""
 
-    def _format_value(items: list[str], fallback: str) -> str:
-        cleaned = [trim_to_budget(_clean_poster_text(item), 15) for item in items if _clean_poster_text(item)]
-        return "<br>".join(cleaned) if cleaned else html_lib.escape(fallback)
-
-    rows = [
-        ("Datasets", _format_value(exp.datasets, "Not specified")),
-        ("Metrics", _format_value(exp.metrics, "Not specified")),
-        ("Main Results", html_lib.escape(
-            trim_to_budget(_first_sentence(_clean_poster_text(exp.main_results or "")) or "Not specified", 20)
-        )),
-    ]
-
-    table_rows = "".join(f"<tr><th>{html_lib.escape(label)}</th><td>{value}</td></tr>" for label, value in rows)
+    header, rows = table
+    header_html = "".join(f"<th>{html_lib.escape(cell)}</th>" for cell in header)
+    body_html = "".join(
+        "<tr>" + "".join(f"<td>{html_lib.escape(cell)}</td>" for cell in row) + "</tr>"
+        for row in rows
+    )
     return (
-        '<div class="item-details-wrap">'
-        '<div class="item-details-title">Item Details</div>'
-        '<table class="item-details-table">'
-        f"<tbody>{table_rows}</tbody>"
+        '<table class="core-metrics-table">'
+        f"<thead><tr>{header_html}</tr></thead>"
+        f"<tbody>{body_html}</tbody>"
         '</table>'
-        '</div>'
     )
 
 
@@ -536,7 +533,22 @@ def _build_project_content(analysis: PaperAnalysis) -> str:
     )
 
 
-def _extract_first_tex_table(doc: PaperDocument) -> str:
+def _extract_core_tex_table(doc: PaperDocument, analysis: PaperAnalysis) -> tuple[list[str], list[list[str]]] | None:
+    """Extract the most useful numeric LaTex table without inventing values."""
+    selected_ids = {item.table_id for item in getattr(analysis, "selected_tables", [])}
+    if getattr(doc, "tables", None):
+        selected = [table for table in doc.tables if table.table_id in selected_ids]
+        if not selected:
+            selected = sorted(doc.tables, key=_table_score, reverse=True)
+        for table in selected:
+            if table.headers and table.rows:
+                item = next((item for item in getattr(analysis, "selected_tables", []) if item.table_id == table.table_id), None)
+                rows = table.rows
+                if item and item.row_indices:
+                    rows = [rows[index] for index in item.row_indices if 0 <= index < len(rows)]
+                if rows:
+                    return table.headers, rows
+
     sources: list[str] = []
     if doc.raw_markdown:
         sources.append(doc.raw_markdown)
@@ -547,52 +559,71 @@ def _extract_first_tex_table(doc: PaperDocument) -> str:
     if not sources:
         return ""
 
-    table_block = ""
+    candidates: list[tuple[int, list[str], list[list[str]]]] = []
     for source in sources:
-        match = re.search(r"\\begin\{table\*?\}(.*?)\\end\{table\*?\}", source, re.DOTALL)
-        if match:
-            table_block = match.group(1)
-            break
-        match = re.search(r"\\begin\{tabular\}(.*?)\\end\{tabular\}", source, re.DOTALL)
-        if match:
-            table_block = match.group(1)
-            break
-    if not table_block:
-        return ""
+        for match in re.finditer(r"\\begin\{table\*?\}(.*?)\\end\{table\*?\}", source, re.DOTALL):
+            parsed = _parse_tex_table(match.group(1))
+            if not parsed:
+                continue
+            header, rows = parsed
+            context = match.group(1).lower()
+            numeric_cells = sum(bool(re.search(r"\d", cell)) for row in rows for cell in row)
+            result_bonus = 10 if any(word in context for word in ("result", "performance", "comparison", "benchmark", "accuracy", "metric")) else 0
+            candidates.append((numeric_cells + result_bonus, header, rows))
 
-    table_block = re.sub(r"\\(?:hline|cline\{[^}]*\})", "", table_block)
-    table_block = re.sub(r"\\multirow\{[^}]*\}\{[^}]*\}\{([^}]*)\}", r"\1", table_block)
-    table_block = re.sub(r"\\multicolumn\{[^}]*\}\{[^}]*\}\{([^}]*)\}", r"\1", table_block)
-    table_block = re.sub(r"\\textbf\{([^}]*)\}", r"\1", table_block)
-    table_block = re.sub(r"\\emph\{([^}]*)\}", r"\1", table_block)
-    table_block = re.sub(r"\\begin\{[^}]+\}|\\end\{[^}]+\}", "", table_block)
+    if not candidates:
+        return None
+    _, header, rows = max(candidates, key=lambda item: item[0])
+    return header, rows
+
+
+def _table_score(table) -> int:
+    text = " ".join([
+        getattr(table, "caption", ""),
+        getattr(table, "label", ""),
+        getattr(table, "section_id", ""),
+    ]).lower()
+    return sum(word in text for word in (
+        "result", "performance", "comparison", "benchmark", "ablation", "experiment", "method",
+    ))
+
+
+def _parse_tex_table(table_block: str) -> tuple[list[str], list[list[str]]] | None:
+    tabular_match = re.search(
+        r"\\begin\{(?:tabular\*?|tabularx|array)\}(?:\[[^\]]*\])?(?:\{[^}]*\}){1,2}(.*?)\\end\{(?:tabular\*?|tabularx|array)\}",
+        table_block,
+        re.DOTALL,
+    )
+    if not tabular_match:
+        return None
 
     rows: list[list[str]] = []
-    for raw_row in re.split(r"\\\\", table_block):
-        row = raw_row.strip()
-        if not row:
-            continue
-        row = re.sub(r"\\[a-zA-Z]+", "", row)
-        row = row.replace("\\", "")
-        cells = [re.sub(r"\s+", " ", _clean_poster_text(cell)).strip() for cell in row.split("&")]
+    for raw_row in re.split(r"\\\\", tabular_match.group(1)):
+        cells = [_clean_tex_table_cell(cell) for cell in raw_row.split("&")]
         cells = [cell for cell in cells if cell]
         if len(cells) >= 2:
             rows.append(cells)
 
     if len(rows) < 2:
-        return ""
-
+        return None
     header = rows[0]
-    body = rows[1:]
     col_count = len(header)
-    if col_count < 2:
-        return ""
-    header = header[:col_count]
-    lines = ["| " + " | ".join(header) + " |", "| " + " | ".join(["---"] * col_count) + " |"]
-    for row in body[:3]:
-        padded = row[:col_count] + [""] * max(0, col_count - len(row))
-        lines.append("| " + " | ".join(padded[:col_count]) + " |")
-    return "\n".join(lines)
+    body = [row[:col_count] for row in rows[1:] if len(row) >= col_count]
+    if col_count < 2 or not body or not any(re.search(r"\d", cell) for row in body for cell in row):
+        return None
+    return header[:6], [row[:6] for row in body[:5]]
+
+
+def _clean_tex_table_cell(cell: str) -> str:
+    cell = re.sub(r"\\(?:toprule|midrule|bottomrule|hline|cline\{[^}]*\}|addlinespace)", "", cell)
+    cell = re.sub(r"\\(?:multirow\{[^}]*\}\{[^}]*\}|multicolumn\{[^}]*\}\{[^}]*\})\{([^{}]*)\}", r"\1", cell)
+    cell = re.sub(r"\\(?:textbf|textit|emph|mathbf|mathrm|mathit|underline)\{([^{}]*)\}", r"\1", cell)
+    cell = re.sub(r"\\(?:cite|ref|label)\{[^{}]*\}", "", cell)
+    cell = cell.replace(r"\%", "%").replace(r"\_", "_").replace(r"\pm", "+/-")
+    cell = cell.replace("$", "")
+    cell = re.sub(r"\\[a-zA-Z]+", "", cell)
+    cell = cell.replace("{", "").replace("}", "").replace("~", " ")
+    return re.sub(r"\s+", " ", cell).strip(" |,;")
 
 
 def _build_motivation_callout(analysis: PaperAnalysis) -> str:

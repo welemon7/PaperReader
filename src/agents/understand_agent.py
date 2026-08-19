@@ -19,12 +19,18 @@ from src.schemas.analysis import (
     ExperimentSummary,
     KeyFigure,
     KeyFormula,
+    SelectedTable,
+    FinalTable,
     PaperAnalysis,
 )
 from src.schemas.paper import PaperDocument
 from src.storage.sqlite import PaperDatabase
 
 logger = logging.getLogger(__name__)
+
+MAX_FINAL_TABLE_ROWS = 8
+MAX_FINAL_TABLE_COLUMNS = 6
+MAX_FINAL_CELL_LENGTH = 36
 
 _CODE_URL_PATTERN = re.compile(
     r"https?://(?:www\.)?(?:github\.com|gitlab\.com|bitbucket\.org|codeberg\.org|huggingface\.co)/[^\s\)\]\}<>\"']+",
@@ -116,12 +122,105 @@ def call_llm_node(state: UnderstandState) -> dict:
         result = _fix_llm_response(result)
         if not isinstance(result, dict) or not result:
             return {"error": "LLM returned an empty/invalid response"}
+        try:
+            result["final_tables"] = _run_final_table_review(client, state.get("paper_document"), result)
+        except Exception as exc:
+            logger.warning("Final table review skipped; tables will not be rendered: %s", exc)
+            result["final_tables"] = []
         logger.info("LLM response received (%d keys)", len(result))
         return {"llm_response": result}
     except LLMError as e:
         return {"error": f"LLM call failed: {e}"}
     except Exception as e:
         return {"error": f"Unexpected LLM error: {e}"}
+
+
+def _run_final_table_review(client: LLMClient, doc: PaperDocument | None, first_response: dict) -> list[dict]:
+    """Ask the LLM to compress candidate method rows into the final display table."""
+    if not doc or not doc.tables:
+        return []
+    candidates = []
+    table_map = {table.table_id: table for table in doc.tables}
+    for item in _safe_parse_list(first_response.get("selected_tables", []), SelectedTable):
+        table = table_map.get(item.table_id)
+        if not table:
+            continue
+        rows = [
+            {"row_index": index, "group": (table.row_groups[index] if index < len(table.row_groups) else ""), "cells": table.rows[index]}
+            for index in item.row_indices[:MAX_FINAL_TABLE_ROWS]
+            if 0 <= index < len(table.rows)
+        ]
+        if rows:
+            candidates.append({"table_id": table.table_id, "headers": table.headers, "rows": rows})
+    if not candidates:
+        return []
+    prompt = (
+        "Create the final compact but semantically complete HTML table data from the candidate rows below. "
+        "The candidates already contain ONLY the paper's proposed method. "
+        "Never add a baseline or invent/edit a value. Return JSON only with final_tables. "
+        f"Use at most {MAX_FINAL_TABLE_ROWS} rows, {MAX_FINAL_TABLE_COLUMNS} displayed columns, and {MAX_FINAL_CELL_LENGTH} characters per cell. "
+        "Preserve all useful proposed-method variants and settings, including Ours-Small/Ours-Large and dataset/setting rows. "
+        "Always preserve identity columns such as Dataset, Setting, Resolution, Method, Variant, Params. "
+        "Only compress numeric metric columns: put their source column indices into one column_groups item, and display their values joined by ' / '. "
+        "For every compressed group, the displayed header must name the metric group and list the source metrics in order. "
+        "Do not compress identity/text columns. Each item must contain table_id, row_indices, column_groups, headers, and rows. "
+        "The row/column values must be copied from candidates; headers may only clarify source headers.\n\n"
+        + json.dumps(candidates, ensure_ascii=False)
+    )
+    response = client.chat_json(
+        system="You are a strict table editor. Output valid JSON only. Preserve source values exactly.",
+        user=prompt,
+    )
+    return _validate_final_tables(doc, candidates, response.get("final_tables", []))
+
+
+def _validate_final_tables(doc: PaperDocument, candidates: list[dict], raw_tables) -> list[dict]:
+    candidate_map = {item["table_id"]: item for item in candidates}
+    final_tables = []
+    for raw in raw_tables if isinstance(raw_tables, list) else []:
+        if not isinstance(raw, dict):
+            continue
+        source = candidate_map.get(raw.get("table_id"))
+        if not source:
+            continue
+        row_indices = [int(i) for i in raw.get("row_indices", []) if str(i).lstrip("-").isdigit()]
+        column_indices = [int(i) for i in raw.get("column_indices", []) if str(i).lstrip("-").isdigit()]
+        raw_groups = raw.get("column_groups", [])
+        row_indices = [i for i in row_indices if any(row["row_index"] == i for row in source["rows"])][:MAX_FINAL_TABLE_ROWS]
+        column_indices = [i for i in column_indices if 0 <= i < len(source["headers"])]
+        groups: list[list[int]] = []
+        for group in raw_groups if isinstance(raw_groups, list) else []:
+            if not isinstance(group, list):
+                continue
+            valid = [int(i) for i in group if str(i).lstrip("-").isdigit() and 0 <= int(i) < len(source["headers"])]
+            if valid and valid not in groups:
+                groups.append(valid)
+        if not groups:
+            groups = [[index] for index in column_indices]
+        # Preserve identity columns when an over-aggressive LLM omits them.
+        identity_tokens = ("setting", "dataset", "resolution", "method", "variant", "param", "model")
+        for index, header in enumerate(source["headers"]):
+            if any(token in header.lower() for token in identity_tokens) and [index] not in groups:
+                groups.insert(0, [index])
+        groups = groups[:MAX_FINAL_TABLE_COLUMNS]
+        if not row_indices or not groups:
+            continue
+        column_indices = [index for group in groups for index in group]
+        headers = []
+        for group in groups:
+            names = [source["headers"][i] for i in group]
+            headers.append(names[0] if len(names) == 1 else " / ".join(names))
+        source_rows = {row["row_index"]: row["cells"] for row in source["rows"]}
+        rows = [[" / ".join(source_rows[index][i] for i in group)[:MAX_FINAL_CELL_LENGTH] for group in groups] for index in row_indices]
+        final_tables.append({
+            "table_id": source["table_id"],
+            "headers": headers,
+            "rows": rows,
+            "row_indices": row_indices,
+            "column_indices": column_indices,
+            "column_groups": groups,
+        })
+    return final_tables[:3]
 
 
 def validate_node(state: UnderstandState) -> dict:
@@ -174,6 +273,7 @@ _SYSTEM_PROMPT = (
     "\n  - figure_id: the figure ID or label"
     "\n  - caption: the figure caption"
     "\n  - role: what this figure illustrates (overview/architecture/result)"
+    "\n- selected_tables: List of tables useful for explaining ONLY the proposed method (never baselines/other methods), max 3. Each item has table_id, role, and row_indices (zero-based indices into data rows). Select ALL relevant rows for the paper method, including every method variant (e.g. Ours-Small/Ours-Large) and every important setting/dataset; do not keep only the best row."
     "\n- experiments: Object with datasets (list of strings), metrics (list of strings), main_results (ONE short sentence), takeaways (at most 3 short items)"
     "\n- conclusion: Summary of the paper conclusion (at most 2 sentences)"
     "\n- code_url: Project code repository URL extracted from the paper body (e.g. GitHub link). Leave empty string if not found."
@@ -205,6 +305,17 @@ def _build_analysis_prompt(doc: PaperDocument) -> str:
             label = fig.label or "(no label)"
             caption = fig.caption or "(no caption)"
             parts.append(f"- [{fig.figure_id}] {label}: {caption}")
+    if doc.tables:
+        parts.append("\n## Table Index (select IDs only; values must remain source-grounded)")
+        for table in doc.tables:
+            parts.append(json.dumps({
+                "table_id": table.table_id,
+                "caption": table.caption,
+                "label": table.label,
+                "headers": table.headers,
+                "rows": table.rows,
+                "row_groups": table.row_groups,
+            }, ensure_ascii=False))
     if doc.references:
         parts.append("\n## References")
         for ref in doc.references[:20]:
@@ -282,6 +393,18 @@ def _safe_parse_list(items, model_cls):
 
 def _parse_analysis(doc: PaperDocument, llm_resp: dict) -> PaperAnalysis:
     code_url = llm_resp.get("code_url", "") or _extract_code_url(doc)
+    valid_table_ids = {table.table_id for table in getattr(doc, "tables", [])}
+    table_by_id = {table.table_id: table for table in getattr(doc, "tables", [])}
+    selected_tables = []
+    for item in _safe_parse_list(llm_resp.get("selected_tables", []), SelectedTable):
+        table = table_by_id.get(item.table_id)
+        if not table:
+            continue
+        item.row_indices = sorted({index for index in item.row_indices if 0 <= index < len(table.rows)})
+        if item.row_indices:
+            selected_tables.append(item)
+    selected_tables = selected_tables[:3]
+    final_tables = _safe_parse_list(llm_resp.get("final_tables", []), FinalTable)
 
     # 处理 experiments，确保格式正确
     experiments = None
@@ -333,6 +456,8 @@ def _parse_analysis(doc: PaperDocument, llm_resp: dict) -> PaperAnalysis:
         method_overview=llm_resp.get("method_overview", ""),
         key_formulas=_safe_parse_list(llm_resp.get("key_formulas", []), KeyFormula),
         key_figures=_safe_parse_list(llm_resp.get("key_figures", []), KeyFigure),
+        selected_tables=selected_tables,
+        final_tables=final_tables,
         experiments=experiments,
         conclusion=llm_resp.get("conclusion", ""),
         code_url=code_url,

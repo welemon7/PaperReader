@@ -5,6 +5,7 @@ import re
 
 from .latex_parser import ParseResult
 from src.utils.figure_assets import resolve_figure_source, sanitize_asset_name
+from .table_extractor import extract_tables
 
 logger = logging.getLogger(__name__)
 
@@ -26,12 +27,18 @@ class ComponentExtractor:
         formulas = self._extract_formulas(result)
         figures = self._extract_figures(result)
         references = self._extract_references(result.merged_latex)
+        tables = extract_tables(result.merged_latex, self._section_id_for_position(result))
 
         return {
             "formulas": formulas,
             "figures": figures,
             "references": references,
+            "tables": tables,
         }
+
+    @staticmethod
+    def _section_id_for_position(result: ParseResult):
+        return lambda pos: ComponentExtractor._find_section_id(result, pos)
 
     # ---- formulas ----
 

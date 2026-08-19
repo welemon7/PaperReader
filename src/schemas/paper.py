@@ -42,6 +42,19 @@ class Reference(BaseModel):
     doi: Optional[str] = None
 
 
+class Table(BaseModel):
+    table_id: str
+    environment: str = "tabular"
+    caption: str = ""
+    label: Optional[str] = None
+    section_id: str = ""
+    column_spec: str = ""
+    headers: list[str] = Field(default_factory=list)
+    rows: list[list[str]] = Field(default_factory=list)
+    row_groups: list[str] = Field(default_factory=list, description="Grouping label for each data row")
+    raw_latex: str = ""
+
+
 # ---------- tree node ----------
 
 class Section(BaseModel):
@@ -67,6 +80,7 @@ class PaperDocument(BaseModel):
     formulas: list[Formula] = Field(default_factory=list, description="Flattened index of all formulas")
     figures: list[Figure] = Field(default_factory=list, description="Flattened index of all figures")
     references: list[Reference] = Field(default_factory=list)
+    tables: list[Table] = Field(default_factory=list)
     raw_markdown: str = Field(default="", description="Full paper as Markdown")
     parsed_at: datetime = Field(default_factory=datetime.now)
     source_dir: str = Field(default="", description="Temporary directory with extracted LaTeX")

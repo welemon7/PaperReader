@@ -199,7 +199,7 @@ class TestHtmlPosterRenderer:
         assert html.count('class="section-block core-band"') == 1
         assert html.count('style="grid-area: core;"') == 1
 
-    def test_render_uses_item_details_table_for_core_results(self, tmp_path):
+    def test_render_removes_legacy_item_details_label_from_core_results(self, tmp_path):
         doc = PaperDocument(paper_id="test-999", arxiv_id="9999.99999", title="Test", raw_markdown=".")
         bp = _make_blueprint()
         bp.sections[3].content_md = (
@@ -216,7 +216,7 @@ class TestHtmlPosterRenderer:
         )
         renderer = HtmlPosterRenderer()
         html = renderer.render(bp, doc, tmp_path)
-        assert "Item Details" in html
+        assert "Item Details" not in html
         assert "Datasets" in html
         assert "Metrics" in html
         assert "Main Results" in html

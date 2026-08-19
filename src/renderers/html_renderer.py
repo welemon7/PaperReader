@@ -113,6 +113,16 @@ class HtmlPosterRenderer:
             flags=re.IGNORECASE | re.DOTALL,
         )
 
+    @staticmethod
+    def _remove_core_table_labels(content: str) -> str:
+        """Remove legacy Core Results labels from cached or external blueprints."""
+        return re.sub(
+            r'<div\b[^>]*class=["\']item-details-title["\'][^>]*>.*?</div>',
+            "",
+            content or "",
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+
     def render(
         self,
         blueprint: PosterBlueprint,
@@ -146,6 +156,7 @@ class HtmlPosterRenderer:
             sec.content_md = self._clean_html_text(sec.content_md)
             if sec.type in {"main_method", "experiments"}:
                 sec.content_md = self._remove_core_takeaway_rows(sec.content_md)
+                sec.content_md = self._remove_core_table_labels(sec.content_md)
             sec.content_html = self._markdown_with_latex(sec.content_md)
 
         html = self.template.render(

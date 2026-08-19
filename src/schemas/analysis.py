@@ -22,6 +22,21 @@ class KeyFigure(BaseModel):
     role: str = Field(description="What this figure illustrates, e.g. 'overview', 'architecture', 'result'")
 
 
+class SelectedTable(BaseModel):
+    table_id: str
+    role: str = "result"
+    row_indices: list[int] = Field(default_factory=list, description="Zero-based row indices from the table data rows")
+
+
+class FinalTable(BaseModel):
+    table_id: str
+    headers: list[str] = Field(default_factory=list)
+    rows: list[list[str]] = Field(default_factory=list)
+    row_indices: list[int] = Field(default_factory=list)
+    column_indices: list[int] = Field(default_factory=list)
+
+
+
 from typing import Union
 from pydantic import BaseModel, Field, field_validator
 import re
@@ -64,6 +79,8 @@ class PaperAnalysis(BaseModel):
     method_overview: str = Field(description="High-level method description, 2-4 sentences")
     key_formulas: list[KeyFormula] = Field(default_factory=list)
     key_figures: list[KeyFigure] = Field(default_factory=list)
+    selected_tables: list[SelectedTable] = Field(default_factory=list)
+    final_tables: list[FinalTable] = Field(default_factory=list)
 
     # Experiments
     experiments: ExperimentSummary | None = None
