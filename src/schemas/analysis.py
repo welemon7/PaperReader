@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import re
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class Contribution(BaseModel):
@@ -30,16 +31,26 @@ class SelectedTable(BaseModel):
 
 class FinalTable(BaseModel):
     table_id: str
+    caption: str = ""
+    datasets: list[str] = Field(default_factory=list)
+    metrics: list[str] = Field(default_factory=list)
+    row_groups: list[str] = Field(default_factory=list)
     headers: list[str] = Field(default_factory=list)
     rows: list[list[str]] = Field(default_factory=list)
     row_indices: list[int] = Field(default_factory=list)
     column_indices: list[int] = Field(default_factory=list)
+    column_groups: list[list[int]] = Field(default_factory=list)
+    notes: str = ""
 
-
-
-from typing import Union
-from pydantic import BaseModel, Field, field_validator
-import re
+    @field_validator("datasets", "metrics", "row_groups", mode="before")
+    @classmethod
+    def ensure_str_list(cls, v):
+        if isinstance(v, str):
+            items = [item.strip() for item in re.split(r"[,;]\s*", v) if item.strip()]
+            return items or ([v.strip()] if v.strip() else [])
+        if isinstance(v, list):
+            return [str(item).strip() for item in v if str(item).strip()]
+        return [str(v).strip()] if v else []
 
 
 class ExperimentSummary(BaseModel):

@@ -177,13 +177,14 @@ def _read_command_arg(text: str, command: str) -> str:
 
 def _clean_cell(value: str) -> str:
     # Formatting/color commands are presentation noise, never table data.
-    value = re.sub(r"\\(?:cellcolor|rowcolor|textcolor)\s*(?:\[[^]]*\])?\s*\{[^{}]*\}", "", value)
-    value = re.sub(r"\\(?:textbf|textit|emph|mathrm|mathbf|mathit|underline|textrm|textsf|texttt)\s*\{([^{}]*)\}", r"\1", value)
-    value = re.sub(r"\\(?:cite|ref|eqref|label)\s*\{[^{}]*\}", "", value)
+    value = re.sub(r"\\(?:cellcolor|rowcolor|textcolor|color)\s*(?:\[[^]]*\])?\s*\{[^{}]*\}", "", value)
+    value = re.sub(r"\\(?:textbf|textit|emph|mathrm|mathbf|mathit|underline|textrm|textsf|texttt|scriptsize|small|footnotesize|tiny)\s*\{([^{}]*)\}", r"\1", value)
+    value = re.sub(r"\\(?:cite|ref|eqref|label|autoref|pageref|cref|Cref)\s*\{[^{}]*\}", "", value)
     value = value.replace(r"\%", "%").replace(r"\_", "_").replace(r"\&", "&").replace(r"\pm", "+/-")
     value = value.replace("$", "")
-    # Remove standalone visual glyph commands, including \checkmark and \ding{172}.
-    value = re.sub(r"\\(?:checkmark|crossmark|ding)\s*(?:\{[^{}]*\})?", "", value)
-    value = re.sub(r"\\[a-zA-Z]+", "", value)
+    # Remove standalone visual glyph commands and table-rule commands.
+    value = re.sub(r"\\(?:checkmark|crossmark|ding|cmark|xmark|yes|no|ok|times|tick)\s*(?:\{[^{}]*\})?", "", value)
+    value = re.sub(r"\\(?:toprule|midrule|bottomrule|hline|cline|cmidrule|addlinespace|tabularnewline|arraybackslash)", "", value)
+    value = re.sub(r"\\[a-zA-Z@]+", "", value)
     value = value.replace("{", "").replace("}", "").replace("~", " ")
     return re.sub(r"\s+", " ", value).strip()

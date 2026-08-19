@@ -2,12 +2,18 @@ from __future__ import annotations
 
 from pathlib import Path
 from unittest.mock import patch
+import base64
 
 from src.schemas.poster import PosterBlueprint, PosterSection
 from src.schemas.paper import PaperDocument
 from src.schemas.paper import Figure
 from src.renderers.html_renderer import HtmlPosterRenderer
 from src.utils.figure_assets import copy_or_rasterize_asset
+
+
+_TINY_PNG = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/XU4AAAAASUVORK5CYII="
+)
 
 
 def _make_blueprint() -> PosterBlueprint:
@@ -162,8 +168,8 @@ class TestHtmlPosterRenderer:
         source_dir.mkdir()
         left = source_dir / "left.png"
         right = source_dir / "right.png"
-        left.write_bytes(b"fakepng")
-        right.write_bytes(b"fakepng")
+        left.write_bytes(_TINY_PNG)
+        right.write_bytes(_TINY_PNG)
         doc = PaperDocument(
             paper_id="test-999",
             arxiv_id="9999.99999",
@@ -193,9 +199,9 @@ class TestHtmlPosterRenderer:
         html = renderer.render(bp, doc, tmp_path)
         assert "Core Results" in html
         assert "core-grid" in html
-        assert "Result figure 1" in html
+        assert html.count('class="figure-card result-card"') >= 2
+        assert 'fig-left.png' in html or 'figures/fig-left.png' in html
         assert "ISTD+" in html
-        assert "Result figure 2" in html
         assert html.count('class="section-block core-band"') == 1
         assert html.count('style="grid-area: core;"') == 1
 
@@ -229,8 +235,8 @@ class TestHtmlPosterRenderer:
         source_dir.mkdir()
         overview_img = source_dir / "overview.png"
         key_img = source_dir / "detail.png"
-        overview_img.write_bytes(b"fakepng")
-        key_img.write_bytes(b"fakepng")
+        overview_img.write_bytes(_TINY_PNG)
+        key_img.write_bytes(_TINY_PNG)
 
         doc = PaperDocument(
             paper_id="test-999",
@@ -264,13 +270,11 @@ class TestHtmlPosterRenderer:
         html = renderer.render(bp, doc, tmp_path)
         assert "formula-box" in html
         assert "callout" in html
-        assert "Network architecture overview" in html
-        assert "Detailed structure" in html
+        assert html.count('class="figure-card method-card"') >= 1
+        assert html.count('class="figure-card result-card"') >= 2
         assert "code-cta" in html
         assert "Paper-to-Poster · Research Reader" in html
         assert html.count("badge-pill") >= 4
-        assert "Result figure 1" in html
-        assert "Result figure 2" in html
         assert "Result figure 1 unavailable" not in html
         assert "Result figure 2 unavailable" not in html
 

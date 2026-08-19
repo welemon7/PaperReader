@@ -212,6 +212,39 @@ class TestPosterBlueprint:
         assert 'Takeaways' not in core.content_md
         assert 'Works well' not in core.content_md
 
+    def test_core_results_prefer_final_table_over_source_table(self):
+        doc = _make_doc()
+        doc.raw_markdown = r'''
+        \begin{table}
+        \begin{tabular}{lcc}
+        Method & PSNR & SSIM \\
+        Baseline & 30.1 & 0.90 \\
+        \end{tabular}
+        \end{table}
+        '''
+        analysis = _make_analysis()
+        analysis.final_tables = [
+            {
+                'table_id': 'table-001',
+                'caption': 'Comparison on benchmarks',
+                'datasets': ['Dataset-A'],
+                'metrics': ['PSNR', 'SSIM'],
+                'row_groups': ['Dataset-A'],
+                'headers': ['Dataset', 'Method', 'PSNR', 'SSIM'],
+                'rows': [['Dataset-A', 'Ours', '32.4', '0.94']],
+                'row_indices': [0],
+                'column_indices': [0, 1, 2, 3],
+                'column_groups': [[0], [1], [2], [3]],
+                'notes': 'paper method only',
+            }
+        ]
+        core = next(section for section in generate_blueprint(doc, analysis).sections if section.section_id == 'sec-main-method')
+        assert 'core-metrics-table' in core.content_md
+        assert 'Comparison on benchmarks' in core.content_md
+        assert 'Dataset-A' in core.content_md
+        assert 'Ours' in core.content_md
+        assert 'Baseline' not in core.content_md
+
     def test_core_results_use_real_numeric_tex_table_without_item_details_label(self):
         doc = _make_doc()
         doc.raw_markdown = r'''

@@ -151,19 +151,25 @@ def _run_final_table_review(client: LLMClient, doc: PaperDocument | None, first_
             if 0 <= index < len(table.rows)
         ]
         if rows:
-            candidates.append({"table_id": table.table_id, "headers": table.headers, "rows": rows})
+            candidates.append({
+                "table_id": table.table_id,
+                "caption": table.caption,
+                "headers": table.headers,
+                "row_groups": table.row_groups,
+                "rows": rows,
+            })
     if not candidates:
         return []
     prompt = (
         "Create the final compact but semantically complete HTML table data from the candidate rows below. "
-        "The candidates already contain ONLY the paper's proposed method. "
-        "Never add a baseline or invent/edit a value. Return JSON only with final_tables. "
+        "Keep only the paper's own method results. Drop baseline rows, comparison rows, and any method not proposed by this paper. "
+        "Never invent, average, or rewrite any value. Return JSON only with final_tables. "
         f"Use at most {MAX_FINAL_TABLE_ROWS} rows, {MAX_FINAL_TABLE_COLUMNS} displayed columns, and {MAX_FINAL_CELL_LENGTH} characters per cell. "
-        "Preserve all useful proposed-method variants and settings, including Ours-Small/Ours-Large and dataset/setting rows. "
+        "Preserve proposed-method variants and settings, including Ours-Small/Ours-Large and dataset/setting rows. "
         "Always preserve identity columns such as Dataset, Setting, Resolution, Method, Variant, Params. "
         "Only compress numeric metric columns: put their source column indices into one column_groups item, and display their values joined by ' / '. "
         "For every compressed group, the displayed header must name the metric group and list the source metrics in order. "
-        "Do not compress identity/text columns. Each item must contain table_id, row_indices, column_groups, headers, and rows. "
+        "Do not compress identity/text columns. Each final table must include table_id, row_indices, column_groups, headers, rows, and optional datasets, metrics, row_groups, caption, notes. "
         "The row/column values must be copied from candidates; headers may only clarify source headers.\n\n"
         + json.dumps(candidates, ensure_ascii=False)
     )
@@ -212,15 +218,62 @@ def _validate_final_tables(doc: PaperDocument, candidates: list[dict], raw_table
             headers.append(names[0] if len(names) == 1 else " / ".join(names))
         source_rows = {row["row_index"]: row["cells"] for row in source["rows"]}
         rows = [[" / ".join(source_rows[index][i] for i in group)[:MAX_FINAL_CELL_LENGTH] for group in groups] for index in row_indices]
+        datasets = _safe_string_list(raw.get("datasets", [])) or _infer_table_datasets(headers, rows, source.get("row_groups", []))
+        metrics = _safe_string_list(raw.get("metrics", [])) or _infer_table_metrics(headers)
+        row_groups = _safe_string_list(raw.get("row_groups", []))
+        if not row_groups:
+            source_groups = source.get("row_groups", []) or []
+            row_groups = [source_groups[index] for index in row_indices if 0 <= index < len(source_groups) and source_groups[index]]
         final_tables.append({
             "table_id": source["table_id"],
+            "caption": source.get("caption", ""),
             "headers": headers,
             "rows": rows,
             "row_indices": row_indices,
             "column_indices": column_indices,
             "column_groups": groups,
+            "datasets": datasets,
+            "metrics": metrics,
+            "row_groups": row_groups,
+            "notes": _safe_string(raw.get("notes", "")),
         })
     return final_tables[:3]
+
+
+def _safe_string(value) -> str:
+    return str(value).strip() if value is not None else ""
+
+
+def _safe_string_list(value) -> list[str]:
+    if isinstance(value, str):
+        return [value.strip()] if value.strip() else []
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    return []
+
+
+def _infer_table_datasets(headers: list[str], rows: list[list[str]], row_groups: list[str]) -> list[str]:
+    candidates: list[str] = []
+    for idx, header in enumerate(headers):
+        lowered = header.lower()
+        if any(token in lowered for token in ("dataset", "data", "benchmark", "split", "setting")):
+            for row in rows:
+                if idx < len(row) and row[idx]:
+                    candidates.append(row[idx])
+    if not candidates:
+        for group in row_groups:
+            if group:
+                candidates.append(group)
+    return list(dict.fromkeys(candidates))[:MAX_FINAL_TABLE_ROWS]
+
+
+def _infer_table_metrics(headers: list[str]) -> list[str]:
+    metrics = []
+    for header in headers:
+        lowered = header.lower()
+        if any(token in lowered for token in ("psnr", "ssim", "acc", "accuracy", "f1", "iou", "dice", "mse", "mae", "score", "metric")):
+            metrics.append(header)
+    return list(dict.fromkeys(metrics))[:MAX_FINAL_TABLE_COLUMNS]
 
 
 def validate_node(state: UnderstandState) -> dict:

@@ -46,3 +46,21 @@ def test_cleans_pollution_and_expands_merged_cells():
     assert table["rows"][1] == ["Ours", "32.4", ""]
     assert table["row_groups"] == ["Ours", "Ours"]
     assert all("textcolor" not in cell and "ding" not in cell for row in table["rows"] for cell in row)
+
+
+def test_cleans_more_formatting_and_symbol_commands():
+    latex = r"""
+    \begin{table}
+    \caption{Ablation on datasets}
+    \begin{tabular}{lcc}
+    Method & PSNR & SSIM \\
+    \rowcolor{gray!10} \textbf{Ours} & \textcolor{red}{32.4} & \checkmark \\
+    Baseline & \small 29.8 & \ding{172} \\
+    \end{tabular}
+    \end{table}
+    """
+    table = extract_tables(latex)[0]
+    assert table["caption"] == "Ablation on datasets"
+    assert table["rows"][0] == ["Ours", "32.4", ""]
+    assert table["rows"][1] == ["Baseline", "29.8", ""]
+    assert all("checkmark" not in cell and "ding" not in cell and "textcolor" not in cell for row in table["rows"] for cell in row)

@@ -468,6 +468,10 @@ def _build_core_result_table(doc: PaperDocument, analysis: PaperAnalysis) -> str
     the arXiv source does not expose a parseable numeric table, this returns an
     empty string and the poster simply omits the table.
     """
+    final_table = _extract_final_table_html(analysis)
+    if final_table:
+        return final_table
+
     table = _extract_core_tex_table(doc, analysis)
     if not table:
         return ""
@@ -483,6 +487,55 @@ def _build_core_result_table(doc: PaperDocument, analysis: PaperAnalysis) -> str
         f"<thead><tr>{header_html}</tr></thead>"
         f"<tbody>{body_html}</tbody>"
         '</table>'
+    )
+
+
+def _extract_final_table_html(analysis: PaperAnalysis) -> str:
+    final_tables = getattr(analysis, "final_tables", []) or []
+    if not final_tables:
+        return ""
+    table = final_tables[0]
+    def _get(obj, key, default=None):
+        if isinstance(obj, dict):
+            return obj.get(key, default)
+        return getattr(obj, key, default)
+
+    headers = [html_lib.escape(str(cell)) for cell in _get(table, "headers", []) or []]
+    rows = _get(table, "rows", []) or []
+    if not headers or not rows:
+        return ""
+    body_html = "".join(
+        "<tr>" + "".join(f"<td>{html_lib.escape(str(cell))}</td>" for cell in row) + "</tr>"
+        for row in rows
+    )
+    header_html = "".join(f"<th>{cell}</th>" for cell in headers)
+    caption = html_lib.escape(_get(table, "caption", "") or "")
+    meta_bits = []
+    datasets = [str(item).strip() for item in _get(table, "datasets", []) or [] if str(item).strip()]
+    metrics = [str(item).strip() for item in _get(table, "metrics", []) or [] if str(item).strip()]
+    row_groups = [str(item).strip() for item in _get(table, "row_groups", []) or [] if str(item).strip()]
+    if datasets:
+        meta_bits.append(f"Datasets: {html_lib.escape(', '.join(datasets))}")
+    if metrics:
+        meta_bits.append(f"Metrics: {html_lib.escape(', '.join(metrics))}")
+    if row_groups:
+        meta_bits.append(f"Groups: {html_lib.escape(', '.join(dict.fromkeys(row_groups)))}")
+    meta_html = ""
+    if meta_bits or caption:
+        pieces = []
+        if caption:
+            pieces.append(f"<div class=\"core-table-caption\">{caption}</div>")
+        if meta_bits:
+            pieces.append(f"<div class=\"core-table-meta\">{' · '.join(meta_bits)}</div>")
+        meta_html = "<div class=\"core-table-header\">" + "".join(pieces) + "</div>"
+    return (
+        '<div class="core-table-wrap">'
+        f"{meta_html}"
+        '<table class="core-metrics-table">'
+        f"<thead><tr>{header_html}</tr></thead>"
+        f"<tbody>{body_html}</tbody>"
+        '</table>'
+        '</div>'
     )
 
 
