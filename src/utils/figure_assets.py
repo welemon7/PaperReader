@@ -8,9 +8,69 @@ import time
 from pathlib import Path
 from typing import Iterable, Optional
 
+from PIL import Image
+
 logger = logging.getLogger(__name__)
 
 _IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff"}
+_CONTENT_BACKGROUND_THRESHOLD = 240
+
+
+def crop_content_with_padding(
+    image_path: str | Path,
+    padding: int = 10,
+) -> tuple[Image.Image, dict[str, list[int] | float]]:
+    """Crop near-white margins and return the image with JSON-safe metadata."""
+    if padding < 0:
+        raise ValueError("padding must be non-negative")
+
+    with Image.open(image_path) as source:
+        image = source.copy()
+
+    width, height = image.size
+    grayscale = image.convert("L")
+    content_mask = grayscale.point(
+        lambda pixel: 255 if pixel < _CONTENT_BACKGROUND_THRESHOLD else 0
+    )
+    bbox = content_mask.getbbox()
+
+    if bbox is None:
+        cropped = image
+    else:
+        left, top, right, bottom = bbox
+        cropped = image.crop(
+            (
+                max(0, left - padding),
+                max(0, top - padding),
+                min(width, right + padding),
+                min(height, bottom + padding),
+            )
+        )
+
+    cropped_width, cropped_height = cropped.size
+    metadata: dict[str, list[int] | float] = {
+        "original_size": [width, height],
+        "cropped_size": [cropped_width, cropped_height],
+        "aspect_ratio": cropped_width / cropped_height if cropped_height else 0.0,
+    }
+    return cropped, metadata
+
+
+def _crop_image_file(image_path: Path, padding: int = 10) -> dict[str, list[int] | float] | None:
+    """Crop an image in place, retaining the original file if processing fails."""
+    temporary_path = image_path.with_name(f".{image_path.stem}.crop{image_path.suffix}")
+    try:
+        with Image.open(image_path) as source:
+            image_format = source.format
+        cropped, metadata = crop_content_with_padding(image_path, padding=padding)
+        cropped.save(temporary_path, format=image_format)
+        temporary_path.replace(image_path)
+        return metadata
+    except Exception as exc:
+        logger.warning("Failed to crop image asset %s: %s", image_path, exc)
+        return None
+    finally:
+        temporary_path.unlink(missing_ok=True)
 
 
 def sanitize_asset_name(name: str, fallback: str = "asset") -> str:
@@ -84,11 +144,13 @@ def copy_or_rasterize_asset(src: Path, out_dir: Path, target_name: str | None = 
                 cmd = [converter, "-png", "-singlefile", "-r", "220", str(src), str(output_base)]
                 subprocess.run(cmd, check=True, capture_output=True)
                 if target.exists():
+                    _crop_image_file(target)
                     return target
                 generated = output_base.with_suffix(".png")
                 if generated.exists():
                     if generated != target:
                         shutil.copy2(generated, target)
+                    _crop_image_file(target)
                     return target
         except Exception as exc:
             logger.warning("Failed to rasterize PDF figure with pdftocairo %s: %s", src, exc)
@@ -100,6 +162,7 @@ def copy_or_rasterize_asset(src: Path, out_dir: Path, target_name: str | None = 
                 page = doc[0]
                 pix = page.get_pixmap(dpi=220, alpha=False)
                 pix.save(str(target))
+            _crop_image_file(target)
             return target
         except Exception as exc:
             logger.warning("Failed to rasterize PDF figure %s: %s", src, exc)
@@ -111,11 +174,13 @@ def copy_or_rasterize_asset(src: Path, out_dir: Path, target_name: str | None = 
             cmd = [converter, "-png", "-singlefile", str(src), str(output_base)]
             subprocess.run(cmd, check=True, capture_output=True)
             if target.exists():
+                _crop_image_file(target)
                 return target
             generated = output_base.with_suffix(".png")
             if generated.exists():
                 if generated != target:
                     shutil.copy2(generated, target)
+                _crop_image_file(target)
                 return target
         except Exception as exc:
             logger.warning("Failed to rasterize PDF figure with pdftoppm %s: %s", src, exc)
@@ -141,6 +206,7 @@ def copy_or_rasterize_asset(src: Path, out_dir: Path, target_name: str | None = 
                         logger.warning("Failed to copy figure asset %s: %s", src, exc)
             if last_exc is not None:
                 return src
+        _crop_image_file(target)
         return target
 
     return src
