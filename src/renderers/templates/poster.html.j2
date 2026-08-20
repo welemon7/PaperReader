@@ -131,6 +131,23 @@ body {
     padding: 0 22px 22px;
     align-items: stretch;
 }
+.grid-container > .section-block#sec-contributions,
+.grid-container > .section-block#sec-highlights,
+.grid-container > .section-block#sec-project {
+    align-self: start;
+    max-height: 190px;
+}
+.grid-container > .section-block#sec-contributions .section-title,
+.grid-container > .section-block#sec-highlights .section-title,
+.grid-container > .section-block#sec-project .section-title {
+    padding-top: 9px;
+    padding-bottom: 9px;
+}
+.grid-container > .section-block#sec-contributions .section-content,
+.grid-container > .section-block#sec-highlights .section-content,
+.grid-container > .section-block#sec-project .section-content {
+    padding: 10px 14px;
+}
 .section-block {
     border: 1px solid var(--border-color);
     background: var(--poster-bg);
@@ -323,6 +340,9 @@ tbody tr:nth-child(even) { background: color-mix(in srgb, var(--panel-soft) 55%,
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px 10px;
     align-items: start;
+    width: 100%;
+    max-width: 330px;
+    margin: auto;
 }
 .highlight-marker {
     display: grid;
@@ -356,6 +376,10 @@ tbody tr:nth-child(even) { background: color-mix(in srgb, var(--panel-soft) 55%,
     color: var(--text-muted);
     font-size: 10px;
     line-height: 1.25;
+}
+.grid-container > .section-block#sec-highlights .section-content {
+    align-items: center;
+    justify-content: center;
 }
 .project-footer { margin-top: 8px; font-size: 13px; color: var(--text-muted); letter-spacing: 0.3px; }
 

@@ -528,19 +528,18 @@ def _extract_final_table_html(analysis: PaperAnalysis) -> str:
 
 def _build_contributions_content(analysis: PaperAnalysis) -> str:
     bullets: list[str] = []
-    for contrib in analysis.contributions[:4]:
+    for contrib in analysis.contributions[:3]:
         item = _short_bullet(contrib.text, BULLET_WORD_BUDGET)
         if item:
             bullets.append(f"- {item}")
-    while len(bullets) < 4:
+    while len(bullets) < 3:
         fallback = [
             "- The method improves the core target task.",
             "- The design stays lightweight and easy to deploy.",
             "- Results stay consistent across settings.",
-            "- The analysis highlights a clear practical benefit.",
         ][len(bullets)]
         bullets.append(fallback)
-    return "\n".join(bullets[:4]).strip()
+    return "\n".join(bullets[:3]).strip()
 
 
 def _build_highlights_content(analysis: PaperAnalysis) -> str:
