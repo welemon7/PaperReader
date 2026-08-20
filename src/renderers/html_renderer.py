@@ -154,10 +154,13 @@ class HtmlPosterRenderer:
 
         for sec in layout:
             sec.content_md = self._clean_html_text(sec.content_md)
+            sec.supplement_html = self._clean_html_text(getattr(sec, "supplement_html", "") or "")
             if sec.type in {"main_method", "experiments"}:
                 sec.content_md = self._remove_core_takeaway_rows(sec.content_md)
                 sec.content_md = self._remove_core_table_labels(sec.content_md)
             sec.content_html = self._markdown_with_latex(sec.content_md)
+            if sec.supplement_html:
+                sec.supplement_html = self._markdown_with_latex(sec.supplement_html)
 
         html = self.template.render(
             poster_title=blueprint.poster_title,

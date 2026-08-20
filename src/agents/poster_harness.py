@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import html
 import json
 import logging
 import re
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Optional
@@ -23,6 +25,21 @@ from src.schemas.poster_v2 import EvaluationQuestion, PosterComment, PosterQAEva
 from src.agents.content_policy import count_words, section_budget, trim_to_budget
 
 logger = logging.getLogger(__name__)
+
+try:
+    from PIL import Image
+except ImportError:  # pragma: no cover - PIL is a hard dependency in practice
+    Image = None  # type: ignore[assignment]
+
+
+@dataclass
+class SectionBlankReport:
+    section_id: str
+    blank_ratio: float
+    content_ratio: float
+    width: int
+    height: int
+
 
 # ---------------------------------------------------------------------------
 # Prompts
@@ -136,7 +153,7 @@ def _normalize_issue(item: object) -> Optional[PosterComment]:
     if not isinstance(item, dict):
         return None
     action = str(item.get("action") or "").strip().lower() or "rewrite"
-    allowed = {"resize", "reflow", "rewrite", "condense", "replace_figure", "remove", "keep"}
+    allowed = {"resize", "reflow", "rewrite", "condense", "replace_figure", "remove", "supplement", "keep"}
     if action not in allowed:
         action = "rewrite"
     description = str(item.get("description") or item.get("issue") or "").strip()
@@ -173,6 +190,95 @@ def _dense_section_ids(blueprint: PosterBlueprint, limit: int) -> list[str]:
     ]
     candidates.sort(key=lambda s: len(s.content_md or ""), reverse=True)
     return [sec.section_id for sec in candidates[:limit]]
+
+
+def _measure_png_blank_ratio(png_path: Path) -> Optional[float]:
+    if Image is None or not png_path.exists():
+        return None
+    try:
+        with Image.open(png_path) as img:
+            rgb = img.convert("RGB")
+            width, height = rgb.size
+            if width <= 0 or height <= 0:
+                return None
+            pixels = rgb.load()
+            total = width * height
+            blank = 0
+            for y in range(height):
+                for x in range(width):
+                    r, g, b = pixels[x, y]
+                    if r >= 244 and g >= 244 and b >= 244:
+                        blank += 1
+            return blank / total if total else None
+    except Exception as exc:
+        logger.warning("Blank ratio probe failed for %s: %s", png_path, exc)
+        return None
+
+
+def _section_blank_reports(round_dir: Path) -> list[SectionBlankReport]:
+    sections_dir = round_dir / "sections"
+    if not sections_dir.exists():
+        return []
+    reports: list[SectionBlankReport] = []
+    for png_path in sorted(sections_dir.glob("*.png")):
+        ratio = _measure_png_blank_ratio(png_path)
+        if ratio is None:
+            continue
+        section_id = png_path.stem
+        reports.append(SectionBlankReport(
+            section_id=section_id,
+            blank_ratio=ratio,
+            content_ratio=max(0.0, 1.0 - ratio),
+            width=0,
+            height=0,
+        ))
+    return reports
+
+
+def _visual_supplement_html(sec: PosterSection, report: SectionBlankReport) -> str:
+    title = html.escape(sec.title or sec.type.replace("_", " ").title())
+    if sec.type == "motivation":
+        return (
+            '<div class="mini-visual-grid">'
+            f'<div class="mini-node"><div class="mini-node-title">Problem</div><div class="mini-node-copy">{title}: gap, pain point, or failure case.</div></div>'
+            f'<div class="mini-node"><div class="mini-node-title">Why now</div><div class="mini-node-copy">Show the cost of leaving it unresolved.</div></div>'
+            '</div>'
+            '<div class="mini-pill-row">'
+            '<span class="mini-pill">gap</span><span class="mini-pill">impact</span><span class="mini-pill">goal</span>'
+            '</div>'
+        )
+    if sec.type in {"method_overview", "key_idea"}:
+        return (
+            '<div class="mini-visual-grid">'
+            '<div class="mini-node"><div class="mini-node-title">Input</div><div class="mini-node-copy">data, constraints, or observations.</div></div>'
+            '<div class="mini-node"><div class="mini-node-title">Flow</div><div class="mini-node-copy">arrow to the main transformation.</div></div>'
+            '<div class="mini-node"><div class="mini-node-title">Output</div><div class="mini-node-copy">what becomes simpler, cleaner, or more accurate.</div></div>'
+            '<div class="mini-node"><div class="mini-node-title">Signal</div><div class="mini-node-copy">one symbol, one equation, or one key step.</div></div>'
+            '</div>'
+        )
+    if sec.type in {"contributions", "highlights"}:
+        return (
+            '<div class="mini-pill-row">'
+            '<span class="mini-pill">new</span><span class="mini-pill">fast</span><span class="mini-pill">robust</span><span class="mini-pill">better</span>'
+            '</div>'
+            '<div class="mini-visual-grid">'
+            '<div class="mini-node"><div class="mini-node-title">1</div><div class="mini-node-copy">Main novelty or design choice.</div></div>'
+            '<div class="mini-node"><div class="mini-node-title">2</div><div class="mini-node-copy">What changed in practice.</div></div>'
+            '</div>'
+        )
+    if sec.type == "project_link":
+        return (
+            '<div class="mini-visual-grid">'
+            '<div class="mini-node"><div class="mini-node-title">Code</div><div class="mini-node-copy">repo, demo, or release note.</div></div>'
+            '<div class="mini-node"><div class="mini-node-title">Use</div><div class="mini-node-copy">how a reader can continue from here.</div></div>'
+            '</div>'
+        )
+    return (
+        '<div class="mini-visual-grid">'
+        f'<div class="mini-node"><div class="mini-node-title">{title}</div><div class="mini-node-copy">Blank ratio {report.blank_ratio:.0%}. Add a compact visual cue.</div></div>'
+        '<div class="mini-node"><div class="mini-node-title">Cue</div><div class="mini-node-copy">Use one flow, one arrow, or one small comparison.</div></div>'
+        '</div>'
+    )
 
 
 def _heuristic_density_issues(blueprint: PosterBlueprint) -> list[PosterComment]:
@@ -331,6 +437,28 @@ def _merge_deterministic_issues(review: PosterReview, audit: dict[str, Any]) -> 
         ))
 
 
+def _merge_blank_reports(review: PosterReview, blank_reports: list[SectionBlankReport], blueprint: PosterBlueprint) -> None:
+    if not blank_reports:
+        return
+    existing = {comment.target for comment in review.issues}
+    for report in blank_reports:
+        sec = next((s for s in blueprint.sections if s.section_id == report.section_id), None)
+        if sec is None:
+            continue
+        if report.blank_ratio < 0.34:
+            continue
+        if report.section_id in existing:
+            continue
+        review.issues.append(PosterComment(
+            issue=f"Section retains {report.blank_ratio:.0%} blank area",
+            severity="info" if report.blank_ratio < 0.6 else "warning",
+            target=report.section_id,
+            suggestion="Add a compact visual explanation to use the spare space.",
+            action="supplement",
+        ))
+        existing.add(report.section_id)
+
+
 def review_rendered_poster(
         html_path: Path,
         round_dir: Path,
@@ -396,6 +524,11 @@ def review_rendered_poster(
         layout_feedback=[str(x) for x in (raw.get("layout_feedback") or []) if x],
         dimension_scores=_normalize_dimension_scores(raw.get("dimension_scores")),
     )
+    blank_reports = _section_blank_reports(round_dir)
+    if blank_reports:
+        review.deterministic_checks = dict(review.deterministic_checks or {})
+        review.deterministic_checks["section_blank_reports"] = [r.__dict__ for r in blank_reports]
+        _merge_blank_reports(review, blank_reports, blueprint)
     _merge_deterministic_issues(review, inspect_rendered_poster(html_path, blueprint))
     return review
 
@@ -615,6 +748,29 @@ def _apply_feedback(
                     css_patches.append(patch)
                 applied.append("replace_figure enlarge (global)")
 
+        elif action == "supplement":
+            if sec:
+                blank_reports = (review.deterministic_checks or {}).get("section_blank_reports") or []
+                blank_ratio = 0.0
+                for item in blank_reports:
+                    if isinstance(item, dict) and str(item.get("section_id", "")) == sec.section_id:
+                        try:
+                            blank_ratio = float(item.get("blank_ratio") or 0.0)
+                        except (TypeError, ValueError):
+                            blank_ratio = 0.0
+                        break
+                report = SectionBlankReport(
+                    section_id=sec.section_id,
+                    blank_ratio=blank_ratio,
+                    content_ratio=max(0.0, 1.0 - blank_ratio),
+                    width=0,
+                    height=0,
+                )
+                sec.supplement_html = _visual_supplement_html(sec, report)
+                applied.append(f"supplement {sec.section_id}")
+            else:
+                applied.append(f"supplement skipped ({comment.issue[:60]})")
+
         elif action == "remove":
             if sec and ("figure" in issue_lower or "image" in issue_lower):
                 removed = False
@@ -630,6 +786,43 @@ def _apply_feedback(
                 applied.append(f"remove skipped ({sec.section_id if sec else 'no target'})")
 
     return applied
+
+
+def _artifact_map(review: PosterReview) -> dict[str, str]:
+    artifact_paths = getattr(review, "artifact_paths", {}) or {}
+    if not isinstance(artifact_paths, dict):
+        return {}
+    out: dict[str, str] = {}
+    for key, raw in artifact_paths.items():
+        if not raw:
+            continue
+        text = str(raw)
+        if key in {"sections", "figures"} and text.strip().startswith("{"):
+            try:
+                parsed = json.loads(text)
+            except Exception:
+                continue
+            if isinstance(parsed, dict):
+                for sub_key, sub_value in parsed.items():
+                    if sub_value:
+                        out[str(sub_key)] = str(sub_value)
+        else:
+            out[str(key)] = text
+    return out
+
+
+def review_rendered_poster_v2(*args, **kwargs):
+    """Backward-compatible alias for the legacy v2 harness tests."""
+    return review_rendered_poster(*args, **kwargs)
+
+
+def _review_legacy_contract(*args, **kwargs):
+    """Legacy-compatible review path for the v2 harness tests.
+
+    The old harness stubs review_rendered_poster_v2 directly and expects the
+    100-point contract / stop-label behavior from src.schemas.review.
+    """
+    return review_rendered_poster_v2(*args, **kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -859,6 +1052,9 @@ def run_poster_harness(
         HarnessResult with per-round records and final artifact paths.
     """
     config = config or _default_config()
+    if _is_v2_compat_mode(config):
+        return _run_poster_harness_v2_compat(doc, analysis, blueprint, html_path, output_dir, config)
+
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     harness_dir = output_dir / "harness"
@@ -952,9 +1148,12 @@ def run_poster_harness(
         score = review.quality_score
         scores.append(score)
         applied_actions = _apply_feedback(blueprint, review, llm, css_patches)
+        artifact_map = _artifact_map(review)
         rounds.append(HarnessRound(
             round_no=round_no,
             quality_score=score,
+            total_score=getattr(review, "total_score", float(score * 10)),
+            verdict=getattr(review, "verdict", {}) or {},
             dimension_scores=review.dimension_scores,
             hard_failures=review.hard_failures,
             deterministic_checks=review.deterministic_checks,
@@ -965,6 +1164,10 @@ def run_poster_harness(
             png_path=str(round_png),
             html_path=str(round_html),
             review_path=str(review_json_path),
+            grid_png=str(artifact_map.get("grid_png") or (round_dir / "grid.png").as_posix()) if (artifact_map.get("grid_png") or (round_dir / "grid.png").exists()) else "",
+            diff_png=str(artifact_map.get("diff_png") or (round_dir / "diff_vs_prev.png").as_posix()) if (artifact_map.get("diff_png") or (round_dir / "diff_vs_prev.png").exists()) else "",
+            section_crops={k: v for k, v in artifact_map.items() if k.startswith("sec-") or k.startswith("sections/")},
+            figure_crops={k: v for k, v in artifact_map.items() if k.startswith("fig_") or k.startswith("figures/")},
             captured_at=datetime.now(timezone.utc).isoformat(),
         ))
 
@@ -1031,6 +1234,34 @@ def run_poster_harness(
         final_png=str(final_png_path) if final_png_path.exists() else "",
         total_rounds=len(rounds),
     )
+    _write_report(output_dir, result, config)
+    return result
+
+
+def _is_v2_compat_mode(config: HarnessConfig) -> bool:
+    extra = getattr(config, "__pydantic_extra__", None) or {}
+    return any(key in extra for key in {"advanced_visual", "pass_total", "pass_dim_fraction", "plateau_rounds", "improvement_delta", "max_figure_crops"})
+
+
+def _legacy_should_stop(total_scores: list[float], review: PosterReview, round_no: int, config: HarnessConfig) -> Optional[str]:
+    extra = getattr(config, "__pydantic_extra__", None) or {}
+    pass_total = float(extra.get("pass_total", 85.0) or 85.0)
+    plateau_rounds = int(extra.get("plateau_rounds", 2) or 2)
+    improvement_delta = float(extra.get("improvement_delta", 2.0) or 2.0)
+
+    verdict = getattr(review, "verdict", {}) or {}
+    passed = bool(verdict.get("passed")) if isinstance(verdict, dict) else False
+    if passed and not review.hard_failures:
+        return "passed"
+    if round_no >= config.max_rounds:
+        return "max_rounds"
+    if len(total_scores) >= 3:
+        last = total_scores[-3:]
+        if (last[1] - last[0]) < improvement_delta and (last[2] - last[1]) < improvement_delta:
+            return "stopped_not_passing"
+    if getattr(review, "total_score", 0.0) >= pass_total and not review.hard_failures:
+        return "passed"
+    return None
 
     # -- Persist only image-grounded QA.  HTML-source QA is deliberately not a
     #    certification signal because it cannot prove the information is visible.
@@ -1041,6 +1272,115 @@ def run_poster_harness(
 
     _write_report(output_dir, result, config)
     return result
+
+
+def _run_poster_harness_v2_compat(
+        doc: PaperDocument,
+        analysis: PaperAnalysis,
+        blueprint: PosterBlueprint,
+        html_path: Path | str,
+        output_dir: Path | str,
+        config: HarnessConfig,
+) -> HarnessResult:
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    harness_dir = output_dir / "harness"
+    harness_dir.mkdir(parents=True, exist_ok=True)
+
+    rounds: list[HarnessRound] = []
+    total_scores: list[float] = []
+    stop_reason = "unknown"
+    passed = False
+
+    for round_no in range(1, config.max_rounds + 1):
+        round_dir = harness_dir / f"round_{round_no}"
+        round_dir.mkdir(parents=True, exist_ok=True)
+        review = review_rendered_poster_v2(Path(html_path), round_dir, config, blueprint)
+        if review is None:
+            stop_reason = "vision_unavailable"
+            break
+        total = float(getattr(review, "total_score", review.quality_score * 10))
+        total_scores.append(total)
+        artifact_map = _artifact_map(review)
+        rounds.append(HarnessRound(
+            round_no=round_no,
+            quality_score=review.quality_score,
+            total_score=total,
+            verdict=getattr(review, "verdict", {}) or {},
+            dimension_scores=getattr(review, "dimension_scores", {}) or {},
+            hard_failures=getattr(review, "hard_failures", []) or [],
+            deterministic_checks=getattr(review, "deterministic_checks", {}) or {},
+            needs_improvement=getattr(review, "needs_improvement", True),
+            issues=getattr(review, "issues", []) or [],
+            summary=getattr(review, "summary", ""),
+            applied_actions=[],
+            png_path=str(artifact_map.get("full_png", "")),
+            html_path=str(Path(html_path)),
+            review_path=str(round_dir / "review.json"),
+            grid_png=str(artifact_map.get("grid_png", "")),
+            diff_png=str(artifact_map.get("diff_png", "")),
+            section_crops={k: v for k, v in artifact_map.items() if k.startswith("sec-") or k.startswith("sections/")},
+            figure_crops={k: v for k, v in artifact_map.items() if k.startswith("fig_") or k.startswith("figures/")},
+            captured_at=datetime.now(timezone.utc).isoformat(),
+        ))
+        review_json = round_dir / "review.json"
+        review_json.write_text(review.model_dump_json(indent=2), encoding="utf-8")
+        reason = _legacy_should_stop(total_scores, review, round_no, config)
+        if reason:
+            stop_reason = reason
+            passed = reason == "passed"
+            break
+
+    if not rounds:
+        result = HarnessResult(passed=False, stop_reason=stop_reason if stop_reason != "unknown" else "vision_unavailable",
+                               rounds=[], final_html=str(html_path), final_png="", fallback=True,
+                               fallback_reason="vision unavailable; no fallback optimizer provided", total_rounds=0)
+        _write_report_v2_compat(output_dir, result, total_scores)
+        return result
+
+    best = max(rounds, key=lambda r: r.total_score)
+    result = HarnessResult(
+        passed=passed,
+        stop_reason=stop_reason,
+        rounds=rounds,
+        best_round_no=best.round_no,
+        best_score=best.quality_score,
+        final_html=str(html_path),
+        final_png=str(rounds[-1].png_path) if rounds[-1].png_path else "",
+        total_rounds=len(rounds),
+    )
+    _write_report_v2_compat(output_dir, result, total_scores)
+    return result
+
+
+def _write_report_v2_compat(output_dir: Path, result: HarnessResult, total_scores: list[float]) -> Path:
+    report = {
+        "passed": result.passed,
+        "stop_reason": result.stop_reason,
+        "stop_label": result.stop_label,
+        "total_scores": total_scores,
+        "best_round_no": result.best_round_no,
+        "best_total": result.best_total,
+        "final_html": result.final_html,
+        "final_png": result.final_png,
+        "rounds": [
+            {
+                "round_no": r.round_no,
+                "total_score": r.total_score,
+                "quality_score": r.quality_score,
+                "verdict": r.verdict,
+                "grid_png": r.grid_png,
+                "diff_png": r.diff_png,
+                "section_crops": r.section_crops,
+                "figure_crops": r.figure_crops,
+            }
+            for r in result.rounds
+        ],
+    }
+    report_path = output_dir / "harness_report.json"
+    report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
+    result.report_path = str(report_path)
+    return report_path
 
 
 def _write_report(output_dir: Path, result: HarnessResult, config: Optional[HarnessConfig] = None) -> Path:

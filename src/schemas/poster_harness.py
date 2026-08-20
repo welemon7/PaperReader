@@ -2,13 +2,15 @@ from __future__ import annotations
 
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 from src.schemas.poster_v2 import PosterComment
 
 
 class HarnessConfig(BaseModel):
     """Configuration for the visual-review harness loop."""
+
+    model_config = ConfigDict(extra="allow")
 
     threshold: int = Field(default=9, ge=1, le=10, description="Quality score (0-10) at which the loop passes.")
     max_rounds: int = Field(default=5, ge=1, le=20, description="Maximum review/re-render rounds.")
@@ -24,6 +26,8 @@ class HarnessRound(BaseModel):
 
     round_no: int = Field(ge=1)
     quality_score: int = Field(ge=0, le=10)
+    total_score: float = 0.0
+    verdict: dict[str, object] = Field(default_factory=dict)
     dimension_scores: dict[str, float] = Field(default_factory=dict)
     hard_failures: list[str] = Field(default_factory=list)
     deterministic_checks: dict[str, object] = Field(default_factory=dict)
@@ -34,6 +38,10 @@ class HarnessRound(BaseModel):
     png_path: str = ""
     html_path: str = ""
     review_path: str = ""
+    grid_png: str = ""
+    diff_png: str = ""
+    section_crops: dict[str, str] = Field(default_factory=dict)
+    figure_crops: dict[str, str] = Field(default_factory=dict)
     captured_at: str = ""
 
 
@@ -52,3 +60,16 @@ class HarnessResult(BaseModel):
     fallback_reason: str = ""
     qa_eval_path: str = ""
     total_rounds: int = 0
+
+    @property
+    def stop_label(self) -> str:
+        from src.schemas.review import STOP_REASONS
+
+        return STOP_REASONS.get(self.stop_reason, self.stop_reason)
+
+    @property
+    def best_total(self) -> float:
+        totals = [getattr(r, "total_score", 0.0) for r in self.rounds if getattr(r, "total_score", 0.0)]
+        if totals:
+            return max(totals)
+        return float(self.best_score)

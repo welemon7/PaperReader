@@ -37,6 +37,7 @@ LINE_HEIGHT = 1.42
 PANEL_TITLE_H = 52
 PANEL_PAD = 16
 MIN_BODY_FONT_PX = 13.0
+SUPPLEMENT_BOX_H = 138
 # Conservative multiplier on estimated text height: Chromium renders taller
 # than a naive chars-per-line estimate (margins, li spacing, font metrics).
 HEIGHT_FUDGE = 1.18
@@ -129,6 +130,7 @@ def _text_height(text: str, box_width: int, font_px: float) -> float:
     extra += 150.0 * (text or "").count('class="formula-box"')
     extra += 100.0 * (text or "").count('class="callout"')
     extra += 160.0 * (text or "").count('class="item-details-wrap"')
+    extra += 120.0 * (text or "").count('class="mini-visual"')
     bullets = (text or "").count("\n- ") + (text or "").count("\n* ")
     extra += bullets * 6.0
     return (lines_h + extra) * HEIGHT_FUDGE
@@ -315,14 +317,17 @@ def _layout_panel_elements(panel: ScenePanel, box: PanelBox, layout: SceneLayout
             pending_figures = max(0, len(figures) - fig_idx)
             continue
 
-        # text-like elements (text / formula / table / callout only)
-        if el.kind in ("text", "formula", "table", "callout"):
+        # text-like elements (text / formula / table / callout / supplement)
+        if el.kind in ("text", "formula", "table", "callout", "supplement"):
             if el.kind == "text":
                 # Reserve space for figures that still come after this text.
                 budget = max(40.0, remaining - fig_reserve) if pending_figures else remaining
                 scale = _fit_font_scale(el.content_md, body_w, budget, panel.constraints.min_font_scale)
                 font_px = BODY_FONT_PX * scale
                 est_h = _text_height(el.content_md, body_w, font_px)
+            elif el.kind == "supplement":
+                font_px = BODY_FONT_PX * 0.9
+                est_h = _estimate_fixed_height(el, body_w, remaining)
             else:
                 font_px = BODY_FONT_PX * el.font_scale
                 est_h = _estimate_fixed_height(el, body_w, remaining)
@@ -338,7 +343,7 @@ def _layout_panel_elements(panel: ScenePanel, box: PanelBox, layout: SceneLayout
 
     # 3) remaining elements (qr / link) get a fixed small box.
     for el in panel.elements:
-        if el.kind in ("figure", "text", "formula", "table", "callout"):
+        if el.kind in ("figure", "text", "formula", "table", "callout", "supplement"):
             continue
         h = 120 if el.kind == "qr" else 44
         layout.elements.append(ElementBox(
@@ -364,6 +369,8 @@ def _estimate_fixed_height(el: SceneElement, body_w: int, remaining_h: float) ->
         return _estimate_table_height(el.content_html, remaining_h)
     if el.kind == "callout":
         return min(remaining_h, 92.0)
+    if el.kind == "supplement":
+        return min(remaining_h, SUPPLEMENT_BOX_H)
     return min(remaining_h, 60.0)
 
 

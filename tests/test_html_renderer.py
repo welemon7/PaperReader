@@ -260,6 +260,7 @@ class TestHtmlPosterRenderer:
         bp.sections[4].content_md = "- First contribution"
         bp.sections[5].content_md = "- Highlight one"
         bp.sections[6].content_md = "Code link."
+        bp.sections[0].supplement_html = "<div class='mini-visual-grid'><div class='mini-node'><div class='mini-node-title'>Problem</div><div class='mini-node-copy'>Gap</div></div></div>"
         bp.figure_placements = [
             type("FP", (), {"figure_id": "fig-ov", "section_id": "s2", "width_ratio": 0.9, "caption": "Network architecture overview"})(),
             type("FP", (), {"figure_id": "fig-key", "section_id": "s3", "width_ratio": 0.9, "caption": "Detailed structure"})(),
@@ -275,6 +276,7 @@ class TestHtmlPosterRenderer:
         assert "code-cta" in html
         assert "Paper-to-Poster · Research Reader" in html
         assert html.count("badge-pill") >= 4
+        assert "mini-visual" in html
         assert "Result figure 1 unavailable" not in html
         assert "Result figure 2 unavailable" not in html
 

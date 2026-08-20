@@ -260,6 +260,40 @@ def test_apply_feedback_remove_figure():
     assert all(fp.section_id != target_sec for fp in blueprint.figure_placements)
 
 
+def test_apply_feedback_supplement_injects_visual_html():
+    blueprint = _make_blueprint()
+    sec = next(s for s in blueprint.sections if s.section_id == "sec-motivation")
+    review = _review(6, needs_improvement=True, issues=[
+        PosterComment(issue="Large blank area", severity="warning",
+                      target="sec-motivation", suggestion="fill", action="supplement"),
+    ])
+    review.deterministic_checks = {
+        "section_blank_reports": [
+            {"section_id": "sec-motivation", "blank_ratio": 0.72, "content_ratio": 0.28, "width": 0, "height": 0}
+        ]
+    }
+    css_patches: list[str] = []
+    applied = _apply_feedback(blueprint, review, llm=None, css_patches=css_patches)
+    assert any("supplement sec-motivation" in a for a in applied)
+    assert "mini-visual" in sec.supplement_html
+
+
+def test_blank_png_ratio_probe_detects_white_space(tmp_path):
+    from PIL import Image
+
+    from src.agents.poster_harness import _measure_png_blank_ratio
+
+    path = tmp_path / "blank.png"
+    img = Image.new("RGB", (20, 20), (255, 255, 255))
+    for x in range(6):
+        for y in range(6):
+            img.putpixel((x, y), (0, 0, 0))
+    img.save(path)
+    ratio = _measure_png_blank_ratio(path)
+    assert ratio is not None
+    assert 0.9 <= ratio <= 0.95
+
+
 # ---------------------------------------------------------------------------
 # Loop control
 # ---------------------------------------------------------------------------

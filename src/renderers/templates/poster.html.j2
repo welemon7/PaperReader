@@ -186,6 +186,8 @@ body {
     display: flex;
     flex-direction: column;
     gap: 9px;
+    min-height: 0;
+    overflow: hidden;
 }
 .section-content p { margin: 0; }
 .section-content ul, .section-content ol { padding-left: 20px; margin: 2px 0; }
@@ -199,6 +201,61 @@ body {
     text-decoration: underline;
     text-decoration-color: var(--poster-accent);
     text-underline-offset: 2px;
+}
+.mini-visual {
+    width: 100%;
+    min-height: 110px;
+    border: 1px solid color-mix(in srgb, var(--border-color) 92%, var(--poster-accent));
+    border-radius: var(--radius-sm);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--panel-soft) 72%, transparent), #fff);
+    padding: 10px 12px;
+    display: grid;
+    gap: 8px;
+    align-content: start;
+    overflow: hidden;
+}
+.mini-visual-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+.mini-node {
+    min-width: 0;
+    border: 1px solid color-mix(in srgb, var(--poster-primary) 22%, var(--border-color));
+    background: #fff;
+    border-radius: 6px;
+    padding: 8px 9px;
+    box-shadow: 0 1px 3px rgba(16, 36, 64, 0.05);
+}
+.mini-node-title {
+    color: var(--poster-primary);
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.15;
+}
+.mini-node-copy {
+    margin-top: 3px;
+    color: var(--text-muted);
+    font-size: 11px;
+    line-height: 1.25;
+}
+.mini-pill-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.mini-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 8px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--poster-primary) 7%, #fff);
+    border: 1px solid color-mix(in srgb, var(--poster-primary) 18%, var(--border-color));
+    color: var(--poster-primary);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
 }
 .accent-text, .highlight-orange { color: var(--accent-text); font-weight: 700; }
 .muted { color: var(--text-muted); }
@@ -381,6 +438,12 @@ tbody tr:nth-child(even) { background: color-mix(in srgb, var(--panel-soft) 55%,
     align-items: center;
     justify-content: center;
 }
+.row-equal {
+    align-self: stretch;
+}
+.row-equal .section-content {
+    height: 100%;
+}
 .project-footer { margin-top: 8px; font-size: 13px; color: var(--text-muted); letter-spacing: 0.3px; }
 
 /* ================= responsive ================= */
@@ -447,7 +510,7 @@ tbody tr:nth-child(even) { background: color-mix(in srgb, var(--panel-soft) 55%,
         {% endfor %}
         {% set sym = cs.get('section_symbol') or '▸ ' %}
 
-        <div class="section-block" id="sec-motivation" style="grid-area: motivation;">
+        <div class="section-block row-equal" id="sec-motivation" style="grid-area: motivation;">
             <div class="section-title"><span class="sym">{{ sym }}</span>{{ ns.motivation.title if ns.motivation else 'Motivation' }}</div>
             <div class="section-content">
                 {% if ns.motivation %}
@@ -455,16 +518,22 @@ tbody tr:nth-child(even) { background: color-mix(in srgb, var(--panel-soft) 55%,
                 {% else %}
                     (not provided)
                 {% endif %}
+                {% if ns.motivation and ns.motivation.supplement_html %}
+                <div class="mini-visual">{{ ns.motivation.supplement_html|safe }}</div>
+                {% endif %}
             </div>
         </div>
 
-        <div class="section-block" id="sec-method-overview" style="grid-area: overview;">
+        <div class="section-block row-equal" id="sec-method-overview" style="grid-area: overview;">
             <div class="section-title"><span class="sym">{{ sym }}</span>{{ ns.overview.title if ns.overview else 'Method Overview' }}</div>
             <div class="section-content">
                 {% if ns.overview %}
                     {{ ns.overview.content_html|replace('[[METHOD_FORMULA]]', '')|safe }}
                 {% else %}
                     (not provided)
+                {% endif %}
+                {% if ns.overview and ns.overview.supplement_html %}
+                <div class="mini-visual">{{ ns.overview.supplement_html|safe }}</div>
                 {% endif %}
                 {% set overview_figs = figure_map.get(ns.overview.section_id, []) if ns.overview else [] %}
                 {% if overview_figs %}
@@ -481,13 +550,16 @@ tbody tr:nth-child(even) { background: color-mix(in srgb, var(--panel-soft) 55%,
             </div>
         </div>
 
-        <div class="section-block" id="sec-key-idea" style="grid-area: key_idea;">
+        <div class="section-block row-equal" id="sec-key-idea" style="grid-area: key_idea;">
             <div class="section-title"><span class="sym">{{ sym }}</span>{{ ns.key_idea.title if ns.key_idea else 'Key Idea' }}</div>
             <div class="section-content">
                 {% if ns.key_idea %}
                     {{ ns.key_idea.content_html|safe }}
                 {% else %}
                     (not provided)
+                {% endif %}
+                {% if ns.key_idea and ns.key_idea.supplement_html %}
+                <div class="mini-visual">{{ ns.key_idea.supplement_html|safe }}</div>
                 {% endif %}
                 {% set key_figs = figure_map.get(ns.key_idea.section_id, []) if ns.key_idea else [] %}
                 {% if key_figs %}
@@ -556,7 +628,7 @@ tbody tr:nth-child(even) { background: color-mix(in srgb, var(--panel-soft) 55%,
             </div>
         </div>
 
-        <div class="section-block" id="sec-contributions" style="grid-area: contributions;">
+        <div class="section-block row-equal" id="sec-contributions" style="grid-area: contributions;">
             <div class="section-title"><span class="sym">{{ sym }}</span>{{ ns.contributions.title if ns.contributions else 'Contributions' }}</div>
             <div class="section-content">
                 {% if ns.contributions %}
@@ -564,10 +636,13 @@ tbody tr:nth-child(even) { background: color-mix(in srgb, var(--panel-soft) 55%,
                 {% else %}
                     (not provided)
                 {% endif %}
+                {% if ns.contributions and ns.contributions.supplement_html %}
+                <div class="mini-visual">{{ ns.contributions.supplement_html|safe }}</div>
+                {% endif %}
             </div>
         </div>
 
-        <div class="section-block" id="sec-highlights" style="grid-area: highlights;">
+        <div class="section-block row-equal" id="sec-highlights" style="grid-area: highlights;">
             <div class="section-title"><span class="sym">{{ sym }}</span>{{ ns.highlights.title if ns.highlights else 'Highlights' }}</div>
             <div class="section-content">
                 <div class="highlight-marker-row">
@@ -600,10 +675,13 @@ tbody tr:nth-child(even) { background: color-mix(in srgb, var(--panel-soft) 55%,
                         </div>
                     </div>
                 </div>
+                {% if ns.highlights and ns.highlights.supplement_html %}
+                <div class="mini-visual">{{ ns.highlights.supplement_html|safe }}</div>
+                {% endif %}
             </div>
         </div>
 
-        <div class="section-block" id="sec-project" style="grid-area: project;">
+        <div class="section-block row-equal" id="sec-project" style="grid-area: project;">
             <div class="section-title"><span class="sym">{{ sym }}</span>{{ ns.project.title if ns.project else 'Project' }}</div>
             <div class="section-content">
                 <div class="project-box">
@@ -616,6 +694,9 @@ tbody tr:nth-child(even) { background: color-mix(in srgb, var(--panel-soft) 55%,
                         {% endif %}
                     </div>
                 </div>
+                {% if ns.project and ns.project.supplement_html %}
+                <div class="mini-visual">{{ ns.project.supplement_html|safe }}</div>
+                {% endif %}
                 <div class="project-footer">Paper-to-Poster · Research Reader</div>
             </div>
         </div>

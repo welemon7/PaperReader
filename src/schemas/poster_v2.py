@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 NodeType = Literal[
@@ -55,16 +55,19 @@ class PosterComment(BaseModel):
     severity: Literal["error", "warning", "info"] = "warning"
     target: str = ""
     suggestion: str = ""
-    action: Literal["resize", "reflow", "rewrite", "condense", "replace_figure", "remove", "keep"] = "rewrite"
+    action: Literal["resize", "reflow", "rewrite", "condense", "replace_figure", "remove", "supplement", "keep"] = "rewrite"
 
 
 class PosterReview(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     quality_score: int = Field(default=0, ge=0, le=10)
     needs_improvement: bool = True
     issues: list[PosterComment] = Field(default_factory=list)
     summary: str = ""
     layout_feedback: list[str] = Field(default_factory=list)
     dimension_scores: dict[str, float] = Field(default_factory=dict)
+    artifact_paths: dict[str, str] = Field(default_factory=dict)
     # Non-negotiable render failures found without asking a model (for example
     # broken figures or clipped text).  A high VLM score must never override
     # these failures.

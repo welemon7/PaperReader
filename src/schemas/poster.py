@@ -11,6 +11,7 @@ class PosterSection(BaseModel):
     title: str = ''
     content_md: str = ''
     content_html: str = ''
+    supplement_html: str = ''
     column: int = Field(default=1, ge=1, le=3)
     col_span: int = Field(default=1, ge=1, le=3)
     row: int = Field(default=0, ge=0, le=3)

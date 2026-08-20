@@ -29,7 +29,7 @@ Zone = Literal[
     "bottom_left", "bottom_center", "bottom_right",
 ]
 
-ElementKind = Literal["text", "figure", "formula", "table", "callout", "qr", "link"]
+ElementKind = Literal["text", "figure", "formula", "table", "callout", "qr", "link", "supplement"]
 
 CANVAS_WIDTH = 1920
 CANVAS_HEIGHT = 1440
@@ -48,7 +48,7 @@ class SceneConstraints(BaseModel):
 
 class SceneElement(BaseModel):
     element_id: str
-    kind: ElementKind = "text"
+    kind: ElementKind | Literal["supplement"] = "text"
     content_md: str = ""
     content_html: str = ""
     figure_id: str = ""
@@ -110,6 +110,7 @@ class ScenePatch(BaseModel):
         "replace_figure",
         "remove_element",
         "adjust_font",
+        "supplement_panel",
     ] = "reflow_panel"
     target: str = ""  # panel_id or element_id
     params: dict = Field(default_factory=dict)
