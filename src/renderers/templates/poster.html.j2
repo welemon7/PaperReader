@@ -317,20 +317,45 @@ tbody tr:nth-child(even) { background: color-mix(in srgb, var(--panel-soft) 55%,
 .code-link:hover { text-decoration: underline; }
 .link-text { font-size: 15px; font-weight: 600; color: var(--poster-primary); word-break: break-all; }
 
-/* ================= badges ================= */
-.badge-row { display: flex; flex-wrap: wrap; gap: 8px; }
-.badge-pill {
+/* ================= highlight markers ================= */
+.highlight-marker-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 10px;
+    align-items: start;
+}
+.highlight-marker {
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr);
+    gap: 8px;
+    align-items: start;
+    min-width: 0;
+}
+.highlight-marker-symbol {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    border: 1px solid var(--border-color);
-    background: var(--panel-soft);
-    color: var(--accent-text);
-    border-radius: 999px;
-    padding: 5px 11px;
-    font-size: 13px;
-    font-weight: 700;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    color: var(--poster-accent);
+    font-size: 28px;
     line-height: 1;
+    font-weight: 800;
+}
+.highlight-marker-copy { min-width: 0; }
+.highlight-marker-title {
+    color: var(--poster-primary);
+    font-size: 12px;
+    line-height: 1.15;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+.highlight-marker-desc {
+    margin-top: 3px;
+    color: var(--text-muted);
+    font-size: 10px;
+    line-height: 1.25;
 }
 .project-footer { margin-top: 8px; font-size: 13px; color: var(--text-muted); letter-spacing: 0.3px; }
 
@@ -521,16 +546,35 @@ tbody tr:nth-child(even) { background: color-mix(in srgb, var(--panel-soft) 55%,
         <div class="section-block" id="sec-highlights" style="grid-area: highlights;">
             <div class="section-title"><span class="sym">{{ sym }}</span>{{ ns.highlights.title if ns.highlights else 'Highlights' }}</div>
             <div class="section-content">
-                {% if ns.highlights %}
-                    {{ ns.highlights.content_html|safe }}
-                {% else %}
-                    (not provided)
-                {% endif %}
-                <div class="badge-row">
-                    <span class="badge-pill">🌐 Cross-benchmark</span>
-                    <span class="badge-pill">⚡ Fast</span>
-                    <span class="badge-pill">🏆 Best-in-class</span>
-                    <span class="badge-pill">🛡️ Robust</span>
+                <div class="highlight-marker-row">
+                    <div class="highlight-marker badge-pill">
+                        <span class="highlight-marker-symbol" aria-hidden="true">◎</span>
+                        <div class="highlight-marker-copy">
+                            <div class="highlight-marker-title">Cross-benchmark</div>
+                            <div class="highlight-marker-desc">Consistent gains across key datasets.</div>
+                        </div>
+                    </div>
+                    <div class="highlight-marker badge-pill">
+                        <span class="highlight-marker-symbol" aria-hidden="true">⚡</span>
+                        <div class="highlight-marker-copy">
+                            <div class="highlight-marker-title">Efficient</div>
+                            <div class="highlight-marker-desc">Designed for fast, practical deployment.</div>
+                        </div>
+                    </div>
+                    <div class="highlight-marker badge-pill">
+                        <span class="highlight-marker-symbol" aria-hidden="true">★</span>
+                        <div class="highlight-marker-copy">
+                            <div class="highlight-marker-title">Strong Results</div>
+                            <div class="highlight-marker-desc">Competitive performance on core metrics.</div>
+                        </div>
+                    </div>
+                    <div class="highlight-marker badge-pill">
+                        <span class="highlight-marker-symbol" aria-hidden="true">◇</span>
+                        <div class="highlight-marker-copy">
+                            <div class="highlight-marker-title">Robust</div>
+                            <div class="highlight-marker-desc">Stable behavior across common settings.</div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

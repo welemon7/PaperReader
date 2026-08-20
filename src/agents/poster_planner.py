@@ -333,11 +333,12 @@ def _build_contributions_section(analysis: PaperAnalysis) -> PosterSection:
 
 
 def _build_highlights_section(analysis: PaperAnalysis) -> PosterSection:
-    content = _build_highlights_content(analysis) or "- See paper for details."
     return PosterSection(
         section_id="sec-highlights", type="highlights",
         title="Highlights",
-        content_md=content,
+        # Highlights are fixed visual markers rendered by the HTML template.
+        # Do not inject extracted contribution/result prose into this footer.
+        content_md="",
         column=2, col_span=1, row=3,
     )
 
