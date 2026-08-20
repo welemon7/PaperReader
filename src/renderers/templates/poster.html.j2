@@ -269,7 +269,7 @@ body {
 .core-column .section-copy { font-size: 16px; line-height: 1.5; }
 
 /* ================= tables ================= */
-.core-table-wrap, .table-wrap { overflow-x: auto; }
+.core-table-wrap, .table-wrap { width: 100%; max-width: 100%; overflow: hidden; }
 .core-table-header { display: flex; flex-direction: column; gap: 5px; margin-bottom: 8px; }
 .core-table-caption { font-size: 14px; font-weight: 700; color: var(--poster-primary); }
 .core-table-meta { font-size: 12px; color: var(--text-muted); line-height: 1.35; }
@@ -286,7 +286,7 @@ tbody tr:nth-child(even) { background: color-mix(in srgb, var(--panel-soft) 55%,
 .core-table-wrap th { background: var(--panel-soft); color: var(--poster-primary); font-weight: 700; }
 
 .core-metrics-table { width: 100%; max-width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 13px; margin: 0; }
-.core-metrics-table th, .core-metrics-table td { border: 1px solid var(--border-color); padding: 7px 8px; text-align: center; vertical-align: middle; }
+.core-metrics-table th, .core-metrics-table td { border: 1px solid var(--border-color); padding: 5px 6px; text-align: center; vertical-align: middle; }
 .core-metrics-table th { background: color-mix(in srgb, var(--poster-primary) 8%, var(--poster-bg)); color: var(--poster-primary); font-weight: 800; }
 .core-metrics-table th:first-child, .core-metrics-table td:first-child { text-align: left; font-weight: 700; }
 .core-metrics-table th, .core-metrics-table td { max-width: 150px; overflow-wrap: anywhere; word-break: break-word; }

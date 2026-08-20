@@ -471,23 +471,9 @@ def _build_core_result_table(doc: PaperDocument, analysis: PaperAnalysis) -> str
     final_table = _extract_final_table_html(analysis)
     if final_table:
         return final_table
-
-    table = _extract_core_tex_table(doc, analysis)
-    if not table:
-        return ""
-
-    header, rows = table
-    header_html = "".join(f"<th>{html_lib.escape(cell)}</th>" for cell in header)
-    body_html = "".join(
-        "<tr>" + "".join(f"<td>{html_lib.escape(cell)}</td>" for cell in row) + "</tr>"
-        for row in rows
-    )
-    return (
-        '<table class="core-metrics-table">'
-        f"<thead><tr>{header_html}</tr></thead>"
-        f"<tbody>{body_html}</tbody>"
-        '</table>'
-    )
+    # Do not fall back to a complete source table: that can reintroduce
+    # baselines or exceed the poster table budget when selection failed.
+    return ""
 
 
 def _extract_final_table_html(analysis: PaperAnalysis) -> str:
@@ -500,8 +486,8 @@ def _extract_final_table_html(analysis: PaperAnalysis) -> str:
             return obj.get(key, default)
         return getattr(obj, key, default)
 
-    headers = [html_lib.escape(str(cell)) for cell in _get(table, "headers", []) or []]
-    rows = _get(table, "rows", []) or []
+    headers = [html_lib.escape(str(cell)) for cell in (_get(table, "headers", []) or [])[:7]]
+    rows = [list(row)[:7] for row in (_get(table, "rows", []) or [])[:5]]
     if not headers or not rows:
         return ""
     body_html = "".join(
