@@ -274,6 +274,17 @@ class HtmlPosterRenderer:
             return None
 
         target_name = sanitize_asset_name(figure_id or src.stem, src.stem)
+        if src.suffix.lower() == ".svg":
+            target = out_dir / f"{target_name}.svg"
+            try:
+                out_dir.mkdir(parents=True, exist_ok=True)
+                if src != target:
+                    target.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+                    return target
+                return src
+            except Exception as exc:
+                logger.warning("Failed to persist SVG figure asset %s: %s", src, exc)
+                return None
         prepared = copy_or_rasterize_asset(src, out_dir, target_name)
         if prepared:
             return prepared
@@ -447,6 +458,14 @@ class HtmlPosterRenderer:
                         if resolved.suffix.lower() == ".pdf":
                             target_name = getattr(fig, "asset_filename", None) or fig.figure_id
                             resolved = copy_or_rasterize_asset(resolved, output_dir / "figures", target_name) or resolved
+                        elif resolved.suffix.lower() == ".svg":
+                            target_name = getattr(fig, "asset_filename", None) or fig.figure_id
+                            svg_target = output_dir / "figures" / f"{sanitize_asset_name(target_name, fig.figure_id)}.svg"
+                            try:
+                                svg_target.write_text(resolved.read_text(encoding="utf-8"), encoding="utf-8")
+                                resolved = svg_target
+                            except Exception as exc:
+                                logger.warning("Failed to copy SVG figure %s: %s", resolved, exc)
                         if resolved.resolve().is_relative_to(figures_dir):
                             entry["src"] = HtmlPosterRenderer._browser_asset_uri(resolved, output_dir)
                         else:

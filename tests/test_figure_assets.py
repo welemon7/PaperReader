@@ -1,6 +1,6 @@
 from PIL import Image, ImageDraw
 
-from src.utils.figure_assets import copy_or_rasterize_asset, crop_content_with_padding
+from src.utils.figure_assets import copy_or_rasterize_asset, crop_content_with_padding, save_svg_asset
 
 
 def test_crop_content_with_padding_removes_white_margins(tmp_path):
@@ -42,3 +42,28 @@ def test_copy_or_rasterize_asset_crops_copied_image(tmp_path):
     assert target is not None
     with Image.open(target) as prepared:
         assert prepared.size == (40, 40)
+
+
+def test_copy_or_rasterize_asset_preserves_svg_assets(tmp_path):
+    source_path = tmp_path / "vector.svg"
+    source_path.write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><path d="M1 1h8v8H1z"/></svg>',
+        encoding="utf-8",
+    )
+
+    target = copy_or_rasterize_asset(source_path, tmp_path / "out", "vector")
+
+    assert target is not None
+    assert target.suffix == ".svg"
+    assert target.exists()
+    assert "<svg" in target.read_text(encoding="utf-8")
+
+
+def test_save_svg_asset_wraps_symbol_text(tmp_path):
+    target = save_svg_asset("◎", tmp_path / "figures", "symbol-highlight")
+
+    assert target.exists()
+    assert target.suffix == ".svg"
+    content = target.read_text(encoding="utf-8")
+    assert "<svg" in content
+    assert "◎" in content

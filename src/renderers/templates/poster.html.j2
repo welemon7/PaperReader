@@ -134,8 +134,9 @@ body {
 .grid-container > .section-block#sec-contributions,
 .grid-container > .section-block#sec-highlights,
 .grid-container > .section-block#sec-project {
-    align-self: start;
-    max-height: 190px;
+    align-self: stretch;
+    min-height: 190px;
+    height: 100%;
 }
 .grid-container > .section-block#sec-contributions .section-title,
 .grid-container > .section-block#sec-highlights .section-title,
@@ -147,6 +148,7 @@ body {
 .grid-container > .section-block#sec-highlights .section-content,
 .grid-container > .section-block#sec-project .section-content {
     padding: 10px 14px;
+    overflow: hidden;
 }
 .section-block {
     border: 1px solid var(--border-color);
@@ -440,6 +442,7 @@ tbody tr:nth-child(even) { background: color-mix(in srgb, var(--panel-soft) 55%,
 }
 .row-equal {
     align-self: stretch;
+    min-height: 190px;
 }
 .row-equal .section-content {
     height: 100%;

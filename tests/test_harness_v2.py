@@ -173,3 +173,41 @@ def test_harness_v2_records_artifacts(mock_cfg, tmp_path):
     report = __import__("json").loads(Path(result.report_path).read_text(encoding="utf-8"))
     assert report["total_scores"] == [66.0, 70.0]
     assert report["rounds"][0]["verdict"]["computed"] is True
+
+
+@patch("src.agents.poster_harness.LLMClient.is_configured", return_value=True)
+@patch("src.agents.poster_harness.LLMClient.chat")
+def test_harness_v2_blank_section_creates_svg_supplement(mock_chat, _mock_cfg, tmp_path):
+    doc, analysis = _make_doc(), _make_analysis()
+    from src.agents.poster_planner import generate_blueprint
+    blueprint = generate_blueprint(doc, analysis)
+    initial = _render_initial(tmp_path)
+
+    motivation = next(sec for sec in blueprint.sections if sec.type == "motivation")
+    motivation.content_md = ""
+
+    mock_chat.return_value = """<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 320 320\">
+<rect width=\"320\" height=\"320\" fill=\"white\"/>
+<circle cx=\"160\" cy=\"160\" r=\"72\" fill=\"#16324f\"/>
+<text x=\"160\" y=\"172\" text-anchor=\"middle\" font-size=\"80\" fill=\"white\">◎</text>
+</svg>"""
+
+    review = _review_with_verdict(60.0)
+    review.issues.append(PosterComment(issue="Blank area in motivation", severity="warning", target="sec-motivation", action="supplement"))
+    review.deterministic_checks = {
+        "section_blank_reports": [
+            {"section_id": "sec-motivation", "blank_ratio": 0.72, "content_ratio": 0.28, "width": 0, "height": 0}
+        ]
+    }
+
+    normal_config = HarnessConfig(threshold=8, max_rounds=2, zoom_crops=False, enable_qa_eval=False)
+
+    with patch("src.agents.poster_harness.review_rendered_poster", side_effect=[review, _review_with_verdict(70.0)]):
+        result = run_poster_harness(doc, analysis, blueprint, initial, tmp_path, config=normal_config)
+
+    round1 = result.rounds[0]
+    assert "supplement sec-motivation (svg)" in round1.applied_actions
+    figure_dir = tmp_path / "harness" / "round_1" / "figures"
+    svg_files = list(figure_dir.glob("*.svg"))
+    assert svg_files, "expected generated SVG supplement asset"
+    assert "<svg" in svg_files[0].read_text(encoding="utf-8")

@@ -12,7 +12,9 @@ from PIL import Image
 
 logger = logging.getLogger(__name__)
 
-_IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff"}
+_RASTER_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff"}
+_VECTOR_SUFFIXES = {".svg"}
+_IMAGE_SUFFIXES = _RASTER_SUFFIXES | _VECTOR_SUFFIXES
 _CONTENT_BACKGROUND_THRESHOLD = 240
 
 
@@ -58,6 +60,9 @@ def crop_content_with_padding(
 
 def _crop_image_file(image_path: Path, padding: int = 10) -> dict[str, list[int] | float] | None:
     """Crop an image in place, retaining the original file if processing fails."""
+    if image_path.suffix.lower() in _VECTOR_SUFFIXES:
+        return None
+
     temporary_path = image_path.with_name(f".{image_path.stem}.crop{image_path.suffix}")
     try:
         with Image.open(image_path) as source:
@@ -96,7 +101,7 @@ def resolve_figure_source(local_path: str | None, source_dir: str | Path | None)
             if not path.suffix:
                 for suffix in _IMAGE_SUFFIXES | {".pdf"}:
                     candidates.append(source_dir_path / f"{path.name}{suffix}")
-        if not path.suffix:
+    if not path.suffix:
             for suffix in _IMAGE_SUFFIXES | {".pdf"}:
                 candidates.append(path.with_suffix(suffix))
 
@@ -210,6 +215,53 @@ def copy_or_rasterize_asset(src: Path, out_dir: Path, target_name: str | None = 
         return target
 
     return src
+
+
+def save_svg_asset(
+    svg_or_symbol: str,
+    out_dir: Path,
+    target_name: str,
+    *,
+    width: int = 320,
+    height: int = 320,
+    view_box: str = "0 0 320 320",
+) -> Path:
+    """Persist a generated vector asset as SVG.
+
+    Accepts either a complete SVG document or a symbol/string payload. Plain
+    symbols are wrapped into a minimal SVG so the asset can be reused directly
+    from HTML later.
+    """
+    out_dir.mkdir(parents=True, exist_ok=True)
+    safe_name = sanitize_asset_name(target_name, "vector_asset")
+    target = out_dir / f"{safe_name}.svg"
+
+    content = (svg_or_symbol or "").strip()
+    if not content:
+        raise ValueError("svg_or_symbol must not be empty")
+
+    if "<svg" not in content.lower():
+        symbol = html_escape(content)
+        content = (
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="{view_box}">'
+            '<rect width="100%" height="100%" fill="white"/>'
+            f'<text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" '
+            f'font-family="Inter, Segoe UI, sans-serif" font-size="120" fill="#16324f">{symbol}</text>'
+            "</svg>"
+        )
+
+    target.write_text(content, encoding="utf-8")
+    return target
+
+
+def html_escape(text: str) -> str:
+    return (
+        text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&#39;")
+    )
 
 
 def create_fallback_preview(src: Path, out_dir: Path, target_name: str) -> Path | None:

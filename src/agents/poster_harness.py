@@ -18,11 +18,12 @@ from src.llm.multimodal_client import (
 )
 from src.renderers.html_renderer import HtmlPosterRenderer
 from src.schemas.analysis import PaperAnalysis
-from src.schemas.paper import PaperDocument
+from src.schemas.paper import Figure, PaperDocument
 from src.schemas.poster import PosterBlueprint, PosterSection
 from src.schemas.poster_harness import HarnessConfig, HarnessResult, HarnessRound
 from src.schemas.poster_v2 import EvaluationQuestion, PosterComment, PosterQAEval, PosterReview
 from src.agents.content_policy import count_words, section_budget, trim_to_budget
+from src.utils.figure_assets import save_svg_asset, sanitize_asset_name
 
 logger = logging.getLogger(__name__)
 
@@ -279,6 +280,69 @@ def _visual_supplement_html(sec: PosterSection, report: SectionBlankReport) -> s
         '<div class="mini-node"><div class="mini-node-title">Cue</div><div class="mini-node-copy">Use one flow, one arrow, or one small comparison.</div></div>'
         '</div>'
     )
+
+
+def _blank_section_visual_prompt(sec: PosterSection, report: SectionBlankReport) -> str:
+    body = (sec.content_md or "").strip()
+    body = re.sub(r"\s+", " ", body)
+    if len(body) > 700:
+        body = body[:700].rstrip() + "…"
+    return (
+        f"Section type: {sec.type}\n"
+        f"Section title: {sec.title or sec.type}\n"
+        f"Blank ratio: {report.blank_ratio:.0%}\n"
+        f"Content preview: {body or '(empty)'}\n\n"
+        "Generate a compact SVG infographic or symbol-only visual that helps fill the blank space. "
+        "Use a clean white background, 1-2 accent colors, and no external dependencies. "
+        "Return ONLY a valid standalone SVG document. If you cannot generate a useful diagram, "
+        "return a single meaningful symbol or icon-like glyph wrapped in SVG."
+    )
+
+
+def _generate_blank_supplement_asset(
+    llm: Optional[LLMClient],
+    sec: PosterSection,
+    report: SectionBlankReport,
+    asset_dirs: list[Path],
+) -> Optional[str]:
+    if not asset_dirs:
+        return None
+
+    target_name = sanitize_asset_name(f"{sec.section_id}-supplement", sec.section_id)
+    primary_dir = asset_dirs[0]
+    svg_text: str | None = None
+
+    if llm is not None:
+        try:
+            svg_text = _strip_fences(llm.chat(
+                system=(
+                    "You create minimal standalone SVG illustrations for scientific posters. "
+                    "Return valid SVG only. No markdown, no code fences, no explanations."
+                ),
+                user=_blank_section_visual_prompt(sec, report),
+            ))
+        except Exception as exc:
+            logger.warning("Blank-section SVG generation failed for %s: %s", sec.section_id, exc)
+            svg_text = None
+
+    if not svg_text:
+        return None
+
+    try:
+        primary_svg = save_svg_asset(svg_text, primary_dir, target_name)
+    except Exception as exc:
+        logger.warning("Failed to persist blank-section SVG for %s: %s", sec.section_id, exc)
+        return None
+
+    for extra_dir in asset_dirs[1:]:
+        try:
+            extra_dir.mkdir(parents=True, exist_ok=True)
+            extra_path = extra_dir / primary_svg.name
+            extra_path.write_text(primary_svg.read_text(encoding="utf-8"), encoding="utf-8")
+        except Exception as exc:
+            logger.warning("Failed to stage SVG asset %s into %s: %s", primary_svg.name, extra_dir, exc)
+
+    return f"figures/{primary_svg.name}"
 
 
 def _heuristic_density_issues(blueprint: PosterBlueprint) -> list[PosterComment]:
@@ -651,6 +715,7 @@ def _apply_feedback(
         review: PosterReview,
         llm: Optional[LLMClient],
         css_patches: list[str],
+        asset_dirs: Optional[list[Path]] = None,
 ) -> list[str]:
     """Translate a review into blueprint mutations + CSS patches.
 
@@ -766,8 +831,18 @@ def _apply_feedback(
                     width=0,
                     height=0,
                 )
-                sec.supplement_html = _visual_supplement_html(sec, report)
-                applied.append(f"supplement {sec.section_id}")
+                asset_ref = _generate_blank_supplement_asset(llm, sec, report, asset_dirs or [])
+                if asset_ref:
+                    sec.supplement_html = (
+                        '<div class="mini-visual-grid">'
+                        f'<div class="mini-node"><div class="mini-node-title">{html.escape(sec.title or sec.type.replace("_", " ").title())}</div><div class="mini-node-copy">Blank ratio {report.blank_ratio:.0%}. Supplemented with a generated visual cue.</div></div>'
+                        f'<div class="figure-card"><img src="{asset_ref}" alt="{html.escape(sec.title or sec.section_id)} supplement"></div>'
+                        '</div>'
+                    )
+                    applied.append(f"supplement {sec.section_id} (svg)")
+                else:
+                    sec.supplement_html = _visual_supplement_html(sec, report)
+                    applied.append(f"supplement {sec.section_id}")
             else:
                 applied.append(f"supplement skipped ({comment.issue[:60]})")
 
@@ -1147,7 +1222,13 @@ def run_poster_harness(
         # 4) Record round.
         score = review.quality_score
         scores.append(score)
-        applied_actions = _apply_feedback(blueprint, review, llm, css_patches)
+        applied_actions = _apply_feedback(
+            blueprint,
+            review,
+            llm,
+            css_patches,
+            asset_dirs=[round_dir / "figures", output_dir / "figures"],
+        )
         artifact_map = _artifact_map(review)
         rounds.append(HarnessRound(
             round_no=round_no,

@@ -529,23 +529,23 @@ def _extract_final_table_html(analysis: PaperAnalysis) -> str:
 def _build_contributions_content(analysis: PaperAnalysis) -> str:
     bullets: list[str] = []
     for contrib in analysis.contributions[:3]:
-        item = _short_bullet(contrib.text, BULLET_WORD_BUDGET)
+        item = _short_bullet(contrib.text, min(14, BULLET_WORD_BUDGET))
         if item:
             bullets.append(f"- {item}")
-    while len(bullets) < 3:
+    while len(bullets) < 2:
         fallback = [
             "- The method improves the core target task.",
             "- The design stays lightweight and easy to deploy.",
             "- Results stay consistent across settings.",
         ][len(bullets)]
         bullets.append(fallback)
-    return "\n".join(bullets[:3]).strip()
+    return "\n".join(bullets[:2]).strip()
 
 
 def _build_highlights_content(analysis: PaperAnalysis) -> str:
-    items = [_short_bullet(x, BULLET_WORD_BUDGET) for x in _build_highlights(analysis)]
+    items = [_short_bullet(x, min(12, BULLET_WORD_BUDGET)) for x in _build_highlights(analysis)]
     items = [x for x in items if x]
-    while len(items) < 4:
+    while len(items) < 3:
         defaults = [
             "A clean pipeline for the target task.",
             "Strong quantitative gains on the main benchmarks.",
@@ -553,7 +553,7 @@ def _build_highlights_content(analysis: PaperAnalysis) -> str:
             "Stable behavior under common variations.",
         ]
         items.append(defaults[len(items)])
-    return "\n".join(f"- {item}" for item in items[:4])
+    return "\n".join(f"- {item}" for item in items[:3])
 
 
 def _build_project_content(analysis: PaperAnalysis) -> str:
