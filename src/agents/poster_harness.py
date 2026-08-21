@@ -56,6 +56,7 @@ class SectionBlankReport:
     crop_path: str = ""
     blank_cells: list[dict[str, Any]] = field(default_factory=list)
     blank_regions: list[dict[str, Any]] = field(default_factory=list)
+    core_blank_review: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -77,6 +78,18 @@ class BlankRegionCandidate:
     blank_cells: list[dict[str, Any]] = field(default_factory=list)
     crop_path: str = ""
     blank_regions: list[dict[str, Any]] = field(default_factory=list)
+    core_blank_review: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class CoreBlankReview:
+    """VLM's coarse location prior for the Core Results blank-space pass."""
+
+    has_invalid_blank: bool
+    location: str = "none"
+    description: str = ""
+    confidence: float = 0.0
+    region_hint: dict[str, float] = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -141,6 +154,25 @@ Answer each question using ONLY what is legible in the supplied poster image. Do
 outside knowledge and do not guess. Return JSON ONLY in this exact format:
 {"answers": [{"question_id": "...", "answer": "...", "confidence": 0.0}]}
 If the answer is absent or unreadable, return an empty answer with confidence 0.
+"""
+
+_CORE_BLANK_SYSTEM_PROMPT = """You inspect ONLY the supplied Core Results section crop from a scientific poster.
+Decide whether there is a large, visually useless empty area that should be filled
+with a compact paper-grounded diagram. Existing charts, tables, axes, legends,
+white plot backgrounds, and whitespace needed for readability are NOT useless.
+If a genuine empty area exists, identify its coarse location and describe what is
+missing. Use a normalized region_hint (all values from 0 to 1, relative to this
+crop) that covers the suspected area. If no reliable empty area exists, set
+has_invalid_blank=false and region_hint=null.
+
+Return JSON ONLY:
+{
+  "has_invalid_blank": true,
+  "location": "top_left|top_center|top_right|center_left|center|center_right|bottom_left|bottom_center|bottom_right|none",
+  "description": "short visual description",
+  "confidence": 0.0,
+  "region_hint": {"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0}
+}
 """
 
 # ---------------------------------------------------------------------------
@@ -301,7 +333,10 @@ def _blank_ratio_threshold(sec: PosterSection) -> float:
 
 
 def _should_supplement_report(report: SectionBlankReport, sec: PosterSection) -> bool:
-    del sec
+    if sec.type == "main_method" and report.core_blank_review:
+        return bool(report.core_blank_review.get("has_invalid_blank")) and report.blank_ratio >= _INVALID_BLANK_RATIO_THRESHOLD
+    if sec.type == "main_method":
+        return False
     return report.blank_ratio >= _INVALID_BLANK_RATIO_THRESHOLD
 
 
@@ -350,6 +385,97 @@ def _connected_white_regions(binary: Any, white_threshold: int = 240) -> list[di
                 "touches_border": left == 0 or top == 0 or right == width - 1 or bottom == height - 1,
             })
     return regions
+
+
+def _location_hint_to_region(location: str) -> dict[str, float]:
+    """Convert a coarse VLM location into a conservative normalized crop hint."""
+    location = (location or "none").strip().lower()
+    if location == "none":
+        return {}
+    horizontal = "right" if "right" in location else ("left" if "left" in location else "center")
+    vertical = "bottom" if "bottom" in location else ("top" if "top" in location else "center")
+    x = 0.5 if horizontal == "right" else (0.0 if horizontal == "left" else 0.25)
+    y = 0.5 if vertical == "bottom" else (0.0 if vertical == "top" else 0.25)
+    width = 0.5 if horizontal in {"left", "right"} else 0.5
+    height = 0.5 if vertical in {"top", "bottom"} else 0.5
+    return {"x": x, "y": y, "width": width, "height": height}
+
+
+def _normalize_region_hint(value: object, location: str = "none") -> dict[str, float]:
+    if not isinstance(value, dict):
+        return _location_hint_to_region(location)
+    result: dict[str, float] = {}
+    for key in ("x", "y", "width", "height"):
+        try:
+            result[key] = min(1.0, max(0.0, float(value.get(key))))
+        except (TypeError, ValueError):
+            return _location_hint_to_region(location)
+    if result["width"] <= 0 or result["height"] <= 0:
+        return _location_hint_to_region(location)
+    result["width"] = round(min(result["width"], 1.0 - result["x"]), 6)
+    result["height"] = round(min(result["height"], 1.0 - result["y"]), 6)
+    return result
+
+
+def _normalize_core_blank_review(raw: object) -> Optional[CoreBlankReview]:
+    if not isinstance(raw, dict):
+        return None
+    location = str(raw.get("location") or "none").strip().lower()
+    location = re.sub(r"[\s-]+", "_", location)
+    location = {
+        "右下角": "bottom_right",
+        "右下方": "bottom_right",
+        "右上角": "top_right",
+        "左下角": "bottom_left",
+        "左下方": "bottom_left",
+        "左上角": "top_left",
+        "下方": "bottom_center",
+        "底部": "bottom_center",
+        "上方": "top_center",
+        "顶部": "top_center",
+        "中间": "center",
+        "中心": "center",
+        "没有": "none",
+        "无": "none",
+    }.get(location, location)
+    allowed = {
+        "top_left", "top_center", "top_right", "center_left", "center",
+        "center_right", "bottom_left", "bottom_center", "bottom_right", "none",
+    }
+    if location not in allowed:
+        location = "none"
+    try:
+        confidence = min(1.0, max(0.0, float(raw.get("confidence") or 0.0)))
+    except (TypeError, ValueError):
+        confidence = 0.0
+    has_blank = bool(raw.get("has_invalid_blank", False)) and location != "none"
+    if confidence and confidence < 0.45:
+        has_blank = False
+    return CoreBlankReview(
+        has_invalid_blank=has_blank,
+        location=location,
+        description=str(raw.get("description") or "").strip(),
+        confidence=confidence,
+        region_hint=_normalize_region_hint(raw.get("region_hint"), location),
+    )
+
+
+def _inspect_core_blank_with_vlm(crop_path: Path, model: Optional[str] = None) -> Optional[CoreBlankReview]:
+    if not crop_path.exists():
+        return None
+    raw = multimodal_analyze_labeled(
+        _CORE_BLANK_SYSTEM_PROMPT,
+        [(str(crop_path), "Core Results section crop")],
+        user_text=(
+            "Is there a large invalid blank area in this Core Results section? "
+            "If yes, state the most important location and what appears to be missing."
+        ),
+        model=model,
+    )
+    review = _normalize_core_blank_review(raw)
+    if review is None:
+        logger.warning("Core Results blank-space VLM review returned no valid result")
+    return review
 
 
 def _largest_pure_background_rectangle(
@@ -406,6 +532,7 @@ def _analyze_blank_regions(
     *,
     white_threshold: int = 240,
     kernel_size: int = _MORPHOLOGY_KERNEL_SIZE,
+    region_hint: Optional[dict[str, float]] = None,
 ) -> list[dict[str, Any]]:
     """Detect pure-background regions using closing, components and variance.
 
@@ -418,13 +545,26 @@ def _analyze_blank_regions(
         return []
     try:
         with Image.open(png_path) as source:
-            gray = source.convert("L")
+            full_gray = source.convert("L")
+            full_width, full_height = full_gray.size
+            total = float(max(1, full_width * full_height))
+            base_x = base_y = 0
+            gray = full_gray
+            if region_hint:
+                hint_x = min(1.0, max(0.0, float(region_hint.get("x") or 0.0)))
+                hint_y = min(1.0, max(0.0, float(region_hint.get("y") or 0.0)))
+                hint_w = min(1.0 - hint_x, max(0.0, float(region_hint.get("width") or 0.0)))
+                hint_h = min(1.0 - hint_y, max(0.0, float(region_hint.get("height") or 0.0)))
+                base_x = int(full_width * hint_x)
+                base_y = int(full_height * hint_y)
+                right = max(base_x + 1, min(full_width, base_x + int(full_width * hint_w)))
+                bottom = max(base_y + 1, min(full_height, base_y + int(full_height * hint_h)))
+                gray = full_gray.crop((base_x, base_y, right, bottom))
             width, height = gray.size
             if width <= 0 or height <= 0:
                 return []
             binary = gray.point(lambda value: 0 if value < white_threshold else 255)
             closed = binary.filter(ImageFilter.MinFilter(kernel_size)).filter(ImageFilter.MaxFilter(kernel_size))
-            total = float(width * height)
             min_area_ratio = min(0.01, _INVALID_BLANK_RATIO_THRESHOLD / 10.0)
             regions: list[dict[str, Any]] = []
             for component in _connected_white_regions(closed, white_threshold):
@@ -436,8 +576,8 @@ def _analyze_blank_regions(
                 area = int(component["component_area"])
                 if variance < _BLANK_GRAY_VARIANCE_THRESHOLD and area / total >= min_area_ratio:
                     region = {
-                        "x": x,
-                        "y": y,
+                        "x": x + base_x,
+                        "y": y + base_y,
                         "width": int(component["width"]),
                         "height": int(component["height"]),
                         "area_pixels": area,
@@ -456,6 +596,8 @@ def _analyze_blank_regions(
                 min_area_ratio=min_area_ratio,
             )
             if rectangle:
+                rectangle["x"] = int(rectangle["x"]) + base_x
+                rectangle["y"] = int(rectangle["y"]) + base_y
                 rectangle["area_ratio"] = round(rectangle["area_pixels"] / total, 6)
                 rectangle["blank_ratio"] = rectangle["area_ratio"]
                 rectangle["method"] = "pure_background_rectangle"
@@ -499,8 +641,9 @@ def _make_blank_region_candidates(
     doc: PaperDocument,
     analysis: PaperAnalysis,
     round_dir: Path,
+    core_blank_review: Optional[CoreBlankReview] = None,
 ) -> list[BlankRegionCandidate]:
-    reports = _section_blank_reports(round_dir, blueprint)
+    reports = _section_blank_reports(round_dir, blueprint, core_blank_review)
     if not reports:
         return []
     lookup = _section_lookup(blueprint)
@@ -540,6 +683,7 @@ def _make_blank_region_candidates(
             blank_cells=list(report.blank_cells),
             blank_regions=list(report.blank_regions),
             crop_path=crop_path,
+            core_blank_review=dict(report.core_blank_review),
         ))
     candidates.sort(key=lambda c: (c.blank_ratio, -c.text_words, -c.figure_count), reverse=True)
     return candidates
@@ -567,7 +711,11 @@ def _measure_png_blank_ratio(png_path: Path) -> Optional[float]:
         return None
 
 
-def _section_blank_reports(round_dir: Path, blueprint: PosterBlueprint) -> list[SectionBlankReport]:
+def _section_blank_reports(
+    round_dir: Path,
+    blueprint: PosterBlueprint,
+    core_blank_review: Optional[CoreBlankReview] = None,
+) -> list[SectionBlankReport]:
     sections_dir = round_dir / "sections"
     if not sections_dir.exists():
         sections_dir = round_dir
@@ -584,7 +732,8 @@ def _section_blank_reports(round_dir: Path, blueprint: PosterBlueprint) -> list[
         if sec is None:
             continue
         width, height = _image_size(png_path)
-        blank_regions = _analyze_blank_regions(png_path)
+        hint = core_blank_review.region_hint if sec.type == "main_method" and core_blank_review and core_blank_review.has_invalid_blank else None
+        blank_regions = _analyze_blank_regions(png_path, region_hint=hint)
         blank_cells = list(blank_regions)
         region_ratio = min(
             1.0,
@@ -604,6 +753,7 @@ def _section_blank_reports(round_dir: Path, blueprint: PosterBlueprint) -> list[
             crop_path=str(png_path.resolve()),
             blank_cells=blank_cells,
             blank_regions=blank_regions,
+            core_blank_review=(asdict(core_blank_review) if sec.type == "main_method" and core_blank_review else {}),
         ))
     return reports
 
@@ -683,6 +833,7 @@ def _blank_region_visual_prompt(candidate: BlankRegionCandidate) -> str:
         f"Text words: {candidate.text_words}\n"
         f"Figures in section: {candidate.figure_count}\n"
         f"Detected blank cells: {cell_lines}\n\n"
+        f"Core VLM blank-location prior: {candidate.core_blank_review or '(not applicable)'}\n\n"
         "Local context:\n"
         f"{candidate.local_context or '(empty)'}\n\n"
         "Nearby context:\n"
@@ -1101,6 +1252,11 @@ def review_rendered_poster(
         except Exception as exc:
             logger.warning("Failed to stage section crop %s: %s", sec_id, exc)
 
+    core_blank_review: Optional[CoreBlankReview] = None
+    core_crop = crops.get("sec-main-method")
+    if core_crop and core_crop.exists():
+        core_blank_review = _inspect_core_blank_with_vlm(core_crop, model=model)
+
     user_text = (
         "Review the rendered scientific poster for visual quality. Report concrete issues "
         "with exact targets (section id/title) and actionable fixes."
@@ -1129,13 +1285,18 @@ def review_rendered_poster(
         layout_feedback=[str(x) for x in (raw.get("layout_feedback") or []) if x],
         dimension_scores=_normalize_dimension_scores(raw.get("dimension_scores")),
     )
-    blank_reports = _section_blank_reports(round_dir, blueprint)
-    if blank_reports:
+    blank_reports = _section_blank_reports(round_dir, blueprint, core_blank_review)
+    if blank_reports or core_blank_review is not None:
         review.deterministic_checks = dict(review.deterministic_checks or {})
+        if core_blank_review is not None:
+            review.deterministic_checks["core_blank_review"] = asdict(core_blank_review)
+    if blank_reports:
         review.deterministic_checks["section_blank_reports"] = [asdict(r) for r in blank_reports]
         if doc is not None and analysis is not None:
             review.deterministic_checks["blank_region_candidates"] = [
-                asdict(c) for c in _make_blank_region_candidates(blueprint, doc, analysis, round_dir)
+                asdict(c) for c in _make_blank_region_candidates(
+                    blueprint, doc, analysis, round_dir, core_blank_review
+                )
             ]
         _merge_blank_reports(review, blank_reports, blueprint)
     _merge_deterministic_issues(review, inspect_rendered_poster(html_path, blueprint))

@@ -17,6 +17,7 @@ from src.agents.poster_harness import (
     _normalize_severity,
     _rewrite_section,
     _analyze_blank_regions,
+    _normalize_core_blank_review,
     _size_supplement_svg,
     _supplement_overlay_html,
     _should_stop,
@@ -348,6 +349,63 @@ def test_svg_supplement_uses_detected_region_geometry():
     assert 'width="100"' in svg
     assert 'height="40"' in svg
     assert 'left:0px;top:6px;width:64px;height:24px' in overlay
+
+
+def test_core_blank_vlm_requires_explicit_positive_review():
+    from src.agents.poster_harness import SectionBlankReport, _should_supplement_report
+
+    sec = next(s for s in _make_blueprint().sections if s.type == "main_method")
+    report = SectionBlankReport(
+        section_id=sec.section_id,
+        section_type=sec.type,
+        section_title=sec.title,
+        blank_ratio=0.8,
+        content_ratio=0.2,
+        width=100,
+        height=100,
+        text_words=50,
+        figure_count=0,
+        has_figures=False,
+        core_blank_review={"has_invalid_blank": False},
+    )
+    assert _should_supplement_report(report, sec) is False
+
+    report.core_blank_review = {
+        "has_invalid_blank": True,
+        "location": "bottom_right",
+        "confidence": 0.9,
+    }
+    assert _should_supplement_report(report, sec) is True
+
+
+def test_core_blank_vlm_normalizes_location_and_region_hint():
+    review = _normalize_core_blank_review({
+        "has_invalid_blank": True,
+        "location": "bottom_right",
+        "description": "Almost no text or graphics in the lower-right area.",
+        "confidence": 0.92,
+        "region_hint": {"x": 0.55, "y": 0.58, "width": 0.5, "height": 0.5},
+    })
+    assert review is not None
+    assert review.has_invalid_blank is True
+    assert review.location == "bottom_right"
+    assert review.region_hint == {"x": 0.55, "y": 0.58, "width": 0.45, "height": 0.42}
+
+    negative = _normalize_core_blank_review({
+        "has_invalid_blank": True,
+        "location": "bottom_right",
+        "confidence": 0.2,
+    })
+    assert negative is not None
+    assert negative.has_invalid_blank is False
+
+    chinese = _normalize_core_blank_review({
+        "has_invalid_blank": True,
+        "location": "右下角",
+        "confidence": 0.9,
+    })
+    assert chinese is not None
+    assert chinese.location == "bottom_right"
 
 
 # ---------------------------------------------------------------------------
