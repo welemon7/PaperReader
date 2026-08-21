@@ -160,7 +160,7 @@ def generate_poster_task(
         task.message = '正在下载和解析论文...'
         task.progress = 20
         logger.info(f"Task {task_id}: Phase 1 - Parse")
-        doc = run_parse_paper(arxiv_id, force=True)
+        paper_doc = run_parse_paper(arxiv_id, force=True)
 
         # ---- Phase 2: Understand (LLM) ----
         task.message = '正在理解论文内容 (LLM)...'
@@ -183,7 +183,7 @@ def generate_poster_task(
         task.progress = 55
         logger.info(f"Task {task_id}: Phase 3 - Plan")
         output_dir = resolve_paper_output_dir(app.config['OUTPUT_DIR'], arxiv_id)
-        blueprint = generate_blueprint(doc, analysis)
+        blueprint = generate_blueprint(paper_doc, analysis)
 
         # ---- Phase 4: Render (初稿) ----
         task.message = '正在渲染初稿 HTML...'
@@ -191,7 +191,7 @@ def generate_poster_task(
         logger.info(f"Task {task_id}: Phase 4 - Render Draft")
         renderer = HtmlPosterRenderer()
         draft_path = output_dir / "poster_draft.html"
-        renderer.render_to_file(blueprint, doc, draft_path, optimize_with_llm=False)
+        renderer.render_to_file(blueprint, paper_doc, draft_path, optimize_with_llm=False)
 
         # ---- Phase 5: Visual Review Harness (视觉审查循环) ----
         task.message = '视觉审查循环准备中...'
@@ -242,7 +242,7 @@ def generate_poster_task(
         )
 
         harness_result = run_poster_harness(
-            doc=doc,
+            doc=paper_doc,
             analysis=analysis,
             blueprint=blueprint,
             html_path=draft_path,

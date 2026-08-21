@@ -208,6 +208,10 @@ def test_harness_v2_blank_section_creates_svg_supplement(mock_chat, _mock_cfg, t
     round1 = result.rounds[0]
     assert "supplement sec-motivation (svg)" in round1.applied_actions
     figure_dir = tmp_path / "harness" / "round_1" / "figures"
+    supplement_dir = tmp_path / "harness" / "round_1" / "supplement"
     svg_files = list(figure_dir.glob("*.svg"))
+    supplement_files = list(supplement_dir.glob("*.svg"))
     assert svg_files, "expected generated SVG supplement asset"
-    assert "<svg" in svg_files[0].read_text(encoding="utf-8")
+    assert supplement_files, "expected raw supplement asset copy"
+    assert svg_files[0].name == supplement_files[0].name
+    assert "<svg" in supplement_files[0].read_text(encoding="utf-8")

@@ -4,7 +4,8 @@ import html
 import json
 import logging
 import re
-from dataclasses import dataclass
+import shutil
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Optional
@@ -36,10 +37,37 @@ except ImportError:  # pragma: no cover - PIL is a hard dependency in practice
 @dataclass
 class SectionBlankReport:
     section_id: str
+    section_type: str
+    section_title: str
     blank_ratio: float
     content_ratio: float
     width: int
     height: int
+    text_words: int
+    figure_count: int
+    has_figures: bool
+    crop_path: str = ""
+    blank_cells: list[dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass
+class BlankRegionCandidate:
+    section_id: str
+    section_type: str
+    section_title: str
+    blank_ratio: float
+    content_ratio: float
+    width: int
+    height: int
+    text_words: int
+    figure_count: int
+    has_figures: bool
+    local_context: str
+    nearby_context: str
+    global_context: str
+    key_signals: list[str] = field(default_factory=list)
+    blank_cells: list[dict[str, Any]] = field(default_factory=list)
+    crop_path: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -183,6 +211,10 @@ def _section_selectors(blueprint: PosterBlueprint) -> dict[str, str]:
     return selectors
 
 
+def _section_lookup(blueprint: PosterBlueprint) -> dict[str, PosterSection]:
+    return {sec.section_id: sec for sec in blueprint.sections}
+
+
 def _dense_section_ids(blueprint: PosterBlueprint, limit: int) -> list[str]:
     """Pick the most text-dense sections for zoomed-in crops."""
     candidates = [
@@ -193,22 +225,195 @@ def _dense_section_ids(blueprint: PosterBlueprint, limit: int) -> list[str]:
     return [sec.section_id for sec in candidates[:limit]]
 
 
-def _measure_png_blank_ratio(png_path: Path) -> Optional[float]:
+def _section_words(sec: PosterSection) -> int:
+    return count_words(sec.content_md)
+
+
+def _section_figure_count(section_id: str, blueprint: PosterBlueprint) -> int:
+    return sum(1 for fp in blueprint.figure_placements if fp.section_id == section_id)
+
+
+def _section_has_figures(section_id: str, blueprint: PosterBlueprint) -> bool:
+    return _section_figure_count(section_id, blueprint) > 0
+
+
+def _section_neighbor_text(blueprint: PosterBlueprint, sec: PosterSection, radius: int = 1) -> str:
+    ordered = sorted(
+        [s for s in blueprint.sections if s.type != "title"],
+        key=lambda s: (s.row, s.column, s.section_id),
+    )
+    try:
+        idx = next(i for i, item in enumerate(ordered) if item.section_id == sec.section_id)
+    except StopIteration:
+        return ""
+    parts: list[str] = []
+    for offset in range(-radius, radius + 1):
+        if offset == 0:
+            continue
+        pos = idx + offset
+        if 0 <= pos < len(ordered):
+            other = ordered[pos]
+            text = _section_content_preview(other, limit=260)
+            parts.append(f"{other.section_id} ({other.type}): {text}")
+    return "\n".join(parts)
+
+
+def _global_poster_context(doc: PaperDocument, analysis: PaperAnalysis, blueprint: PosterBlueprint) -> str:
+    contributions = " | ".join(
+        _short if (_short := re.sub(r"\s+", " ", c.text).strip()) else ""
+        for c in analysis.contributions[:4]
+        if (c.text or "").strip()
+    )
+    experiments = analysis.experiments.main_results if analysis.experiments and analysis.experiments.main_results else ""
+    method = (analysis.method_overview or "").strip()
+    problem = (analysis.problem_statement or "").strip()
+    return (
+        f"Paper title: {doc.title}\n"
+        f"Problem: {problem or '(not provided)'}\n"
+        f"Method: {method or '(not provided)'}\n"
+        f"Main results: {experiments or '(not provided)'}\n"
+        f"Contributions: {contributions or '(not provided)'}\n"
+        f"Poster title: {blueprint.poster_title}\n"
+        f"Poster sections: {', '.join(sec.type for sec in blueprint.sections if sec.type != 'title')}"
+    )
+
+
+def _fallback_poster_context(blueprint: PosterBlueprint) -> str:
+    return (
+        f"Poster title: {blueprint.poster_title}\n"
+        f"Poster sections: {', '.join(sec.type for sec in blueprint.sections if sec.type != 'title')}\n"
+        f"Layout rows: {', '.join(str(sec.row) for sec in blueprint.sections if sec.type != 'title')}"
+    )
+
+
+def _blank_ratio_threshold(sec: PosterSection) -> float:
+    if sec.type == "main_method":
+        return 0.22
+    if sec.type in {"motivation", "method_overview", "key_idea"}:
+        return 0.30
+    if sec.type in {"contributions", "highlights", "project_link"}:
+        return 0.38
+    return 0.32
+
+
+def _analyze_blank_cells(png_path: Path, *, white_threshold: int = 240, grid_x: int = 4, grid_y: int = 4) -> list[dict[str, Any]]:
     if Image is None or not png_path.exists():
-        return None
+        return []
     try:
         with Image.open(png_path) as img:
             rgb = img.convert("RGB")
             width, height = rgb.size
             if width <= 0 or height <= 0:
-                return None
+                return []
+            cell_w = max(1, width // grid_x)
+            cell_h = max(1, height // grid_y)
             pixels = rgb.load()
+            cells: list[dict[str, Any]] = []
+            for row in range(grid_y):
+                for col in range(grid_x):
+                    left = col * cell_w
+                    top = row * cell_h
+                    right = width if col == grid_x - 1 else min(width, left + cell_w)
+                    bottom = height if row == grid_y - 1 else min(height, top + cell_h)
+                    area = max(1, (right - left) * (bottom - top))
+                    blank = 0
+                    for y in range(top, bottom):
+                        for x in range(left, right):
+                            r, g, b = pixels[x, y]
+                            if r >= white_threshold and g >= white_threshold and b >= white_threshold:
+                                blank += 1
+                    blank_ratio = blank / area
+                    if blank_ratio >= 0.3:
+                        cells.append({
+                            "row": row,
+                            "col": col,
+                            "blank_ratio": round(blank_ratio, 4),
+                            "area_ratio": round(area / float(width * height), 4),
+                        })
+            return cells
+    except Exception as exc:
+        logger.warning("Blank cell analysis failed for %s: %s", png_path, exc)
+        return []
+
+
+def _image_size(png_path: Path) -> tuple[int, int]:
+    if Image is None or not png_path.exists():
+        return 0, 0
+    try:
+        with Image.open(png_path) as img:
+            return int(img.width), int(img.height)
+    except Exception:
+        return 0, 0
+
+
+def _make_blank_region_candidates(
+    blueprint: PosterBlueprint,
+    doc: PaperDocument,
+    analysis: PaperAnalysis,
+    round_dir: Path,
+) -> list[BlankRegionCandidate]:
+    reports = _section_blank_reports(round_dir, blueprint)
+    if not reports:
+        return []
+    lookup = _section_lookup(blueprint)
+    global_context = _global_poster_context(doc, analysis, blueprint)
+    candidates: list[BlankRegionCandidate] = []
+    for report in reports:
+        sec = lookup.get(report.section_id)
+        if sec is None:
+            continue
+        threshold = _blank_ratio_threshold(sec)
+        if report.blank_ratio < threshold:
+            continue
+        if report.has_figures and report.blank_ratio < 0.5:
+            continue
+        local_context = _section_content_preview(sec, limit=650)
+        nearby_context = _section_neighbor_text(blueprint, sec, radius=1)
+        signals: list[str] = []
+        if analysis.problem_statement:
+            signals.append(_section_content_preview(PosterSection(section_id="tmp", type=sec.type, title=sec.title, content_md=analysis.problem_statement), limit=180))
+        if analysis.method_overview:
+            signals.append(_section_content_preview(PosterSection(section_id="tmp", type=sec.type, title=sec.title, content_md=analysis.method_overview), limit=180))
+        if analysis.experiments and analysis.experiments.main_results:
+            signals.append(_section_content_preview(PosterSection(section_id="tmp", type=sec.type, title=sec.title, content_md=analysis.experiments.main_results), limit=180))
+        crop_path = report.crop_path or str((round_dir / "sections" / f"{sec.section_id}.png").resolve())
+        candidates.append(BlankRegionCandidate(
+            section_id=sec.section_id,
+            section_type=sec.type,
+            section_title=sec.title or sec.type,
+            blank_ratio=report.blank_ratio,
+            content_ratio=report.content_ratio,
+            width=report.width,
+            height=report.height,
+            text_words=report.text_words,
+            figure_count=report.figure_count,
+            has_figures=report.has_figures,
+            local_context=local_context,
+            nearby_context=nearby_context,
+            global_context=global_context,
+            key_signals=[s for s in signals if s],
+            blank_cells=list(report.blank_cells),
+            crop_path=crop_path,
+        ))
+    candidates.sort(key=lambda c: (c.blank_ratio, -c.text_words, -c.figure_count), reverse=True)
+    return candidates
+
+
+def _measure_png_blank_ratio(png_path: Path) -> Optional[float]:
+    if Image is None or not png_path.exists():
+        return None
+    try:
+        with Image.open(png_path) as img:
+            gray = img.convert("L")
+            width, height = gray.size
+            if width <= 0 or height <= 0:
+                return None
+            pixels = gray.load()
             total = width * height
             blank = 0
             for y in range(height):
                 for x in range(width):
-                    r, g, b = pixels[x, y]
-                    if r >= 244 and g >= 244 and b >= 244:
+                    if pixels[x, y] >= 240:
                         blank += 1
             return blank / total if total else None
     except Exception as exc:
@@ -216,22 +421,37 @@ def _measure_png_blank_ratio(png_path: Path) -> Optional[float]:
         return None
 
 
-def _section_blank_reports(round_dir: Path) -> list[SectionBlankReport]:
+def _section_blank_reports(round_dir: Path, blueprint: PosterBlueprint) -> list[SectionBlankReport]:
     sections_dir = round_dir / "sections"
     if not sections_dir.exists():
-        return []
+        sections_dir = round_dir
+    lookup = _section_lookup(blueprint)
     reports: list[SectionBlankReport] = []
     for png_path in sorted(sections_dir.glob("*.png")):
         ratio = _measure_png_blank_ratio(png_path)
         if ratio is None:
             continue
         section_id = png_path.stem
+        sec = lookup.get(section_id)
+        if sec is None and section_id.startswith("poster_"):
+            sec = lookup.get(section_id.removeprefix("poster_"))
+        if sec is None:
+            continue
+        width, height = _image_size(png_path)
+        blank_cells = _analyze_blank_cells(png_path)
         reports.append(SectionBlankReport(
             section_id=section_id,
+            section_type=sec.type,
+            section_title=sec.title or sec.type,
             blank_ratio=ratio,
             content_ratio=max(0.0, 1.0 - ratio),
-            width=0,
-            height=0,
+            width=width,
+            height=height,
+            text_words=_section_words(sec),
+            figure_count=_section_figure_count(sec.section_id, blueprint),
+            has_figures=_section_has_figures(sec.section_id, blueprint),
+            crop_path=str(png_path.resolve()),
+            blank_cells=blank_cells,
         ))
     return reports
 
@@ -282,34 +502,60 @@ def _visual_supplement_html(sec: PosterSection, report: SectionBlankReport) -> s
     )
 
 
-def _blank_section_visual_prompt(sec: PosterSection, report: SectionBlankReport) -> str:
-    body = (sec.content_md or "").strip()
-    body = re.sub(r"\s+", " ", body)
-    if len(body) > 700:
-        body = body[:700].rstrip() + "…"
+def _section_content_preview(sec: PosterSection, limit: int = 900) -> str:
+    raw = (sec.content_md or "").strip()
+    raw = re.sub(r"\s+", " ", raw)
+    if not raw:
+        return "(empty)"
+    if len(raw) <= limit:
+        return raw
+    return raw[:limit].rstrip() + "…"
+
+
+def _blank_region_visual_prompt(candidate: BlankRegionCandidate) -> str:
+    blank_cells = candidate.blank_cells[:8]
+    cell_lines = ", ".join(
+        f"r{cell.get('row')}c{cell.get('col')}={float(cell.get('blank_ratio') or 0.0):.0%}"
+        for cell in blank_cells
+        if isinstance(cell, dict)
+    ) or "none"
     return (
-        f"Section type: {sec.type}\n"
-        f"Section title: {sec.title or sec.type}\n"
-        f"Blank ratio: {report.blank_ratio:.0%}\n"
-        f"Content preview: {body or '(empty)'}\n\n"
-        "Generate a compact SVG infographic or symbol-only visual that helps fill the blank space. "
-        "Use a clean white background, 1-2 accent colors, and no external dependencies. "
-        "Return ONLY a valid standalone SVG document. If you cannot generate a useful diagram, "
-        "return a single meaningful symbol or icon-like glyph wrapped in SVG."
+        f"Target section: {candidate.section_id} ({candidate.section_type})\n"
+        f"Section title: {candidate.section_title}\n"
+        f"Canvas size: {candidate.width}x{candidate.height}\n"
+        f"Blank ratio: {candidate.blank_ratio:.0%}\n"
+        f"Content ratio: {candidate.content_ratio:.0%}\n"
+        f"Text words: {candidate.text_words}\n"
+        f"Figures in section: {candidate.figure_count}\n"
+        f"Detected blank cells: {cell_lines}\n\n"
+        "Local context:\n"
+        f"{candidate.local_context or '(empty)'}\n\n"
+        "Nearby context:\n"
+        f"{candidate.nearby_context or '(none)'}\n\n"
+        "Global context:\n"
+        f"{candidate.global_context or '(none)'}\n\n"
+        "Key signals:\n"
+        f"{chr(10).join('- ' + s for s in candidate.key_signals) if candidate.key_signals else '(none)'}\n\n"
+        "Design task: generate a compact SVG that fills the blank region with a visual grounded in the poster content. "
+        "Prefer a simple diagram, comparison, flow, metric callout, or one symbolic glyph only when the evidence is weak. "
+        "Use 1-3 labels max, a white background, 1-2 accent colors, and no external dependencies. "
+        "Match the visual emphasis to the blank geometry; do not add decorative elements unrelated to the content. "
+        "Return ONLY a valid standalone SVG document."
     )
 
 
 def _generate_blank_supplement_asset(
     llm: Optional[LLMClient],
-    sec: PosterSection,
-    report: SectionBlankReport,
-    asset_dirs: list[Path],
+    candidate: BlankRegionCandidate,
+    asset_roots: list[Path],
 ) -> Optional[str]:
-    if not asset_dirs:
+    if not asset_roots:
         return None
 
-    target_name = sanitize_asset_name(f"{sec.section_id}-supplement", sec.section_id)
-    primary_dir = asset_dirs[0]
+    target_name = sanitize_asset_name(f"{candidate.section_id}_supplement", candidate.section_id)
+    primary_root = asset_roots[0]
+    primary_supplement_dir = primary_root / "supplement"
+    primary_browser_dir = primary_root / "figures"
     svg_text: str | None = None
 
     if llm is not None:
@@ -319,28 +565,36 @@ def _generate_blank_supplement_asset(
                     "You create minimal standalone SVG illustrations for scientific posters. "
                     "Return valid SVG only. No markdown, no code fences, no explanations."
                 ),
-                user=_blank_section_visual_prompt(sec, report),
+                user=_blank_region_visual_prompt(candidate),
             ))
         except Exception as exc:
-            logger.warning("Blank-section SVG generation failed for %s: %s", sec.section_id, exc)
+            logger.warning("Blank-section SVG generation failed for %s: %s", candidate.section_id, exc)
             svg_text = None
 
     if not svg_text:
         return None
 
     try:
-        primary_svg = save_svg_asset(svg_text, primary_dir, target_name)
+        primary_svg = save_svg_asset(svg_text, primary_supplement_dir, target_name)
     except Exception as exc:
-        logger.warning("Failed to persist blank-section SVG for %s: %s", sec.section_id, exc)
+        logger.warning("Failed to persist blank-section SVG for %s: %s", candidate.section_id, exc)
         return None
 
-    for extra_dir in asset_dirs[1:]:
+    try:
+        primary_browser_dir.mkdir(parents=True, exist_ok=True)
+        browser_path = primary_browser_dir / primary_svg.name
+        browser_path.write_text(primary_svg.read_text(encoding="utf-8"), encoding="utf-8")
+    except Exception as exc:
+        logger.warning("Failed to stage SVG asset %s into %s: %s", primary_svg.name, primary_browser_dir, exc)
+
+    for extra_root in asset_roots[1:]:
         try:
-            extra_dir.mkdir(parents=True, exist_ok=True)
-            extra_path = extra_dir / primary_svg.name
+            supplement_dir = extra_root / "supplement"
+            supplement_dir.mkdir(parents=True, exist_ok=True)
+            extra_path = supplement_dir / primary_svg.name
             extra_path.write_text(primary_svg.read_text(encoding="utf-8"), encoding="utf-8")
         except Exception as exc:
-            logger.warning("Failed to stage SVG asset %s into %s: %s", primary_svg.name, extra_dir, exc)
+            logger.warning("Failed to stage SVG asset %s into %s: %s", primary_svg.name, extra_root, exc)
 
     return f"figures/{primary_svg.name}"
 
@@ -529,6 +783,8 @@ def review_rendered_poster(
         config: HarnessConfig,
         blueprint: PosterBlueprint,
         model: Optional[str] = None,
+        doc: Optional[PaperDocument] = None,
+        analysis: Optional[PaperAnalysis] = None,
 ) -> Optional[PosterReview]:
     """Capture the rendered poster (full + zoom crops) and ask the VLM for a review.
 
@@ -536,6 +792,8 @@ def review_rendered_poster(
     fall back to the legacy single-shot HTML optimizer).
     """
     png_path = round_dir / "poster.png"
+    sections_dir = round_dir / "sections"
+    sections_dir.mkdir(parents=True, exist_ok=True)
     selectors = _section_selectors(blueprint)
     crops = capture_poster_full_and_sections(
         html_path,
@@ -559,6 +817,16 @@ def review_rendered_poster(
                 sec = next((s for s in blueprint.sections if s.section_id == sec_id), None)
                 label = f"section: {sec.title if sec else sec_id}"
                 images.append((str(crop), label))
+
+    for sec_id, crop in crops.items():
+        if not crop.exists():
+            continue
+        target = sections_dir / f"{sec_id}.png"
+        try:
+            if crop.resolve() != target.resolve():
+                shutil.copy2(crop, target)
+        except Exception as exc:
+            logger.warning("Failed to stage section crop %s: %s", sec_id, exc)
 
     user_text = (
         "Review the rendered scientific poster for visual quality. Report concrete issues "
@@ -588,10 +856,14 @@ def review_rendered_poster(
         layout_feedback=[str(x) for x in (raw.get("layout_feedback") or []) if x],
         dimension_scores=_normalize_dimension_scores(raw.get("dimension_scores")),
     )
-    blank_reports = _section_blank_reports(round_dir)
+    blank_reports = _section_blank_reports(round_dir, blueprint)
     if blank_reports:
         review.deterministic_checks = dict(review.deterministic_checks or {})
-        review.deterministic_checks["section_blank_reports"] = [r.__dict__ for r in blank_reports]
+        review.deterministic_checks["section_blank_reports"] = [asdict(r) for r in blank_reports]
+        if doc is not None and analysis is not None:
+            review.deterministic_checks["blank_region_candidates"] = [
+                asdict(c) for c in _make_blank_region_candidates(blueprint, doc, analysis, round_dir)
+            ]
         _merge_blank_reports(review, blank_reports, blueprint)
     _merge_deterministic_issues(review, inspect_rendered_poster(html_path, blueprint))
     return review
@@ -715,7 +987,9 @@ def _apply_feedback(
         review: PosterReview,
         llm: Optional[LLMClient],
         css_patches: list[str],
-        asset_dirs: Optional[list[Path]] = None,
+        asset_roots: Optional[list[Path]] = None,
+        doc: Optional[PaperDocument] = None,
+        analysis: Optional[PaperAnalysis] = None,
 ) -> list[str]:
     """Translate a review into blueprint mutations + CSS patches.
 
@@ -815,33 +1089,81 @@ def _apply_feedback(
 
         elif action == "supplement":
             if sec:
-                blank_reports = (review.deterministic_checks or {}).get("section_blank_reports") or []
-                blank_ratio = 0.0
-                for item in blank_reports:
-                    if isinstance(item, dict) and str(item.get("section_id", "")) == sec.section_id:
+                candidate_map: dict[str, BlankRegionCandidate] = {}
+                for item in (review.deterministic_checks or {}).get("blank_region_candidates") or []:
+                    if isinstance(item, dict) and item.get("section_id"):
                         try:
-                            blank_ratio = float(item.get("blank_ratio") or 0.0)
-                        except (TypeError, ValueError):
-                            blank_ratio = 0.0
-                        break
-                report = SectionBlankReport(
-                    section_id=sec.section_id,
-                    blank_ratio=blank_ratio,
-                    content_ratio=max(0.0, 1.0 - blank_ratio),
-                    width=0,
-                    height=0,
-                )
-                asset_ref = _generate_blank_supplement_asset(llm, sec, report, asset_dirs or [])
+                            candidate_map[str(item["section_id"])] = BlankRegionCandidate(**item)
+                        except Exception:
+                            continue
+                if sec.section_id in candidate_map:
+                    candidate = candidate_map[sec.section_id]
+                else:
+                    blank_reports = (review.deterministic_checks or {}).get("section_blank_reports") or []
+                    blank_ratio = 0.0
+                    blank_cells: list[dict[str, Any]] = []
+                    crop_path = ""
+                    width = 0
+                    height = 0
+                    text_words = _section_words(sec)
+                    figure_count = _section_figure_count(sec.section_id, blueprint)
+                    has_figures = _section_has_figures(sec.section_id, blueprint)
+                    for item in blank_reports:
+                        if isinstance(item, dict) and str(item.get("section_id", "")) == sec.section_id:
+                            try:
+                                blank_ratio = float(item.get("blank_ratio") or 0.0)
+                                width = int(item.get("width") or 0)
+                                height = int(item.get("height") or 0)
+                                text_words = int(item.get("text_words") or text_words)
+                                figure_count = int(item.get("figure_count") or figure_count)
+                                has_figures = bool(item.get("has_figures", has_figures))
+                                blank_cells = list(item.get("blank_cells") or [])
+                                crop_path = str(item.get("crop_path") or crop_path)
+                            except (TypeError, ValueError):
+                                blank_ratio = 0.0
+                            break
+                    candidate = BlankRegionCandidate(
+                        section_id=sec.section_id,
+                        section_type=sec.type,
+                        section_title=sec.title or sec.type,
+                        blank_ratio=blank_ratio,
+                        content_ratio=max(0.0, 1.0 - blank_ratio),
+                        width=width,
+                        height=height,
+                        text_words=text_words,
+                        figure_count=figure_count,
+                        has_figures=has_figures,
+                        local_context=_section_content_preview(sec, limit=650),
+                        nearby_context=_section_neighbor_text(blueprint, sec, radius=1),
+                        global_context=(_global_poster_context(doc, analysis, blueprint) if doc and analysis else _fallback_poster_context(blueprint)),
+                        key_signals=[],
+                        blank_cells=blank_cells,
+                        crop_path=crop_path,
+                    )
+                asset_ref = _generate_blank_supplement_asset(llm, candidate, asset_roots or [])
                 if asset_ref:
                     sec.supplement_html = (
                         '<div class="mini-visual-grid">'
-                        f'<div class="mini-node"><div class="mini-node-title">{html.escape(sec.title or sec.type.replace("_", " ").title())}</div><div class="mini-node-copy">Blank ratio {report.blank_ratio:.0%}. Supplemented with a generated visual cue.</div></div>'
+                        f'<div class="mini-node"><div class="mini-node-title">{html.escape(sec.title or sec.type.replace("_", " ").title())}</div><div class="mini-node-copy">Blank ratio {candidate.blank_ratio:.0%}. Supplemented with a generated visual cue.</div></div>'
                         f'<div class="figure-card"><img src="{asset_ref}" alt="{html.escape(sec.title or sec.section_id)} supplement"></div>'
                         '</div>'
                     )
                     applied.append(f"supplement {sec.section_id} (svg)")
                 else:
-                    sec.supplement_html = _visual_supplement_html(sec, report)
+                    sec.supplement_html = _visual_supplement_html(sec, SectionBlankReport(
+                        section_id=candidate.section_id,
+                        section_type=candidate.section_type,
+                        section_title=candidate.section_title,
+                        blank_ratio=candidate.blank_ratio,
+                        content_ratio=candidate.content_ratio,
+                        width=candidate.width,
+                        height=candidate.height,
+                        text_words=candidate.text_words,
+                        figure_count=candidate.figure_count,
+                        has_figures=candidate.has_figures,
+                        crop_path=candidate.crop_path,
+                        blank_cells=candidate.blank_cells,
+                    ))
                     applied.append(f"supplement {sec.section_id}")
             else:
                 applied.append(f"supplement skipped ({comment.issue[:60]})")
@@ -1166,12 +1488,28 @@ def run_poster_harness(
         round_html.write_text(html_str, encoding="utf-8")
 
         # 2) Capture + visual review.
-        review = review_rendered_poster(round_html, round_dir, config, blueprint, model=vision_model)
+        review = review_rendered_poster(
+            round_html,
+            round_dir,
+            config,
+            blueprint,
+            model=vision_model,
+            doc=doc,
+            analysis=analysis,
+        )
         if review is None:
             # One retry, then declare vision unavailable.
             import time as _time
             _time.sleep(2)
-            review = review_rendered_poster(round_html, round_dir, config, blueprint, model=vision_model)
+            review = review_rendered_poster(
+                round_html,
+                round_dir,
+                config,
+                blueprint,
+                model=vision_model,
+                doc=doc,
+                analysis=analysis,
+            )
         if review is None:
             logger.warning("Vision review unavailable; harness cannot continue (round %d)", round_no)
             stop_reason = "vision_unavailable"
@@ -1227,8 +1565,17 @@ def run_poster_harness(
             review,
             llm,
             css_patches,
-            asset_dirs=[round_dir / "figures", output_dir / "figures"],
+            asset_roots=[round_dir, output_dir],
+            doc=doc,
+            analysis=analysis,
         )
+        if applied_actions:
+            try:
+                html_str = renderer.render(blueprint, doc, round_dir)
+                html_str = _apply_css_patches(html_str, css_patches)
+                round_html.write_text(html_str, encoding="utf-8")
+            except Exception as exc:
+                logger.warning("Post-feedback rerender failed at round %d: %s", round_no, exc)
         artifact_map = _artifact_map(review)
         rounds.append(HarnessRound(
             round_no=round_no,
