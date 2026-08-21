@@ -215,3 +215,6 @@ def test_harness_v2_blank_section_creates_svg_supplement(mock_chat, _mock_cfg, t
     assert supplement_files, "expected raw supplement asset copy"
     assert svg_files[0].name == supplement_files[0].name
     assert "<svg" in supplement_files[0].read_text(encoding="utf-8")
+    poster_html = Path(result.final_html).read_text(encoding="utf-8")
+    assert "Blank ratio" not in poster_html
+    assert "supplemented with a generated visual cue" not in poster_html.lower()

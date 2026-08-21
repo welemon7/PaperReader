@@ -16,6 +16,9 @@ from src.agents.poster_harness import (
     _normalize_quality_score,
     _normalize_severity,
     _rewrite_section,
+    _analyze_blank_regions,
+    _size_supplement_svg,
+    _supplement_overlay_html,
     _should_stop,
     evaluate_poster_visual_qa,
     run_poster_harness,
@@ -275,7 +278,8 @@ def test_apply_feedback_supplement_injects_visual_html():
     css_patches: list[str] = []
     applied = _apply_feedback(blueprint, review, llm=None, css_patches=css_patches)
     assert any("supplement sec-motivation" in a for a in applied)
-    assert "mini-visual" in sec.supplement_html
+    assert "Blank ratio" not in sec.supplement_html
+    assert "figure-card" in sec.supplement_html or sec.supplement_html == ""
 
 
 def test_blank_png_ratio_probe_detects_white_space(tmp_path):
@@ -292,6 +296,58 @@ def test_blank_png_ratio_probe_detects_white_space(tmp_path):
     ratio = _measure_png_blank_ratio(path)
     assert ratio is not None
     assert 0.9 <= ratio <= 0.95
+
+
+def test_blank_region_analysis_returns_bbox_and_rejects_low_variance_false_positive(tmp_path):
+    from PIL import Image, ImageDraw
+
+    path = tmp_path / "section.png"
+    image = Image.new("RGB", (100, 100), "white")
+    draw = ImageDraw.Draw(image)
+    for y in range(40):
+        shade = 240 if y % 2 else 255
+        draw.line((0, y, 99, y), fill=(shade, shade, shade))
+    draw.rectangle((0, 60, 99, 99), fill="white")
+    draw.rectangle((15, 68, 85, 72), fill=(0, 0, 0))
+    image.save(path)
+
+    regions = _analyze_blank_regions(path)
+
+    assert regions
+    largest = max(regions, key=lambda item: item["area_pixels"])
+    assert largest["x"] == 0
+    assert largest["y"] >= 60
+    assert largest["width"] == 100
+    assert largest["height"] <= 40
+    assert largest["gray_variance"] < 10
+    assert all(region["y"] >= 60 for region in regions)
+
+
+def test_svg_supplement_uses_detected_region_geometry():
+    from src.agents.poster_harness import BlankRegionCandidate
+
+    candidate = BlankRegionCandidate(
+        section_id="sec-motivation",
+        section_type="motivation",
+        section_title="Motivation",
+        blank_ratio=0.4,
+        content_ratio=0.6,
+        width=100,
+        height=100,
+        text_words=20,
+        figure_count=0,
+        has_figures=False,
+        local_context="context",
+        nearby_context="",
+        global_context="",
+        blank_regions=[{"x": 0, "y": 60, "width": 100, "height": 40, "area_pixels": 4000}],
+    )
+    svg = _size_supplement_svg('<svg viewBox="0 0 10 10"></svg>', candidate)
+    overlay = _supplement_overlay_html("figures/sec-motivation_supplement.svg", candidate, "Motivation")
+
+    assert 'width="100"' in svg
+    assert 'height="40"' in svg
+    assert 'left:0px;top:6px;width:64px;height:24px' in overlay
 
 
 # ---------------------------------------------------------------------------

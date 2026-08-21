@@ -29,9 +29,16 @@ from src.utils.figure_assets import save_svg_asset, sanitize_asset_name
 logger = logging.getLogger(__name__)
 
 try:
-    from PIL import Image
+    from PIL import Image, ImageFilter, ImageStat
 except ImportError:  # pragma: no cover - PIL is a hard dependency in practice
     Image = None  # type: ignore[assignment]
+    ImageFilter = None  # type: ignore[assignment]
+    ImageStat = None  # type: ignore[assignment]
+
+
+_INVALID_BLANK_RATIO_THRESHOLD = 0.30
+_BLANK_GRAY_VARIANCE_THRESHOLD = 10.0
+_MORPHOLOGY_KERNEL_SIZE = 15
 
 
 @dataclass
@@ -48,6 +55,7 @@ class SectionBlankReport:
     has_figures: bool
     crop_path: str = ""
     blank_cells: list[dict[str, Any]] = field(default_factory=list)
+    blank_regions: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -68,6 +76,7 @@ class BlankRegionCandidate:
     key_signals: list[str] = field(default_factory=list)
     blank_cells: list[dict[str, Any]] = field(default_factory=list)
     crop_path: str = ""
+    blank_regions: list[dict[str, Any]] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -287,53 +296,192 @@ def _fallback_poster_context(blueprint: PosterBlueprint) -> str:
 
 
 def _blank_ratio_threshold(sec: PosterSection) -> float:
-    if sec.type == "main_method":
-        return 0.22
-    if sec.type in {"motivation", "method_overview", "key_idea"}:
-        return 0.30
-    if sec.type in {"contributions", "highlights", "project_link"}:
-        return 0.38
-    return 0.32
+    del sec
+    return _INVALID_BLANK_RATIO_THRESHOLD
+
+
+def _should_supplement_report(report: SectionBlankReport, sec: PosterSection) -> bool:
+    del sec
+    return report.blank_ratio >= _INVALID_BLANK_RATIO_THRESHOLD
+
+
+def _connected_white_regions(binary: Any, white_threshold: int = 240) -> list[dict[str, Any]]:
+    """Return 8-connected white components from a PIL grayscale image."""
+    width, height = binary.size
+    pixels = binary.load()
+    seen = bytearray(width * height)
+    regions: list[dict[str, Any]] = []
+    for y in range(height):
+        for x in range(width):
+            index = y * width + x
+            if seen[index] or pixels[x, y] < white_threshold:
+                continue
+            seen[index] = 1
+            stack = [(x, y)]
+            area = 0
+            left = right = x
+            top = bottom = y
+            while stack:
+                current_x, current_y = stack.pop()
+                area += 1
+                left = min(left, current_x)
+                right = max(right, current_x)
+                top = min(top, current_y)
+                bottom = max(bottom, current_y)
+                for dy in (-1, 0, 1):
+                    for dx in (-1, 0, 1):
+                        if not dx and not dy:
+                            continue
+                        next_x = current_x + dx
+                        next_y = current_y + dy
+                        if not (0 <= next_x < width and 0 <= next_y < height):
+                            continue
+                        next_index = next_y * width + next_x
+                        if seen[next_index] or pixels[next_x, next_y] < white_threshold:
+                            continue
+                        seen[next_index] = 1
+                        stack.append((next_x, next_y))
+            regions.append({
+                "component_area": area,
+                "x": left,
+                "y": top,
+                "width": right - left + 1,
+                "height": bottom - top + 1,
+                "touches_border": left == 0 or top == 0 or right == width - 1 or bottom == height - 1,
+            })
+    return regions
+
+
+def _largest_pure_background_rectangle(
+    gray: Any,
+    *,
+    white_threshold: int,
+    min_area_ratio: float,
+) -> dict[str, Any] | None:
+    """Find the largest all-background rectangle for an edge-connected component.
+
+    Text often leaves the outer white background as one connected component.
+    Its full bounding box contains text and therefore fails the variance test,
+    while a bottom or side strip can still be a genuine empty rectangle.  This
+    maximal-rectangle pass recovers that geometry without treating pale charts
+    as blank: the final rectangle is still checked against raw-pixel variance.
+    """
+    width, height = gray.size
+    pixels = gray.load()
+    total = max(1, width * height)
+    histogram = [0] * width
+    best: dict[str, Any] | None = None
+    for y in range(height):
+        for x in range(width):
+            histogram[x] = histogram[x] + 1 if pixels[x, y] >= white_threshold else 0
+        stack: list[tuple[int, int]] = []
+        for index in range(width + 1):
+            current = histogram[index] if index < width else 0
+            start = index
+            while stack and stack[-1][1] > current:
+                previous_start, previous_height = stack.pop()
+                rect_width = index - previous_start
+                area = rect_width * previous_height
+                if area >= (best or {}).get("area_pixels", 0):
+                    candidate = {
+                        "x": previous_start,
+                        "y": y - previous_height + 1,
+                        "width": rect_width,
+                        "height": previous_height,
+                        "area_pixels": area,
+                    }
+                    crop = gray.crop((candidate["x"], candidate["y"], candidate["x"] + rect_width, candidate["y"] + previous_height))
+                    variance = float(ImageStat.Stat(crop).var[0])
+                    if variance < _BLANK_GRAY_VARIANCE_THRESHOLD and area / total >= min_area_ratio:
+                        candidate["gray_variance"] = round(variance, 4)
+                        best = candidate
+                start = previous_start
+            if not stack or stack[-1][1] < current:
+                stack.append((start, current))
+    return best
+
+
+def _analyze_blank_regions(
+    png_path: Path,
+    *,
+    white_threshold: int = 240,
+    kernel_size: int = _MORPHOLOGY_KERNEL_SIZE,
+) -> list[dict[str, Any]]:
+    """Detect pure-background regions using closing, components and variance.
+
+    The binary convention is black=foreground and white=background.  PIL's
+    MinFilter followed by MaxFilter is the equivalent of a 15x15 closing for
+    that convention: it dilates black text strokes so nearby strokes connect,
+    then restores their approximate edges before white components are measured.
+    """
+    if Image is None or ImageFilter is None or ImageStat is None or not png_path.exists():
+        return []
+    try:
+        with Image.open(png_path) as source:
+            gray = source.convert("L")
+            width, height = gray.size
+            if width <= 0 or height <= 0:
+                return []
+            binary = gray.point(lambda value: 0 if value < white_threshold else 255)
+            closed = binary.filter(ImageFilter.MinFilter(kernel_size)).filter(ImageFilter.MaxFilter(kernel_size))
+            total = float(width * height)
+            min_area_ratio = min(0.01, _INVALID_BLANK_RATIO_THRESHOLD / 10.0)
+            regions: list[dict[str, Any]] = []
+            for component in _connected_white_regions(closed, white_threshold):
+                x = int(component["x"])
+                y = int(component["y"])
+                right = x + int(component["width"])
+                bottom = y + int(component["height"])
+                variance = float(ImageStat.Stat(gray.crop((x, y, right, bottom))).var[0])
+                area = int(component["component_area"])
+                if variance < _BLANK_GRAY_VARIANCE_THRESHOLD and area / total >= min_area_ratio:
+                    region = {
+                        "x": x,
+                        "y": y,
+                        "width": int(component["width"]),
+                        "height": int(component["height"]),
+                        "area_pixels": area,
+                        "area_ratio": round(area / total, 6),
+                        "blank_ratio": round(area / total, 6),
+                        "gray_variance": round(variance, 4),
+                        "method": "closed_white_component",
+                        "touches_border": bool(component["touches_border"]),
+                    }
+                    regions.append(region)
+
+            # Recover the largest pure strip inside a text-connected background.
+            rectangle = _largest_pure_background_rectangle(
+                gray,
+                white_threshold=white_threshold,
+                min_area_ratio=min_area_ratio,
+            )
+            if rectangle:
+                rectangle["area_ratio"] = round(rectangle["area_pixels"] / total, 6)
+                rectangle["blank_ratio"] = rectangle["area_ratio"]
+                rectangle["method"] = "pure_background_rectangle"
+                rectangle["touches_border"] = (
+                    rectangle["x"] == 0 or rectangle["y"] == 0
+                    or rectangle["x"] + rectangle["width"] == width
+                    or rectangle["y"] + rectangle["height"] == height
+                )
+                largest_region_area = max(
+                    (int(region.get("area_pixels") or 0) for region in regions),
+                    default=0,
+                )
+                if int(rectangle["area_pixels"]) > largest_region_area:
+                    regions.append(rectangle)
+
+            regions.sort(key=lambda item: float(item.get("area_pixels") or 0), reverse=True)
+            return regions
+    except Exception as exc:
+        logger.warning("Blank region analysis failed for %s: %s", png_path, exc)
+        return []
 
 
 def _analyze_blank_cells(png_path: Path, *, white_threshold: int = 240, grid_x: int = 4, grid_y: int = 4) -> list[dict[str, Any]]:
-    if Image is None or not png_path.exists():
-        return []
-    try:
-        with Image.open(png_path) as img:
-            rgb = img.convert("RGB")
-            width, height = rgb.size
-            if width <= 0 or height <= 0:
-                return []
-            cell_w = max(1, width // grid_x)
-            cell_h = max(1, height // grid_y)
-            pixels = rgb.load()
-            cells: list[dict[str, Any]] = []
-            for row in range(grid_y):
-                for col in range(grid_x):
-                    left = col * cell_w
-                    top = row * cell_h
-                    right = width if col == grid_x - 1 else min(width, left + cell_w)
-                    bottom = height if row == grid_y - 1 else min(height, top + cell_h)
-                    area = max(1, (right - left) * (bottom - top))
-                    blank = 0
-                    for y in range(top, bottom):
-                        for x in range(left, right):
-                            r, g, b = pixels[x, y]
-                            if r >= white_threshold and g >= white_threshold and b >= white_threshold:
-                                blank += 1
-                    blank_ratio = blank / area
-                    if blank_ratio >= 0.3:
-                        cells.append({
-                            "row": row,
-                            "col": col,
-                            "blank_ratio": round(blank_ratio, 4),
-                            "area_ratio": round(area / float(width * height), 4),
-                        })
-            return cells
-    except Exception as exc:
-        logger.warning("Blank cell analysis failed for %s: %s", png_path, exc)
-        return []
+    """Backward-compatible name for the precise blank-region analyzer."""
+    del grid_x, grid_y
+    return _analyze_blank_regions(png_path, white_threshold=white_threshold)
 
 
 def _image_size(png_path: Path) -> tuple[int, int]:
@@ -362,10 +510,7 @@ def _make_blank_region_candidates(
         sec = lookup.get(report.section_id)
         if sec is None:
             continue
-        threshold = _blank_ratio_threshold(sec)
-        if report.blank_ratio < threshold:
-            continue
-        if report.has_figures and report.blank_ratio < 0.5:
+        if not _should_supplement_report(report, sec):
             continue
         local_context = _section_content_preview(sec, limit=650)
         nearby_context = _section_neighbor_text(blueprint, sec, radius=1)
@@ -393,6 +538,7 @@ def _make_blank_region_candidates(
             global_context=global_context,
             key_signals=[s for s in signals if s],
             blank_cells=list(report.blank_cells),
+            blank_regions=list(report.blank_regions),
             crop_path=crop_path,
         ))
     candidates.sort(key=lambda c: (c.blank_ratio, -c.text_words, -c.figure_count), reverse=True)
@@ -438,13 +584,18 @@ def _section_blank_reports(round_dir: Path, blueprint: PosterBlueprint) -> list[
         if sec is None:
             continue
         width, height = _image_size(png_path)
-        blank_cells = _analyze_blank_cells(png_path)
+        blank_regions = _analyze_blank_regions(png_path)
+        blank_cells = list(blank_regions)
+        region_ratio = min(
+            1.0,
+            sum(float(region.get("area_ratio") or 0.0) for region in blank_regions),
+        )
         reports.append(SectionBlankReport(
-            section_id=section_id,
+            section_id=sec.section_id,
             section_type=sec.type,
             section_title=sec.title or sec.type,
-            blank_ratio=ratio,
-            content_ratio=max(0.0, 1.0 - ratio),
+            blank_ratio=region_ratio,
+            content_ratio=max(0.0, 1.0 - region_ratio),
             width=width,
             height=height,
             text_words=_section_words(sec),
@@ -452,6 +603,7 @@ def _section_blank_reports(round_dir: Path, blueprint: PosterBlueprint) -> list[
             has_figures=_section_has_figures(sec.section_id, blueprint),
             crop_path=str(png_path.resolve()),
             blank_cells=blank_cells,
+            blank_regions=blank_regions,
         ))
     return reports
 
@@ -513,9 +665,12 @@ def _section_content_preview(sec: PosterSection, limit: int = 900) -> str:
 
 
 def _blank_region_visual_prompt(candidate: BlankRegionCandidate) -> str:
-    blank_cells = candidate.blank_cells[:8]
+    blank_cells = candidate.blank_regions[:8] or candidate.blank_cells[:8]
     cell_lines = ", ".join(
-        f"r{cell.get('row')}c{cell.get('col')}={float(cell.get('blank_ratio') or 0.0):.0%}"
+        f"x={cell.get('x', 0)}, y={cell.get('y', 0)}, "
+        f"w={cell.get('width', 0)}, h={cell.get('height', 0)}, "
+        f"area={float(cell.get('area_ratio') or cell.get('blank_ratio') or 0.0):.0%}, "
+        f"variance={float(cell.get('gray_variance') or 0.0):.2f}"
         for cell in blank_cells
         if isinstance(cell, dict)
     ) or "none"
@@ -541,6 +696,119 @@ def _blank_region_visual_prompt(candidate: BlankRegionCandidate) -> str:
         "Use 1-3 labels max, a white background, 1-2 accent colors, and no external dependencies. "
         "Match the visual emphasis to the blank geometry; do not add decorative elements unrelated to the content. "
         "Return ONLY a valid standalone SVG document."
+    )
+
+
+def _fallback_supplement_svg(candidate: BlankRegionCandidate) -> str:
+    region = max(
+        candidate.blank_regions or candidate.blank_cells or [{}],
+        key=lambda item: float(item.get("area_pixels") or item.get("area_ratio") or 0.0),
+    )
+    target_width = max(1, int(region.get("width") or candidate.width or 360))
+    target_height = max(1, int(region.get("height") or candidate.height or 220))
+    accent = {
+        "motivation": "#d1495b",
+        "method_overview": "#1f4a75",
+        "key_idea": "#8b5cf6",
+        "main_method": "#0f766e",
+        "experiments": "#a16207",
+        "contributions": "#2563eb",
+        "highlights": "#7c3aed",
+        "project_link": "#059669",
+    }.get(candidate.section_type, "#16324f")
+    secondary = "#c9a84c"
+    if candidate.section_type in {"contributions", "highlights", "project_link"}:
+        return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{target_width}" height="{target_height}" viewBox="0 0 360 220" preserveAspectRatio="none">
+  <rect width="360" height="220" rx="18" fill="#ffffff"/>
+  <rect x="24" y="26" width="312" height="168" rx="14" fill="#f8fafc" stroke="#e2e8f0"/>
+  <rect x="46" y="58" width="54" height="18" rx="9" fill="{accent}" opacity="0.18"/>
+  <rect x="110" y="58" width="76" height="18" rx="9" fill="{secondary}" opacity="0.22"/>
+  <rect x="196" y="58" width="92" height="18" rx="9" fill="{accent}" opacity="0.18"/>
+  <rect x="46" y="98" width="256" height="14" rx="7" fill="{accent}" opacity="0.22"/>
+  <rect x="46" y="126" width="198" height="14" rx="7" fill="{secondary}" opacity="0.26"/>
+  <rect x="46" y="154" width="232" height="14" rx="7" fill="{accent}" opacity="0.20"/>
+</svg>'''
+    if candidate.section_type in {"motivation", "method_overview", "key_idea"}:
+        return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{target_width}" height="{target_height}" viewBox="0 0 360 220" preserveAspectRatio="none">
+  <rect width="360" height="220" rx="18" fill="#ffffff"/>
+  <rect x="28" y="28" width="304" height="164" rx="16" fill="#f8fafc" stroke="#e2e8f0"/>
+  <rect x="52" y="58" width="62" height="84" rx="10" fill="{accent}" opacity="0.18" stroke="{accent}"/>
+  <rect x="150" y="58" width="62" height="84" rx="10" fill="{secondary}" opacity="0.28" stroke="{secondary}"/>
+  <rect x="248" y="58" width="62" height="84" rx="10" fill="{accent}" opacity="0.18" stroke="{accent}"/>
+  <path d="M114 100H144" stroke="{accent}" stroke-width="8" stroke-linecap="round"/>
+  <path d="M212 100H242" stroke="{secondary}" stroke-width="8" stroke-linecap="round"/>
+  <path d="M138 86l10 14-10 14" fill="none" stroke="{accent}" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M236 86l10 14-10 14" fill="none" stroke="{secondary}" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>'''
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{target_width}" height="{target_height}" viewBox="0 0 360 220" preserveAspectRatio="none">
+  <rect width="360" height="220" rx="18" fill="#ffffff"/>
+  <rect x="24" y="28" width="312" height="164" rx="16" fill="#f8fafc" stroke="#e2e8f0"/>
+  <rect x="54" y="52" width="252" height="18" rx="9" fill="{accent}" opacity="0.2"/>
+  <rect x="54" y="84" width="154" height="18" rx="9" fill="{secondary}" opacity="0.25"/>
+  <rect x="54" y="116" width="216" height="18" rx="9" fill="{accent}" opacity="0.16"/>
+  <rect x="54" y="148" width="120" height="18" rx="9" fill="{secondary}" opacity="0.22"/>
+</svg>'''
+
+
+def _size_supplement_svg(svg_text: str, candidate: BlankRegionCandidate) -> str:
+    """Give generated SVGs the detected blank rectangle's intrinsic size."""
+    region = max(
+        candidate.blank_regions or candidate.blank_cells or [{}],
+        key=lambda item: float(item.get("area_pixels") or item.get("area_ratio") or 0.0),
+    )
+    width = max(1, int(region.get("width") or candidate.width or 360))
+    height = max(1, int(region.get("height") or candidate.height or 220))
+    match = re.search(r"<svg\b([^>]*)>", svg_text, flags=re.IGNORECASE)
+    if not match:
+        return svg_text
+    attrs = match.group(1)
+    for name, value in (("width", width), ("height", height)):
+        pattern = rf"\s{name}\s*=\s*(['\"]).*?\1"
+        replacement = f' {name}="{value}"'
+        if re.search(pattern, attrs, flags=re.IGNORECASE):
+            attrs = re.sub(pattern, replacement, attrs, count=1, flags=re.IGNORECASE)
+        else:
+            attrs += replacement
+    return svg_text[:match.start(1)] + attrs + svg_text[match.end(1):]
+
+
+def _supplement_overlay_html(asset_ref: str, candidate: BlankRegionCandidate, alt: str) -> str:
+    """Build a non-flow SVG overlay positioned in the section crop coordinates."""
+    regions = candidate.blank_regions or candidate.blank_cells
+    if not regions:
+        return f'<div class="figure-card"><img src="{html.escape(asset_ref, quote=True)}" alt="{html.escape(alt, quote=True)} supplement"></div>'
+    region = max(
+        regions,
+        key=lambda item: float(item.get("area_pixels") or item.get("area_ratio") or 0.0),
+    )
+    region_x = int(region.get("x") or 0)
+    region_y = int(region.get("y") or 0)
+    region_right = region_x + max(1, int(region.get("width") or candidate.width or 360))
+    region_bottom = region_y + max(1, int(region.get("height") or candidate.height or 220))
+    canvas_width = max(1, candidate.width or region_right)
+    canvas_height = max(1, candidate.height or region_bottom)
+    # Section crops include the border, title band, and content padding. Map the
+    # detected crop coordinates into the content box so the overlay stays in
+    # the section without changing its grid/flex dimensions.
+    content_left = 18
+    content_top = 54
+    content_right = max(content_left, canvas_width - 18)
+    content_bottom = max(content_top, canvas_height - 16)
+    left_edge = max(region_x, content_left)
+    top_edge = max(region_y, content_top)
+    right_edge = min(region_right, content_right)
+    bottom_edge = min(region_bottom, content_bottom)
+    if right_edge <= left_edge or bottom_edge <= top_edge:
+        return ""
+    left = left_edge - content_left
+    top = top_edge - content_top
+    width = right_edge - left_edge
+    height = bottom_edge - top_edge
+    return (
+        '<div class="blank-region-supplement" '
+        f'style="left:{left}px;top:{top}px;width:{width}px;height:{height}px;">'
+        f'<img src="{html.escape(asset_ref, quote=True)}" alt="{html.escape(alt, quote=True)} supplement">'
+        '</div>'
     )
 
 
@@ -572,7 +840,8 @@ def _generate_blank_supplement_asset(
             svg_text = None
 
     if not svg_text:
-        return None
+        svg_text = _fallback_supplement_svg(candidate)
+    svg_text = _size_supplement_svg(svg_text, candidate)
 
     try:
         primary_svg = save_svg_asset(svg_text, primary_supplement_dir, target_name)
@@ -593,6 +862,10 @@ def _generate_blank_supplement_asset(
             supplement_dir.mkdir(parents=True, exist_ok=True)
             extra_path = supplement_dir / primary_svg.name
             extra_path.write_text(primary_svg.read_text(encoding="utf-8"), encoding="utf-8")
+            browser_dir = extra_root / "figures"
+            browser_dir.mkdir(parents=True, exist_ok=True)
+            browser_path = browser_dir / primary_svg.name
+            browser_path.write_text(primary_svg.read_text(encoding="utf-8"), encoding="utf-8")
         except Exception as exc:
             logger.warning("Failed to stage SVG asset %s into %s: %s", primary_svg.name, extra_root, exc)
 
@@ -763,7 +1036,7 @@ def _merge_blank_reports(review: PosterReview, blank_reports: list[SectionBlankR
         sec = next((s for s in blueprint.sections if s.section_id == report.section_id), None)
         if sec is None:
             continue
-        if report.blank_ratio < 0.34:
+        if not _should_supplement_report(report, sec):
             continue
         if report.section_id in existing:
             continue
@@ -867,6 +1140,39 @@ def review_rendered_poster(
         _merge_blank_reports(review, blank_reports, blueprint)
     _merge_deterministic_issues(review, inspect_rendered_poster(html_path, blueprint))
     return review
+
+
+def _refresh_round_artifacts(
+        html_path: Path,
+        round_dir: Path,
+        blueprint: PosterBlueprint,
+) -> None:
+    """Re-capture the poster after feedback has been applied.
+
+    The harness first captures a pre-feedback review image, then mutates the
+    blueprint and re-renders HTML. Without a second capture pass, the saved
+    section crops stay stale even though the HTML now includes the supplement.
+    """
+    png_path = round_dir / "poster.png"
+    sections_dir = round_dir / "sections"
+    sections_dir.mkdir(parents=True, exist_ok=True)
+    selectors = _section_selectors(blueprint)
+    crops = capture_poster_full_and_sections(
+        html_path,
+        png_path,
+        selectors,
+        width=blueprint.width_px,
+        height=blueprint.height_px,
+    )
+    for sec_id, crop in crops.items():
+        if not crop.exists():
+            continue
+        target = sections_dir / f"{sec_id}.png"
+        try:
+            if crop.resolve() != target.resolve():
+                shutil.copy2(crop, target)
+        except Exception as exc:
+            logger.warning("Failed to refresh section crop %s: %s", sec_id, exc)
 
 
 # ---------------------------------------------------------------------------
@@ -1102,6 +1408,7 @@ def _apply_feedback(
                     blank_reports = (review.deterministic_checks or {}).get("section_blank_reports") or []
                     blank_ratio = 0.0
                     blank_cells: list[dict[str, Any]] = []
+                    blank_regions: list[dict[str, Any]] = []
                     crop_path = ""
                     width = 0
                     height = 0
@@ -1118,6 +1425,7 @@ def _apply_feedback(
                                 figure_count = int(item.get("figure_count") or figure_count)
                                 has_figures = bool(item.get("has_figures", has_figures))
                                 blank_cells = list(item.get("blank_cells") or [])
+                                blank_regions = list(item.get("blank_regions") or blank_cells)
                                 crop_path = str(item.get("crop_path") or crop_path)
                             except (TypeError, ValueError):
                                 blank_ratio = 0.0
@@ -1138,32 +1446,19 @@ def _apply_feedback(
                         global_context=(_global_poster_context(doc, analysis, blueprint) if doc and analysis else _fallback_poster_context(blueprint)),
                         key_signals=[],
                         blank_cells=blank_cells,
+                        blank_regions=blank_regions,
                         crop_path=crop_path,
                     )
                 asset_ref = _generate_blank_supplement_asset(llm, candidate, asset_roots or [])
                 if asset_ref:
-                    sec.supplement_html = (
-                        '<div class="mini-visual-grid">'
-                        f'<div class="mini-node"><div class="mini-node-title">{html.escape(sec.title or sec.type.replace("_", " ").title())}</div><div class="mini-node-copy">Blank ratio {candidate.blank_ratio:.0%}. Supplemented with a generated visual cue.</div></div>'
-                        f'<div class="figure-card"><img src="{asset_ref}" alt="{html.escape(sec.title or sec.section_id)} supplement"></div>'
-                        '</div>'
+                    sec.supplement_html = _supplement_overlay_html(
+                        asset_ref,
+                        candidate,
+                        sec.title or sec.section_id,
                     )
                     applied.append(f"supplement {sec.section_id} (svg)")
                 else:
-                    sec.supplement_html = _visual_supplement_html(sec, SectionBlankReport(
-                        section_id=candidate.section_id,
-                        section_type=candidate.section_type,
-                        section_title=candidate.section_title,
-                        blank_ratio=candidate.blank_ratio,
-                        content_ratio=candidate.content_ratio,
-                        width=candidate.width,
-                        height=candidate.height,
-                        text_words=candidate.text_words,
-                        figure_count=candidate.figure_count,
-                        has_figures=candidate.has_figures,
-                        crop_path=candidate.crop_path,
-                        blank_cells=candidate.blank_cells,
-                    ))
+                    sec.supplement_html = ""
                     applied.append(f"supplement {sec.section_id}")
             else:
                 applied.append(f"supplement skipped ({comment.issue[:60]})")
@@ -1574,6 +1869,7 @@ def run_poster_harness(
                 html_str = renderer.render(blueprint, doc, round_dir)
                 html_str = _apply_css_patches(html_str, css_patches)
                 round_html.write_text(html_str, encoding="utf-8")
+                _refresh_round_artifacts(round_html, round_dir, blueprint)
             except Exception as exc:
                 logger.warning("Post-feedback rerender failed at round %d: %s", round_no, exc)
         artifact_map = _artifact_map(review)

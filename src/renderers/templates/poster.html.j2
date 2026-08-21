@@ -190,6 +190,7 @@ body {
     gap: 9px;
     min-height: 0;
     overflow: hidden;
+    position: relative;
 }
 .section-content p { margin: 0; }
 .section-content ul, .section-content ol { padding-left: 20px; margin: 2px 0; }
@@ -325,6 +326,29 @@ body {
 .figure-card.method-card img { max-height: 360px; }
 .figure-card.result-card img { max-height: 300px; }
 .figure-card.method-card { border-color: color-mix(in srgb, var(--poster-accent) 60%, var(--border-color)); }
+.blank-region-supplement {
+    position: absolute;
+    z-index: 3;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    pointer-events: none;
+}
+.blank-region-supplement img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: fill;
+    border-radius: 5px;
+}
+.mini-visual:has(.blank-region-supplement) {
+    width: 0;
+    height: 0;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    overflow: visible;
+}
 
 /* ================= core band ================= */
 .core-band { grid-area: core; }
