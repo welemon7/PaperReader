@@ -132,6 +132,19 @@ class TestPosterBlueprint:
         assert len(bp.formula_displays) == 1
         assert bp.formula_displays[0].section_id == 'sec-key-idea'
 
+    def test_formula_titles_are_sentence_cased(self):
+        analysis = _make_analysis()
+        analysis.key_formulas = [
+            KeyFormula(
+                formula_id='f-001',
+                latex='E=mc^2',
+                semantic_desc='DECOMPOSES OBSERVED IMAGES INTOREFLECTANCE AND ILLUMINATION',
+            ),
+        ]
+        bp = generate_blueprint(_make_doc(), analysis)
+        assert bp.sections[3].content_md.count('formula-box') == 1
+        assert '<div class="formula-label">Decomposes Observed Images into Reflectance and Illumination</div>' in bp.sections[3].content_md
+
     def test_motivation_restores_original_prose_and_key_idea_receives_formulas(self):
         bp = generate_blueprint(_make_doc(), _make_analysis())
         sections = {section.section_id: section for section in bp.sections}

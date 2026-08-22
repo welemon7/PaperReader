@@ -173,7 +173,8 @@ body {
     display: flex;
     align-items: center;
     gap: 8px;
-    text-align: left;
+    text-align: center;
+    justify-content: center;
 }
 .section-title .sym {
     color: var(--poster-accent);
@@ -628,7 +629,10 @@ tbody tr:nth-child(even) { background: color-mix(in srgb, var(--panel-soft) 55%,
                 {% set center_source = ns.core_results if ns.core_results else ns.core_method %}
                 {% set has_table = center_source and center_source.content_html and '[[CORE_TABLE]]' in center_source.content_html %}
                 {% if center_source %}
-                <div class="section-copy">{{ center_source.content_html.split('[[CORE_TABLE]]')[0]|safe }}</div>
+                {% set core_intro = center_source.content_html.split('[[CORE_TABLE]]')[0] %}
+                {% if core_intro|lower|trim not in ['core results', '<h1>core results</h1>', '<h2>core results</h2>', '<h3>core results</h3>', '<h4>core results</h4>', '<h5>core results</h5>', '<h6>core results</h6>'] %}
+                <div class="section-copy">{{ core_intro|safe }}</div>
+                {% endif %}
                 {% endif %}
                 <div class="core-grid {{ 'two-col' if n_figs == 1 else ('one-col' if n_figs == 0 else '') }}">
                     {% if left_fig %}

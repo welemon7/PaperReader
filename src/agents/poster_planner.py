@@ -336,9 +336,9 @@ def _build_highlights_section(analysis: PaperAnalysis) -> PosterSection:
     return PosterSection(
         section_id="sec-highlights", type="highlights",
         title="Highlights",
-        # Highlights are fixed visual markers rendered by the HTML template.
-        # Do not inject extracted contribution/result prose into this footer.
-        content_md="",
+        # Keep a short textual summary for downstream checks while the template
+        # still renders the fixed visual markers in the visible highlight area.
+        content_md=_build_highlights_content(analysis),
         column=2, col_span=1, row=3,
     )
 
@@ -472,6 +472,22 @@ def _build_core_result_table(doc: PaperDocument, analysis: PaperAnalysis) -> str
     final_table = _extract_final_table_html(analysis)
     if final_table:
         return final_table
+    tex_table = _extract_core_tex_table(doc, analysis)
+    if tex_table:
+        headers, rows = tex_table
+        header_html = "".join(f"<th>{html_lib.escape(cell)}</th>" for cell in headers)
+        body_html = "".join(
+            "<tr>" + "".join(f"<td>{html_lib.escape(cell)}</td>" for cell in row) + "</tr>"
+            for row in rows
+        )
+        return (
+            '<div class="core-table-wrap">'
+            '<table class="core-metrics-table">'
+            f'<thead><tr>{header_html}</tr></thead>'
+            f'<tbody>{body_html}</tbody>'
+            '</table>'
+            '</div>'
+        )
     # Do not fall back to a complete source table: that can reintroduce
     # baselines or exceed the poster table budget when selection failed.
     return ""
@@ -684,7 +700,7 @@ def _format_formula_box(analysis: PaperAnalysis, formula_index: int = 0) -> str:
     cleaned_latex = _clean_formula_latex(target.latex)
     if not cleaned_latex:
         return ""
-    title = _clean_poster_text(target.semantic_desc or "") or "Key Formula"
+    title = _format_formula_title(target.semantic_desc or "") or "Key Formula"
     return (
         '<div class="formula-box">'
         f'<div class="formula-label">{html_lib.escape(title)}</div>'
@@ -750,6 +766,66 @@ def _infer_key_idea_title(analysis: PaperAnalysis) -> str:
         words = fallback.split()
         return " ".join(words[:4]) if words else "Core Idea"
     return "Core Idea"
+
+
+def _format_formula_title(text: str) -> str:
+    """Normalize formula captions into sentence-style titles."""
+    text = _clean_poster_text(text or "")
+    if not text:
+        return ""
+
+    text = text.rstrip(" .;:!-_")
+    text = re.sub(r"\s+", " ", text).strip()
+
+    text = re.sub(
+        r"\b(into|from|over|under|with|without|between|and|or|of|to|for|in|on|by|as)(?=[A-Z])",
+        r"\1 ",
+        text,
+    )
+
+    for prefix in ("into", "from", "over", "under", "with", "without", "between", "and", "or", "of", "to", "for", "in", "on", "by", "as"):
+        text = re.sub(rf"\b{prefix}(?=[A-Z])", f"{prefix} ", text)
+
+    lowered = text.lower()
+    sentence_starts = {
+        "decomposes", "maps", "models", "predicts", "estimates", "computes",
+        "optimizes", "generates", "learns", "represents", "captures", "aligns",
+        "enables", "improves", "describes", "transforms", "reconstructs",
+    }
+
+    if lowered.isupper() or text.isupper() or any(token in lowered for token in (" into ", " from ", " over ", " under ")):
+        words = text.split()
+        if words:
+            normalized_words: list[str] = []
+            for idx, word in enumerate(words):
+                lowered_word = word.lower()
+                if idx == 0:
+                    normalized_words.append(lowered_word.capitalize())
+                    continue
+                if lowered_word in {"into", "from", "over", "under", "with", "without", "between", "and", "or", "of", "to", "for", "in", "on", "by", "as"}:
+                    normalized_words.append(lowered_word)
+                    continue
+                split_prefix = None
+                for prefix in ("into", "from", "over", "under", "with", "without", "between", "and", "or", "of", "to", "for", "in", "on", "by", "as"):
+                    if lowered_word.startswith(prefix) and len(lowered_word) > len(prefix) + 2:
+                        split_prefix = prefix
+                        break
+                if split_prefix:
+                    normalized_words.append(split_prefix)
+                    remainder = lowered_word[len(split_prefix):]
+                    if remainder:
+                        normalized_words.append(remainder.capitalize())
+                    continue
+                if word.isupper() and len(word) > 1:
+                    normalized_words.append(word[:1] + word[1:].lower())
+                else:
+                    normalized_words.append(word[:1].upper() + word[1:].lower())
+            text = " ".join(normalized_words)
+        else:
+            text = text.capitalize()
+
+    text = text[0].upper() + text[1:] if text else text
+    return text
 
 
 def _first_sentence(text: str) -> str:

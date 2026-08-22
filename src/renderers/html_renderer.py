@@ -123,6 +123,16 @@ class HtmlPosterRenderer:
             flags=re.IGNORECASE | re.DOTALL,
         )
 
+    @staticmethod
+    def _remove_duplicate_core_results_heading(content: str) -> str:
+        """Drop section-internal Core Results headings while keeping the band title."""
+        return re.sub(
+            r'(^\s*#{1,6}\s*core results\s*$|^\s*<h[1-6]\b[^>]*>\s*core results\s*</h[1-6]>\s*)',
+            "",
+            content or "",
+            flags=re.IGNORECASE | re.MULTILINE,
+        )
+
     def render(
         self,
         blueprint: PosterBlueprint,
@@ -158,6 +168,7 @@ class HtmlPosterRenderer:
             if sec.type in {"main_method", "experiments"}:
                 sec.content_md = self._remove_core_takeaway_rows(sec.content_md)
                 sec.content_md = self._remove_core_table_labels(sec.content_md)
+                sec.content_md = self._remove_duplicate_core_results_heading(sec.content_md)
             sec.content_html = self._markdown_with_latex(sec.content_md)
             if sec.supplement_html:
                 sec.supplement_html = self._markdown_with_latex(sec.supplement_html)
