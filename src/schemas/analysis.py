@@ -75,6 +75,45 @@ class ExperimentSummary(BaseModel):
             return [str(v)] if v else []
 
 
+VisualPriority = Literal["P0", "P1", "P2", "P3"]
+
+
+class ImportanceItem(BaseModel):
+    """A paper claim ranked for poster-scale visual emphasis."""
+
+    text: str = ""
+    importance: float = Field(default=0.0, ge=0.0, le=1.0)
+    role: str = "supporting"
+
+
+class MethodComponent(ImportanceItem):
+    name: str = ""
+
+
+class ContentImportance(BaseModel):
+    """Importance map shared by planning, layout, and visual QA."""
+
+    main_message: ImportanceItem = Field(default_factory=ImportanceItem)
+    core_innovation: ImportanceItem = Field(default_factory=ImportanceItem)
+    method_components: list[MethodComponent] = Field(default_factory=list)
+    supporting_information: list[ImportanceItem] = Field(default_factory=list)
+
+    def priority_for_type(self, section_type: str) -> VisualPriority:
+        mapping: dict[str, VisualPriority] = {
+            "main_method": "P0",
+            "experiments": "P0",
+            "key_idea": "P1",
+            "method_overview": "P1",
+            "motivation": "P2",
+            "contributions": "P3",
+            "highlights": "P3",
+            "project_link": "P3",
+            "references": "P3",
+            "title": "P0",
+        }
+        return mapping.get(section_type, "P2")
+
+
 class PaperAnalysis(BaseModel):
     """Structured analysis of a research paper, used as input for poster planning."""
 
@@ -104,3 +143,6 @@ class PaperAnalysis(BaseModel):
 
     # Full text
     full_analysis_md: str = Field(default="", description="Full LLM analysis in Markdown")
+
+    # Poster hierarchy. Kept on the analysis so it survives SQLite round-trips.
+    content_importance: ContentImportance = Field(default_factory=ContentImportance)

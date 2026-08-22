@@ -176,6 +176,11 @@ body {
     text-align: center;
     justify-content: center;
 }
+
+.section-block[data-priority="P0"] { border-width: 3px; box-shadow: 0 8px 20px rgba(22, 50, 79, 0.16); }
+.section-block[data-priority="P1"] { border-width: 2px; }
+.section-block[data-priority="P2"] { opacity: 0.94; }
+.section-block[data-priority="P3"] { opacity: 0.82; }
 .section-title .sym {
     color: var(--poster-accent);
     font-size: 15px;
@@ -198,6 +203,7 @@ body {
 .section-content li { margin-bottom: 6px; }
 .section-content li::marker { color: var(--poster-accent); }
 .section-content strong { color: var(--poster-primary); font-weight: 700; }
+.story-claim { color: var(--poster-primary); font-weight: 700; margin: 0 0 8px; }
 .section-content em { color: var(--accent-text); }
 .section-content a {
     color: var(--poster-primary);
@@ -538,7 +544,7 @@ tbody tr:nth-child(even) { background: color-mix(in srgb, var(--panel-soft) 55%,
         {% endfor %}
         {% set sym = cs.get('section_symbol') or '▸ ' %}
 
-        <div class="section-block row-equal" id="sec-motivation" style="grid-area: motivation;">
+        <div class="section-block row-equal" id="sec-motivation" data-priority="{{ ns.motivation.visual_priority if ns.motivation else 'P2' }}" style="grid-area: motivation;">
             <div class="section-title"><span class="sym">{{ sym }}</span>{{ ns.motivation.title if ns.motivation else 'Motivation' }}</div>
             <div class="section-content">
                 {% if ns.motivation %}
@@ -552,7 +558,7 @@ tbody tr:nth-child(even) { background: color-mix(in srgb, var(--panel-soft) 55%,
             </div>
         </div>
 
-        <div class="section-block row-equal" id="sec-method-overview" style="grid-area: overview;">
+        <div class="section-block row-equal" id="sec-method-overview" data-priority="{{ ns.overview.visual_priority if ns.overview else 'P1' }}" style="grid-area: overview;">
             <div class="section-title"><span class="sym">{{ sym }}</span>{{ ns.overview.title if ns.overview else 'Method Overview' }}</div>
             <div class="section-content">
                 {% if ns.overview %}
@@ -578,7 +584,7 @@ tbody tr:nth-child(even) { background: color-mix(in srgb, var(--panel-soft) 55%,
             </div>
         </div>
 
-        <div class="section-block row-equal" id="sec-key-idea" style="grid-area: key_idea;">
+        <div class="section-block row-equal" id="sec-key-idea" data-priority="{{ ns.key_idea.visual_priority if ns.key_idea else 'P1' }}" style="grid-area: key_idea;">
             <div class="section-title"><span class="sym">{{ sym }}</span>{{ ns.key_idea.title if ns.key_idea else 'Key Idea' }}</div>
             <div class="section-content">
                 {% if ns.key_idea %}
@@ -604,7 +610,7 @@ tbody tr:nth-child(even) { background: color-mix(in srgb, var(--panel-soft) 55%,
             </div>
         </div>
 
-        <div class="section-block core-band" id="sec-main-method" style="grid-area: core;">
+        <div class="section-block core-band" id="sec-main-method" data-priority="{{ (ns.core_results or ns.core_method).visual_priority if (ns.core_results or ns.core_method) else 'P0' }}" style="grid-area: core;">
             <div class="section-title core-band-title"><span class="sym">{{ sym }}</span>Core Results</div>
             <div class="section-content">
                 {% set core_figs = namespace(items=[]) %}
@@ -659,7 +665,7 @@ tbody tr:nth-child(even) { background: color-mix(in srgb, var(--panel-soft) 55%,
             </div>
         </div>
 
-        <div class="section-block row-equal" id="sec-contributions" style="grid-area: contributions;">
+        <div class="section-block row-equal" id="sec-contributions" data-priority="{{ ns.contributions.visual_priority if ns.contributions else 'P3' }}" style="grid-area: contributions;">
             <div class="section-title"><span class="sym">{{ sym }}</span>{{ ns.contributions.title if ns.contributions else 'Contributions' }}</div>
             <div class="section-content">
                 {% if ns.contributions %}
@@ -673,7 +679,7 @@ tbody tr:nth-child(even) { background: color-mix(in srgb, var(--panel-soft) 55%,
             </div>
         </div>
 
-        <div class="section-block row-equal" id="sec-highlights" style="grid-area: highlights;">
+        <div class="section-block row-equal" id="sec-highlights" data-priority="{{ ns.highlights.visual_priority if ns.highlights else 'P3' }}" style="grid-area: highlights;">
             <div class="section-title"><span class="sym">{{ sym }}</span>{{ ns.highlights.title if ns.highlights else 'Highlights' }}</div>
             <div class="section-content">
                 <div class="highlight-marker-row">
@@ -712,7 +718,7 @@ tbody tr:nth-child(even) { background: color-mix(in srgb, var(--panel-soft) 55%,
             </div>
         </div>
 
-        <div class="section-block row-equal" id="sec-project" style="grid-area: project;">
+        <div class="section-block row-equal" id="sec-project" data-priority="{{ ns.project.visual_priority if ns.project else 'P3' }}" style="grid-area: project;">
             <div class="section-title"><span class="sym">{{ sym }}</span>{{ ns.project.title if ns.project else 'Project' }}</div>
             <div class="section-content">
                 <div class="project-box">

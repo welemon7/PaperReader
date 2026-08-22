@@ -9,6 +9,8 @@ __all__ = [
     "run_parse_paper",
     "run_understand_paper",
     "generate_blueprint",
+    "analyze_content_importance",
+    "plan_poster_story",
     "build_layout_tree",
     "layout_tree_to_blueprint",
     "render_layout_tree",
@@ -37,6 +39,12 @@ def __getattr__(name: str):
     if name == "generate_blueprint":
         from .poster_planner import generate_blueprint
         return generate_blueprint
+    if name == "analyze_content_importance":
+        from .content_importance import analyze_content_importance
+        return analyze_content_importance
+    if name == "plan_poster_story":
+        from .poster_story_planner import plan_poster_story
+        return plan_poster_story
     if name == "build_layout_tree":
         from .poster_v2 import build_layout_tree
         return build_layout_tree

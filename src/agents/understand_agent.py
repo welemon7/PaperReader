@@ -26,6 +26,7 @@ from src.schemas.analysis import (
 )
 from src.schemas.paper import PaperDocument
 from src.storage.sqlite import PaperDatabase
+from src.agents.content_importance import analyze_content_importance
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +80,7 @@ class UnderstandState(TypedDict):
     analysis_prompt: Optional[str]
     llm_response: Optional[dict[str, Any]]
     paper_analysis: Optional[PaperAnalysis]
+    content_importance: Optional[object]
     error: Optional[str]
 
 
@@ -276,12 +278,27 @@ def validate_node(state: UnderstandState) -> dict:
         return {"error": f"Validation failed: {e}"}
 
 
+def analyze_importance_node(state: UnderstandState) -> dict:
+    analysis = state.get("paper_analysis")
+    doc = state.get("paper_document")
+    if not analysis or not doc:
+        return {"error": state.get("error") or "Missing analysis or paper document"}
+    try:
+        return {"content_importance": analyze_content_importance(analysis, doc)}
+    except Exception as e:
+        logger.exception("Content importance analysis failed")
+        return {"error": f"Content importance analysis failed: {e}"}
+
+
 def store_analysis_node(state: UnderstandState) -> dict:
     analysis = state.get("paper_analysis")
     if not analysis:
         # Preserve the original failure reason from validation or LLM calls.
         return {"error": state.get("error") or "No analysis to store"}
     try:
+        importance = state.get("content_importance")
+        if importance is not None:
+            analysis.content_importance = importance
         db = PaperDatabase()
         db.save_analysis(analysis)
         db.close()
@@ -513,12 +530,14 @@ def build_understand_graph():
     workflow.add_node("build_prompt", build_prompt_node)
     workflow.add_node("call_llm", call_llm_node)
     workflow.add_node("validate", validate_node)
+    workflow.add_node("analyze_importance", analyze_importance_node)
     workflow.add_node("store", store_analysis_node)
     workflow.set_entry_point("load_paper")
     workflow.add_edge("load_paper", "build_prompt")
     workflow.add_edge("build_prompt", "call_llm")
     workflow.add_edge("call_llm", "validate")
-    workflow.add_edge("validate", "store")
+    workflow.add_edge("validate", "analyze_importance")
+    workflow.add_edge("analyze_importance", "store")
     workflow.add_edge("store", END)
     return workflow.compile()
 
@@ -541,9 +560,10 @@ def run_understand_paper(arxiv_id: str) -> PaperAnalysis:
             "analysis_prompt": None,
             "llm_response": None,
             "paper_analysis": None,
+            "content_importance": None,
             "error": None,
         }
-        for node in (load_paper_node, build_prompt_node, call_llm_node, validate_node, store_analysis_node):
+        for node in (load_paper_node, build_prompt_node, call_llm_node, validate_node, analyze_importance_node, store_analysis_node):
             state.update(node(state))
             if state.get("error"):
                 raise RuntimeError(state["error"])
@@ -554,6 +574,7 @@ def run_understand_paper(arxiv_id: str) -> PaperAnalysis:
         "analysis_prompt": None,
         "llm_response": None,
         "paper_analysis": None,
+        "content_importance": None,
         "error": None,
     }
     result = _compiled_graph.invoke(initial_state)

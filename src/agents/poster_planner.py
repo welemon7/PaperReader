@@ -15,6 +15,7 @@ from src.schemas.poster import (
 )
 from src.schemas.analysis import KeyFigure
 from src.agents.content_policy import BULLET_WORD_BUDGET, trim_to_budget
+from src.agents.poster_story_planner import plan_poster_story
 
 logger = logging.getLogger(__name__)
 
@@ -155,9 +156,12 @@ def generate_blueprint(
     """Generate poster blueprint using static layout only."""
     analysis = normalize_analysis_for_poster(analysis.model_copy(deep=True))
     _augment_key_formulas(doc, analysis)
+    story_plan = plan_poster_story(doc, analysis)
     sections = []
     sections.append(_build_title_section(doc, analysis))
     sections.extend(_build_compact_layout(doc, analysis))
+    _apply_story_plan(sections, story_plan)
+    _apply_content_importance(sections, analysis)
     figure_placements = _place_figures(doc, analysis, sections)
     formula_displays = _place_formulas(analysis)
     _tighten_layout(sections, figure_placements)
@@ -173,7 +177,52 @@ def generate_blueprint(
         figure_placements=figure_placements,
         formula_displays=formula_displays,
         color_scheme=_default_colors(),
+        story_plan=story_plan,
     )
+
+
+def _apply_content_importance(sections: list[PosterSection], analysis: PaperAnalysis) -> None:
+    """Translate analysis-level ranking into section-level visual tokens."""
+    importance = getattr(analysis, "content_importance", None)
+    for section in sections:
+        priority = importance.priority_for_type(section.type) if importance else "P2"
+        section.visual_priority = priority
+        section.importance = {"P0": 1.0, "P1": 0.85, "P2": 0.55, "P3": 0.30}[priority]
+
+
+def _apply_story_plan(sections: list[PosterSection], story_plan) -> None:
+    """Let the reader-question sequence shape section copy without changing layout."""
+    beats = {beat.type: beat for beat in story_plan.beats}
+    by_type = {section.type: section for section in sections}
+
+    why = beats.get("why")
+    if why and by_type.get("motivation"):
+        current = by_type["motivation"].content_md
+        if why.text and why.text not in current:
+            by_type["motivation"].content_md = f"{current}\n\n**Why it matters:** {why.text}"
+
+    how = beats.get("how")
+    if how and by_type.get("method_overview") and how.text:
+        current = by_type["method_overview"].content_md
+        if how.text not in current:
+            by_type["method_overview"].content_md = f"{current}\n\n**How:** {how.text}"
+
+    idea = beats.get("idea")
+    if idea and by_type.get("key_idea") and idea.text:
+        by_type["key_idea"].title = "Key Idea"
+        by_type["key_idea"].supplement_html = f"<p class=\"story-claim\">{idea.text}</p>"
+
+    hook = beats.get("hook")
+    evidence = beats.get("evidence")
+    core = by_type.get("main_method")
+    if core:
+        cues = []
+        if hook and hook.text:
+            cues.append(f"**Hook:** {hook.text}")
+        if evidence and evidence.text and evidence.text != (hook.text if hook else ""):
+            cues.append(f"**Evidence:** {evidence.text}")
+        if cues:
+            core.content_md = "\n\n".join(cues + [core.content_md])
 
 def _drop_top_summary_sections(sections: list[PosterSection]) -> list[PosterSection]:
     """Compatibility shim kept for older callers.

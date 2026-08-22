@@ -41,9 +41,9 @@ def _layout_node_from_section(sec: PosterSection, reading_order: int) -> LayoutN
         constraints=LayoutConstraints(
             min_ratio=0.08,
             max_ratio=0.95,
-            priority=2 if sec.type in {"main_method", "experiments"} else 1,
+            priority={"P0": 4, "P1": 3, "P2": 2, "P3": 1}.get(sec.visual_priority, 1),
         ),
-        notes=sec.type,
+        notes=f"{sec.type}; visual_priority={sec.visual_priority}; importance={sec.importance:.2f}",
     )
 
 
@@ -169,6 +169,7 @@ def layout_tree_to_blueprint(tree: LayoutTree, doc: PaperDocument, analysis: Pap
         figure_placements=figure_placements[:4],
         formula_displays=formula_displays[:5],
         color_scheme=base.color_scheme or _default_colors(),
+        story_plan=base.story_plan,
     )
 
 
