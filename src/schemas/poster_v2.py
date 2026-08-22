@@ -15,6 +15,18 @@ NodeType = Literal[
     "callout",
     "spacer",
 ]
+SemanticRole = Literal[
+    "poster", "header", "hero", "hero_metric", "hero_method",
+    "primary_content", "problem", "core_principle", "method",
+    "evidence", "benchmark_chart", "result_table", "footer",
+    "contributions", "project", "section", "supporting",
+]
+ContentDensity = Literal["low", "medium", "high"]
+CompositionType = Literal[
+    "canvas", "header_band", "metric_callout", "process_diagram",
+    "problem_statement", "principle_callout", "text", "evidence_grid",
+    "benchmark_chart", "result_table", "footer_strip", "link", "panel",
+]
 
 
 class LayoutConstraints(BaseModel):
@@ -37,6 +49,16 @@ class LayoutNode(BaseModel):
     figure_width_ratio: float = Field(default=0.9, ge=0.1, le=1.0)
     constraints: LayoutConstraints = Field(default_factory=LayoutConstraints)
     notes: str = ""
+    # Semantic-first layout metadata. The legacy grid fields above remain the
+    # solver output consumed by PosterBlueprint and older callers.
+    semantic_role: SemanticRole = "section"
+    importance: float = Field(default=0.5, ge=0.0, le=1.0)
+    visual_weight: float = Field(default=0.5, ge=0.0, le=1.0)
+    content_density: ContentDensity = "medium"
+    composition_type: CompositionType = "panel"
+    min_area_ratio: float = Field(default=0.08, ge=0.0, le=1.0)
+    children: list[str] = Field(default_factory=list)
+    source_section_id: str = ""
 
 
 class LayoutTree(BaseModel):
@@ -45,9 +67,10 @@ class LayoutTree(BaseModel):
     title: str = ""
     required_items: list[str] = Field(default_factory=list)
     nodes: list[LayoutNode] = Field(default_factory=list)
-    root_id: str = "root"
+    root_id: str = "poster"
     reading_path: list[str] = Field(default_factory=list)
     layout_notes: list[str] = Field(default_factory=list)
+    layout_mode: Literal["semantic_first", "grid_first"] = "semantic_first"
 
 
 class PosterComment(BaseModel):

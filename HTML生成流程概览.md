@@ -111,7 +111,34 @@
   - 先构建 `LayoutTree`，再转成 `PosterBlueprint`。
   - `render_layout_tree()` 里调用 `HtmlPosterRenderer` 输出 HTML。
   - `run_poster_v2()` 会额外写出 `layout_tree.json` 和 `blueprint_v2.json`。
-  - 这条线比传统流程更强调布局结构先行：先有树，再有蓝图，再到 HTML，便于在渲染前就检查层级、阅读顺序和空间分配。
+  - 这条线现在采用 **Semantic-first -> Grid Solver -> PosterBlueprint**：先有语义树，再把语义权重求解为兼容的网格字段，最后进入 HTML。
+  - `LayoutTree.root_id` 为 `poster`，推荐结构是 `header -> hero -> primary_content -> evidence -> footer`；每个容器通过 `children` 连接 section 节点。
+  - `LayoutNode` 除了旧的 `section_col_span`、`section_row_span`，还记录 `semantic_role`、`importance`、`visual_weight`、`content_density`、`composition_type` 和 `min_area_ratio`。
+
+### 5. Semantic LayoutTree
+
+- [`src/schemas/poster_v2.py`](./src/schemas/poster_v2.py)
+  - `LayoutNode` 是语义布局中间表示，不再只是 row/column 的位置记录。
+  - 推荐树形结构：
+
+    ```text
+    poster
+    ├── header
+    ├── hero
+    │   ├── hero_metric
+    │   └── hero_method
+    ├── primary_content
+    │   ├── problem
+    │   └── core_principle
+    ├── evidence
+    │   ├── benchmark_chart
+    │   └── result_table
+    └── footer
+        ├── contributions
+        └── project
+    ```
+
+  - 旧网格字段继续保留，作为 `Grid Solver` 的落地结果，保证 `LayoutTree -> PosterBlueprint -> HTML` 的兼容性。
 
 ### 5. Poster Story Planner
 

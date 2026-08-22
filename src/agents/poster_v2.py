@@ -26,12 +26,15 @@ logger = logging.getLogger(__name__)
 
 
 def _layout_node_from_section(sec: PosterSection, reading_order: int) -> LayoutNode:
+    role, composition = _semantic_attributes_for_section(sec)
+    density = "low" if len(sec.content_md or "") < 180 else ("high" if len(sec.content_md or "") > 600 else "medium")
     return LayoutNode(
         node_id=sec.section_id,
         node_type="text" if sec.type != "title" else "title",
         title=sec.title,
         content_md=sec.content_md,
         child_ids=[],
+        children=[],
         figure_ids=[],
         reading_order=reading_order,
         space_ratio=min(1.0, max(0.08, (len(sec.content_md or "") / 1400.0) + 0.1)),
@@ -44,7 +47,91 @@ def _layout_node_from_section(sec: PosterSection, reading_order: int) -> LayoutN
             priority={"P0": 4, "P1": 3, "P2": 2, "P3": 1}.get(sec.visual_priority, 1),
         ),
         notes=f"{sec.type}; visual_priority={sec.visual_priority}; importance={sec.importance:.2f}",
+        semantic_role=role,
+        importance=sec.importance,
+        visual_weight=sec.importance,
+        content_density=density,
+        composition_type=composition,
+        min_area_ratio=max(0.08, sec.importance * 0.25),
+        source_section_id=sec.section_id,
     )
+
+
+def _semantic_attributes_for_section(sec: PosterSection) -> tuple[str, str]:
+    mapping = {
+        "title": ("header", "header_band"),
+        "motivation": ("problem", "problem_statement"),
+        "method_overview": ("hero_method", "process_diagram"),
+        "key_idea": ("core_principle", "principle_callout"),
+        "main_method": ("hero_metric", "metric_callout"),
+        "experiments": ("benchmark_chart", "benchmark_chart"),
+        "contributions": ("contributions", "footer_strip"),
+        "highlights": ("supporting", "panel"),
+        "project_link": ("project", "link"),
+    }
+    return mapping.get(sec.type, ("section", "panel"))
+
+
+def _semantic_container(node_id: str, role: str, children: list[str], composition: str) -> LayoutNode:
+    return LayoutNode(
+        node_id=node_id,
+        node_type="root" if role == "poster" else "container",
+        semantic_role=role,
+        composition_type=composition,
+        children=children,
+        child_ids=children,
+        importance=1.0 if role in {"poster", "hero"} else 0.8,
+        visual_weight=1.0 if role in {"poster", "hero"} else 0.7,
+        content_density="low",
+        min_area_ratio=0.12 if role == "hero" else 0.08,
+        notes="semantic container",
+    )
+
+
+def _build_semantic_containers(section_nodes: list[LayoutNode]) -> list[LayoutNode]:
+    by_role: dict[str, list[str]] = {"header": [], "hero": [], "primary_content": [], "evidence": [], "footer": []}
+    for node in section_nodes:
+        target = {
+            "header": "header",
+            "hero_metric": "hero",
+            "hero_method": "hero",
+            "core_principle": "primary_content",
+            "problem": "primary_content",
+            "method": "primary_content",
+            "evidence": "evidence",
+            "benchmark_chart": "evidence",
+            "contributions": "footer",
+            "project": "footer",
+        }.get(node.semantic_role, "footer")
+        by_role[target].append(node.node_id)
+    containers = [
+        _semantic_container("header", "header", by_role["header"], "header_band"),
+        _semantic_container("hero", "hero", by_role["hero"], "panel"),
+        _semantic_container("primary_content", "primary_content", by_role["primary_content"], "panel"),
+        _semantic_container("evidence", "evidence", by_role["evidence"], "evidence_grid"),
+        _semantic_container("footer", "footer", by_role["footer"], "footer_strip"),
+    ]
+    root_children = [node.node_id for node in containers]
+    return [_semantic_container("poster", "poster", root_children, "canvas"), *containers]
+
+
+def _solve_semantic_grid(sec: PosterSection, node: LayoutNode) -> None:
+    """Solve semantic roles into the legacy three-column poster grid."""
+    placement = {
+        "header": (0, 1, 3),
+        "problem": (1, 1, 1),
+        "hero_method": (1, 2, 1),
+        "core_principle": (1, 3, 1),
+        "hero_metric": (2, 1, 3),
+        "benchmark_chart": (2, 1, 3),
+        "evidence": (2, 1, 3),
+        "contributions": (3, 1, 1),
+        "supporting": (3, 2, 1),
+        "project": (3, 3, 1),
+    }
+    row, column, span = placement.get(node.semantic_role, (sec.row, sec.column, sec.col_span))
+    sec.row, sec.column, sec.col_span = row, column, span
+    sec.row_span = max(1, node.section_row_span)
 
 
 def _layout_nodes_from_paper_section(sec, reading_order: int = 0) -> list[LayoutNode]:
@@ -62,6 +149,10 @@ def _layout_nodes_from_paper_section(sec, reading_order: int = 0) -> list[Layout
         figure_width_ratio=0.9,
         constraints=LayoutConstraints(min_ratio=0.08, max_ratio=0.95, priority=max(1, 4 - getattr(sec, "level", 1))),
         notes=f"paper-section:{getattr(sec, 'level', 1)}",
+        semantic_role="supporting",
+        composition_type="panel",
+        content_density="high" if len(getattr(sec, "text", "") or "") > 600 else "medium",
+        source_section_id=getattr(sec, "section_id", ""),
     )]
     next_order = reading_order + 1
     for sub in getattr(sec, "subsections", []) or []:
@@ -99,18 +190,29 @@ def _fallback_layout_tree(doc: PaperDocument, analysis: PaperAnalysis, required_
 
     sections = generate_blueprint(doc, analysis).sections
     sections = _drop_top_summary_sections(sections)
+    section_nodes: list[LayoutNode] = []
     for sec in sections:
-        nodes.append(_layout_node_from_section(sec, order))
+        section_node = _layout_node_from_section(sec, order)
+        section_nodes.append(section_node)
+        nodes.append(section_node)
         order += 1
+    semantic_nodes = _build_semantic_containers(section_nodes)
+    for node in semantic_nodes:
+        node.reading_order = len(nodes)
+        nodes.append(node)
     return LayoutTree(
         paper_id=doc.paper_id,
         arxiv_id=doc.arxiv_id,
         title=doc.title,
         required_items=required_items or [doc.title],
         nodes=nodes,
-        root_id="root",
-        reading_path=[node.node_id for node in nodes],
-        layout_notes=["Deterministic layout tree."],
+        root_id="poster",
+        reading_path=[
+            "poster", "header", "hero", "primary_content", "evidence", "footer",
+            *[node.node_id for node in section_nodes],
+        ],
+        layout_notes=["Semantic-first tree; legacy grid fields are solved for blueprint compatibility."],
+        layout_mode="semantic_first",
     )
 
 
@@ -124,9 +226,11 @@ def layout_tree_to_blueprint(tree: LayoutTree, doc: PaperDocument, analysis: Pap
         if node:
             sec.content_md = node.content_md or sec.content_md
             sec.title = node.title or sec.title
-            sec.row = min(3, max(0, node.reading_order))
-            sec.col_span = node.section_col_span if node.section_col_span else (2 if node.space_ratio >= 0.35 else sec.col_span)
-            sec.row_span = node.section_row_span if node.section_row_span else sec.row_span
+            sec.importance = node.importance
+            sec.visual_priority = {4: "P0", 3: "P1", 2: "P2", 1: "P3"}.get(
+                node.constraints.priority, sec.visual_priority
+            )
+            _solve_semantic_grid(sec, node)
             if sec.type == "title":
                 sec.col_span = 3
         sections.append(sec)
