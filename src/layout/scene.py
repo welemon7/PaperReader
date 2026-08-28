@@ -75,6 +75,7 @@ class ScenePanel(BaseModel):
 class PosterScene(BaseModel):
     paper_id: str = ""
     poster_title: str = ""
+    tagline: str = ""
     authors_str: str = ""
     code_url: str = ""
     canvas_width: int = CANVAS_WIDTH

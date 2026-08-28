@@ -53,6 +53,7 @@ class FormulaDisplay(BaseModel):
 class PosterBlueprint(BaseModel):
     paper_id: str
     poster_title: str = ''
+    tagline: str = ''
     authors_str: str = ''
     code_url: str = ''
     # The primary deliverable is a landscape academic poster.  48 x 27 inches

@@ -4,6 +4,7 @@ import html as html_lib
 import logging
 import os
 import re
+import shutil
 from pathlib import Path
 from typing import Optional
 
@@ -150,6 +151,8 @@ class HtmlPosterRenderer:
             self._prepare_figure_assets(blueprint, doc, output_dir)
         except Exception:
             pass
+        github_src = self._prepare_github_asset(output_dir) if blueprint.code_url else ""
+        author_line = self._build_author_line(blueprint.authors_str, doc)
         layout = self._build_layout(blueprint)
         figure_map = self._build_figure_map(blueprint, doc, output_dir)
         cleaned_formulas = []
@@ -175,8 +178,11 @@ class HtmlPosterRenderer:
 
         html = self.template.render(
             poster_title=blueprint.poster_title,
+            tagline=blueprint.tagline or self._summarize_text(doc.abstract, 1),
             authors_str=blueprint.authors_str,
+            author_line=author_line,
             code_url=blueprint.code_url,
+            github_src=github_src,
             poster_width=blueprint.width_px,
             poster_height=blueprint.height_px,
             color_scheme=blueprint.color_scheme,
@@ -188,6 +194,26 @@ class HtmlPosterRenderer:
             html = self._optimize_html_with_llm(html, doc, blueprint, output_dir)
 
         return html
+
+    @staticmethod
+    def _build_author_line(authors_str: str, doc: PaperDocument) -> str:
+        authors = [a for a in (doc.authors or []) if getattr(a, "name", "")]
+        names = authors_str or "; ".join(getattr(a, "name", "") for a in authors)
+        affiliations = "; ".join(dict.fromkeys(
+            getattr(a, "affiliation", "") for a in authors if getattr(a, "affiliation", "")
+        ))
+        emails = "; ".join(dict.fromkeys(re.findall(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}", doc.raw_markdown or "", re.I)))
+        return " | ".join(part for part in (names, affiliations, emails) if part)
+
+    @staticmethod
+    def _prepare_github_asset(output_dir: Path) -> str:
+        target = output_dir / "logo" / "github.svg"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        source = Path(__file__).resolve().parents[2] / "logo" / "github.svg"
+        if source.exists():
+            shutil.copyfile(source, target)
+            return "logo/github.svg"
+        return ""
 
     def render_to_file(
         self,

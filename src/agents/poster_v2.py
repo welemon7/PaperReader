@@ -17,6 +17,7 @@ from src.agents.poster_planner import (
     _default_colors,
     _drop_top_summary_sections,
     _format_authors,
+    _first_sentence,
     _tighten_layout,
     generate_blueprint,
     normalize_analysis_for_poster,
@@ -263,6 +264,7 @@ def layout_tree_to_blueprint(tree: LayoutTree, doc: PaperDocument, analysis: Pap
     return PosterBlueprint(
         paper_id=doc.paper_id,
         poster_title=doc.title,
+        tagline=_first_sentence((analysis.method_overview or analysis.problem_statement or doc.abstract or "").strip()),
         authors_str=_format_authors(doc.authors),
         code_url=analysis.code_url,
         width_px=base.width_px,

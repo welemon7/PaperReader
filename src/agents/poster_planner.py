@@ -169,6 +169,7 @@ def generate_blueprint(
     return PosterBlueprint(
         paper_id=doc.paper_id,
         poster_title=doc.title,
+        tagline=_first_sentence(_clean_poster_text(analysis.method_overview or analysis.problem_statement or doc.abstract)),
         authors_str=_format_authors(doc.authors),
         code_url=analysis.code_url,
         width_px=POSTER_WIDTH_PX, height_px=POSTER_HEIGHT_PX,

@@ -30,8 +30,8 @@
     --radius: {{ cs.get('radius') or '10px' }};
     --radius-sm: 7px;
     --shadow: {{ cs.get('shadow') or '0 6px 16px rgba(22, 50, 79, 0.10)' }};
-    --font-display: {{ cs.get('font_display') or "'Inter', 'Segoe UI', sans-serif" }};
-    --font-body: {{ cs.get('font_body') or "'Inter', 'Segoe UI', sans-serif" }};
+    --font-display: "Times New Roman", Times, serif;
+    --font-body: "Times New Roman", Times, serif;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { margin: 0; padding: 0; background: #fff; }
@@ -48,7 +48,6 @@ body { display: flex; justify-content: center; }
     color: var(--text-main);
     line-height: 1.42;
     overflow: hidden;
-    border-top: 6px solid var(--poster-accent);
 }
 
 /* ---- title band ---- */
@@ -60,10 +59,9 @@ body { display: flex; justify-content: center; }
     height: 150px;
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
-    text-align: center;
-    border-bottom: 1px solid var(--border-color);
+    text-align: left;
     padding: 4px 24px 12px;
     overflow: hidden;
 }
@@ -71,18 +69,16 @@ body { display: flex; justify-content: center; }
     font-family: var(--font-display);
     font-size: 54px;
     font-weight: 800;
-    letter-spacing: -0.5px;
+    letter-spacing: 0;
     color: var(--poster-primary);
     line-height: 1.1;
     text-wrap: balance;
 }
 .header-rule {
-    width: 84px;
-    height: 5px;
-    border-radius: 3px;
-    background: var(--poster-accent);
-    margin: 10px auto 8px;
+    display: none;
 }
+.tagline { margin-top: 10px; color: var(--text-main); font-size: 22px; font-weight: 600; line-height: 1.3; }
+.author-line { margin-top: 8px; font-size: 18px; color: var(--text-muted); }
 .header .authors {
     font-size: 22px;
     color: var(--text-muted);
@@ -118,8 +114,9 @@ body { display: flex; justify-content: center; }
     box-shadow: 0 2px 6px rgba(16, 36, 64, 0.04);
 }
 .section-title {
-    background: linear-gradient(180deg, var(--band-top), var(--band-bottom));
-    color: var(--header-text);
+    background: transparent;
+    color: #1D4ED8;
+    font-family: "Times New Roman", Times, serif;
     height: 52px;
     flex-shrink: 0;
     display: flex;
@@ -129,13 +126,14 @@ body { display: flex; justify-content: center; }
     font-size: 22px;
     font-weight: 800;
     text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: 0;
     padding: 0 16px;
-    border-bottom: 3px solid var(--poster-accent);
+    border-bottom: none;
     line-height: 1.1;
     overflow: hidden;
 }
-.section-title .sym { color: var(--poster-accent); font-size: 16px; line-height: 1; }
+.section-title .sym { color: #1D4ED8; font-size: 22px; line-height: 1; }
+.github-icon { width: 22px; height: 22px; display: inline-block; vertical-align: -5px; margin-right: 6px; }
 .section-content {
     position: absolute;
     left: 0;
@@ -306,15 +304,16 @@ tbody tr:nth-child(even) { background: color-mix(in srgb, var(--panel-soft) 55%,
     <header class="header">
         <h1>{{ poster_title }}</h1>
         <div class="header-rule"></div>
-        {% if authors_str %}<div class="authors">{{ authors_str }}</div>{% endif %}
-        {% if code_url %}<a class="hero-pill" href="{{ code_url }}" target="_blank" rel="noreferrer noopener">{{ code_url }}</a>{% endif %}
+        {% if tagline %}<div class="tagline">{{ tagline }}</div>{% endif %}
+        {% if author_line %}<div class="author-line">{{ author_line }}</div>{% endif %}
+        {% if code_url %}<a class="hero-pill" href="{{ code_url }}" target="_blank" rel="noreferrer noopener">{% if github_src %}<img class="github-icon" src="{{ github_src }}" alt="GitHub">{% endif %}{{ code_url }}</a>{% endif %}
     </header>
 
     {% set sym = cs.get('section_symbol') or '▸ ' %}
     {% for panel in panels %}
     <div class="section-block" id="{{ panel.panel_id }}"
          style="left:{{ panel.x }}px; top:{{ panel.y }}px; width:{{ panel.w }}px; height:{{ panel.h }}px;">
-        <div class="section-title"><span class="sym">{{ sym }}</span>{{ panels_meta[panel.panel_id].title if panels_meta.get(panel.panel_id) else panel.panel_id }}</div>
+        <div class="section-title"><span class="sym">{% if panel.panel_type == 'motivation' %}📑{% elif panel.panel_type == 'method_overview' %}⚙{% elif panel.panel_type == 'key_idea' %}💡{% elif panel.panel_type in ('main_method', 'experiments') %}🏆{% elif panel.panel_type == 'contributions' %}⭐{% elif panel.panel_type == 'highlights' %}⚡{% elif panel.panel_type == 'project_link' and github_src %}<img class="github-icon" src="{{ github_src }}" alt="GitHub">{% else %}◉{% endif %}</span>{{ panels_meta[panel.panel_id].title if panels_meta.get(panel.panel_id) else panel.panel_id }}</div>
         <div class="section-content">
             {% set panel_id = panel.panel_id %}
             {% for el in elements if el.element_id.startswith(panel_id ~ '.') %}

@@ -30,8 +30,8 @@
     --radius: {{ cs.get('radius') or '10px' }};
     --radius-sm: 7px;
     --shadow: {{ cs.get('shadow') or '0 6px 16px rgba(22, 50, 79, 0.10)' }};
-    --font-display: {{ cs.get('font_display') or "'Inter', 'Segoe UI', sans-serif" }};
-    --font-body: {{ cs.get('font_body') or "'Inter', 'Segoe UI', sans-serif" }};
+    --font-display: "Times New Roman", Times, serif;
+    --font-body: "Times New Roman", Times, serif;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { min-height: 100%; margin: 0; }
@@ -54,18 +54,14 @@ body {
     border-radius: var(--radius);
     padding: 0;
     overflow: hidden;
-    border-top: 6px solid var(--poster-accent);
     position: relative;
 }
 
 /* ================= header ================= */
 .header {
-    text-align: center;
+    text-align: left;
     padding: 34px 48px 20px;
-    border-bottom: 1px solid var(--border-color);
     margin-bottom: 18px;
-    background:
-        linear-gradient(180deg, color-mix(in srgb, var(--poster-primary) 4%, transparent), transparent 120px);
 }
 .hero-pill {
     display: inline-flex;
@@ -90,22 +86,25 @@ body {
     font-size: 46px;
     color: var(--poster-primary);
     font-weight: 800;
-    letter-spacing: -0.5px;
+    letter-spacing: 0;
     line-height: 1.12;
     text-wrap: balance;
 }
 .header-rule {
-    width: 76px;
-    height: 5px;
-    border-radius: 3px;
-    background: var(--poster-accent);
-    margin: 14px auto 10px;
+    display: none;
+}
+.tagline {
+    margin-top: 10px;
+    color: var(--text-main);
+    font-size: 19px;
+    font-weight: 600;
+    line-height: 1.3;
 }
 .header .authors {
-    font-size: 20px;
+    font-size: 17px;
     color: var(--text-muted);
     font-weight: 600;
-    margin-top: 4px;
+    margin-top: 10px;
 }
 .header .affiliation {
     font-size: 15px;
@@ -113,11 +112,14 @@ body {
 }
 .header .header-meta {
     display: flex;
-    justify-content: center;
+    justify-content: flex-start;
     flex-wrap: wrap;
     gap: 10px;
-    margin-top: 12px;
+    margin-top: 8px;
 }
+.author-line { font-size: 16px; color: var(--text-muted); margin-top: 8px; }
+.header .hero-pill { margin-left: 0; }
+.github-icon { width: 18px; height: 18px; display: inline-block; vertical-align: -4px; margin-right: 5px; }
 
 /* ================= grid ================= */
 .grid-container {
@@ -161,20 +163,21 @@ body {
     box-shadow: 0 2px 6px rgba(16, 36, 64, 0.04);
 }
 .section-title {
-    background: linear-gradient(180deg, var(--band-top), var(--band-bottom));
-    color: var(--header-text);
+    background: transparent;
+    color: #1D4ED8;
+    font-family: "Times New Roman", Times, serif;
     font-size: 19px;
     font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 1px;
+    text-transform: none;
+    letter-spacing: 0;
     padding: 12px 18px;
-    border-bottom: 3px solid var(--poster-accent);
+    border-bottom: none;
     flex-shrink: 0;
     display: flex;
     align-items: center;
     gap: 8px;
-    text-align: center;
-    justify-content: center;
+    text-align: left;
+    justify-content: flex-start;
 }
 
 .section-block[data-priority="P0"] { border-width: 3px; box-shadow: 0 8px 20px rgba(22, 50, 79, 0.16); }
@@ -182,8 +185,8 @@ body {
 .section-block[data-priority="P2"] { opacity: 0.94; }
 .section-block[data-priority="P3"] { opacity: 0.82; }
 .section-title .sym {
-    color: var(--poster-accent);
-    font-size: 15px;
+    color: #1D4ED8;
+    font-size: 19px;
     line-height: 1;
 }
 .section-content {
@@ -361,8 +364,8 @@ body {
 .core-band { grid-area: core; }
 .core-band .section-content { gap: 12px; }
 .core-band-title {
-    background: linear-gradient(180deg, var(--band-top), var(--band-bottom));
-    border-bottom: 3px solid var(--poster-accent);
+    background: transparent;
+    border-bottom: none;
 }
 .core-grid {
     display: grid;
@@ -511,12 +514,15 @@ tbody tr:nth-child(even) { background: color-mix(in srgb, var(--panel-soft) 55%,
     <header class="header">
         <h1>{{ poster_title }}</h1>
         <div class="header-rule"></div>
-        {% if authors_str %}
-        <div class="authors">{{ authors_str }}</div>
+        {% if tagline %}
+        <div class="tagline">{{ tagline }}</div>
         {% endif %}
+        {% if author_line %}<div class="author-line">{{ author_line }}</div>{% endif %}
         <div class="header-meta">
             {% if code_url %}
-            <a class="hero-pill hero-link" href="{{ code_url }}" target="_blank" rel="noreferrer noopener">🔗 {{ code_url }}</a>
+            <a class="hero-pill hero-link" href="{{ code_url }}" target="_blank" rel="noreferrer noopener">
+                {% if github_src %}<img class="github-icon" src="{{ github_src }}" alt="GitHub">{% endif %}{{ code_url }}
+            </a>
             {% endif %}
         </div>
     </header>
@@ -545,7 +551,7 @@ tbody tr:nth-child(even) { background: color-mix(in srgb, var(--panel-soft) 55%,
         {% set sym = cs.get('section_symbol') or '▸ ' %}
 
         <div class="section-block row-equal" id="sec-motivation" data-priority="{{ ns.motivation.visual_priority if ns.motivation else 'P2' }}" style="grid-area: motivation;">
-            <div class="section-title"><span class="sym">{{ sym }}</span>{{ ns.motivation.title if ns.motivation else 'Motivation' }}</div>
+            <div class="section-title"><span class="sym">📑</span>{{ ns.motivation.title if ns.motivation else 'Motivation' }}</div>
             <div class="section-content">
                 {% if ns.motivation %}
                     {{ ns.motivation.content_html|safe }}
@@ -559,7 +565,7 @@ tbody tr:nth-child(even) { background: color-mix(in srgb, var(--panel-soft) 55%,
         </div>
 
         <div class="section-block row-equal" id="sec-method-overview" data-priority="{{ ns.overview.visual_priority if ns.overview else 'P1' }}" style="grid-area: overview;">
-            <div class="section-title"><span class="sym">{{ sym }}</span>{{ ns.overview.title if ns.overview else 'Method Overview' }}</div>
+            <div class="section-title"><span class="sym">⚙</span>{{ ns.overview.title if ns.overview else 'Method Overview' }}</div>
             <div class="section-content">
                 {% if ns.overview %}
                     {{ ns.overview.content_html|replace('[[METHOD_FORMULA]]', '')|safe }}
@@ -585,7 +591,7 @@ tbody tr:nth-child(even) { background: color-mix(in srgb, var(--panel-soft) 55%,
         </div>
 
         <div class="section-block row-equal" id="sec-key-idea" data-priority="{{ ns.key_idea.visual_priority if ns.key_idea else 'P1' }}" style="grid-area: key_idea;">
-            <div class="section-title"><span class="sym">{{ sym }}</span>{{ ns.key_idea.title if ns.key_idea else 'Key Idea' }}</div>
+            <div class="section-title"><span class="sym">💡</span>{{ ns.key_idea.title if ns.key_idea else 'Key Idea' }}</div>
             <div class="section-content">
                 {% if ns.key_idea %}
                     {{ ns.key_idea.content_html|safe }}
@@ -611,7 +617,7 @@ tbody tr:nth-child(even) { background: color-mix(in srgb, var(--panel-soft) 55%,
         </div>
 
         <div class="section-block core-band" id="sec-main-method" data-priority="{{ (ns.core_results or ns.core_method).visual_priority if (ns.core_results or ns.core_method) else 'P0' }}" style="grid-area: core;">
-            <div class="section-title core-band-title"><span class="sym">{{ sym }}</span>Core Results</div>
+            <div class="section-title core-band-title"><span class="sym">🏆</span>Core Result</div>
             <div class="section-content">
                 {% set core_figs = namespace(items=[]) %}
                 {% if ns.core_results %}
@@ -666,7 +672,7 @@ tbody tr:nth-child(even) { background: color-mix(in srgb, var(--panel-soft) 55%,
         </div>
 
         <div class="section-block row-equal" id="sec-contributions" data-priority="{{ ns.contributions.visual_priority if ns.contributions else 'P3' }}" style="grid-area: contributions;">
-            <div class="section-title"><span class="sym">{{ sym }}</span>{{ ns.contributions.title if ns.contributions else 'Contributions' }}</div>
+            <div class="section-title"><span class="sym">⭐</span>{{ ns.contributions.title if ns.contributions else 'Contributions' }}</div>
             <div class="section-content">
                 {% if ns.contributions %}
                     {{ ns.contributions.content_html|safe }}
@@ -680,7 +686,7 @@ tbody tr:nth-child(even) { background: color-mix(in srgb, var(--panel-soft) 55%,
         </div>
 
         <div class="section-block row-equal" id="sec-highlights" data-priority="{{ ns.highlights.visual_priority if ns.highlights else 'P3' }}" style="grid-area: highlights;">
-            <div class="section-title"><span class="sym">{{ sym }}</span>{{ ns.highlights.title if ns.highlights else 'Highlights' }}</div>
+            <div class="section-title"><span class="sym">⚡</span>{{ ns.highlights.title if ns.highlights else 'Highlights' }}</div>
             <div class="section-content">
                 <div class="highlight-marker-row">
                     <div class="highlight-marker badge-pill">
@@ -719,7 +725,7 @@ tbody tr:nth-child(even) { background: color-mix(in srgb, var(--panel-soft) 55%,
         </div>
 
         <div class="section-block row-equal" id="sec-project" data-priority="{{ ns.project.visual_priority if ns.project else 'P3' }}" style="grid-area: project;">
-            <div class="section-title"><span class="sym">{{ sym }}</span>{{ ns.project.title if ns.project else 'Project' }}</div>
+            <div class="section-title"><span class="sym">{% if github_src %}<img class="github-icon" src="{{ github_src }}" alt="GitHub">{% else %}◉{% endif %}</span>{{ ns.project.title if ns.project else 'Project' }}</div>
             <div class="section-content">
                 <div class="project-box">
                     <div class="code-cta">

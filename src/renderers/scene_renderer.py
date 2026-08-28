@@ -59,8 +59,11 @@ class SceneRenderer:
 
         html = self.template.render(
             poster_title=scene.poster_title,
+            tagline=scene.tagline or HtmlPosterRenderer._summarize_text(doc.abstract, 1),
             authors_str=scene.authors_str,
+            author_line=HtmlPosterRenderer._build_author_line(scene.authors_str, doc),
             code_url=scene.code_url,
+            github_src=HtmlPosterRenderer._prepare_github_asset(output_dir) if scene.code_url else "",
             canvas_width=scene.canvas_width,
             canvas_height=scene.canvas_height,
             color_scheme=scene.color_scheme or {},
