@@ -845,9 +845,9 @@ def _blank_region_visual_prompt(candidate: BlankRegionCandidate) -> str:
         f"{candidate.global_context or '(none)'}\n\n"
         "Key signals:\n"
         f"{chr(10).join('- ' + s for s in candidate.key_signals) if candidate.key_signals else '(none)'}\n\n"
-        "Design task: generate a compact SVG that fills the blank region with a visual grounded in the poster content. "
-        "Prefer a simple diagram, comparison, flow, metric callout, or one symbolic glyph only when the evidence is weak. "
-        "Use 1-3 labels max, a white background, 1-2 accent colors, and no external dependencies. "
+        "Design task: generate a polished self-contained SVG that fills the detected blank region with a visual grounded in the poster content. "
+        "Choose the simplest visual grammar that preserves the content relationships, such as a flow, comparison, timeline, architecture, chart, or symbolic concept. "
+        "Let the supplied dimensions determine orientation, density, spacing, and label wrapping. Preserve important content rather than imposing a fixed label count or palette. "
         "Match the visual emphasis to the blank geometry; do not add decorative elements unrelated to the content. "
         "Return ONLY a valid standalone SVG document."
     )

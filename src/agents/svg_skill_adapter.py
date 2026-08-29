@@ -1,10 +1,4 @@
-"""Project adapter for the vendored Software Mansion SVG guidance.
-
-The upstream skill targets React Native, while this project embeds SVGs in a
-browser-rendered scientific poster.  This adapter keeps the upstream files
-unchanged and translates the reusable guidance into prompt rules plus a small
-deterministic validity gate for model-generated SVG documents.
-"""
+"""Load the project SVG skill and validate generated standalone SVG assets."""
 
 from __future__ import annotations
 
@@ -19,36 +13,33 @@ _SVG_NS = "http://www.w3.org/2000/svg"
 _MAX_ELEMENTS = 90
 
 
-def _read_upstream_guidance() -> str:
-    parts: list[str] = []
-    for name in ("SKILL.md", "svg.md", "when-to-use.md"):
-        path = _UPSTREAM_SKILL_DIR / name
-        if path.exists():
-            parts.append(path.read_text(encoding="utf-8"))
-    return "\n\n".join(parts)
+def _read_svg_skill() -> str:
+    """Read the single executable skill used by the SVG generation prompt."""
+    path = _UPSTREAM_SKILL_DIR / "SKILL.md"
+    if not path.exists():
+        return ""
+    return path.read_text(encoding="utf-8")
 
 
-_UPSTREAM_GUIDANCE = _read_upstream_guidance()
+_SVG_SKILL = _read_svg_skill()
 
 
 def svg_generation_guidance(width: int, height: int) -> str:
-    """Return compact, poster-specific rules derived from the vendored skill."""
+    """Return the canonical SVG skill plus the current harness geometry."""
     aspect = width / height if height else 1.0
+    skill = _SVG_SKILL or (
+        "Generate one valid, self-contained browser SVG. Return SVG XML only."
+    )
     return (
-        "SVG quality rules adapted from the vendored Software Mansion SVG skill:\n"
-        "- This is a static browser poster asset: use a simple, legible composition, "
-        "not a React component tree or animation.\n"
-        "- Return one standalone <svg> with the SVG namespace and an explicit viewBox "
-        "whose aspect ratio is close to the target region. Keep width and height at "
-        f"{width}x{height}; target aspect ratio is {aspect:.3f}.\n"
-        "- Preserve geometry inside the viewBox with comfortable padding. Use vector "
-        "shapes and text only when labels are essential; avoid clipping and overflow.\n"
-        "- Keep the asset lightweight: at most 90 visible elements, no scripts, no "
-        "external images/fonts/URLs, and avoid filters, masks, patterns, and large "
-        "decorative backgrounds unless they communicate the paper result.\n"
-        "- Use a restrained white background, 1-2 accent colors, strong contrast, "
-        "and no more than 3 short labels. Match visual density to the blank region.\n"
-        "- Do not invent unsupported metrics or claims. Return SVG XML only."
+        f"{skill}\n\n"
+        "RUNTIME HARNESS OVERRIDE (follow these values exactly):\n"
+        f"- CONTENT is supplied by the caller above.\n"
+        f"- WIDTH={width}px; HEIGHT={height}px; target region={width}x{height}; aspect ratio={aspect:.3f}.\n"
+        f"- Root width and height must be exactly {width} and {height}.\n"
+        f"- Use viewBox=\"0 0 {width} {height}\".\n"
+        "- Use no scripts and no external resources.\n"
+        "- The detected region is already the usable fill area; do not add an outer "
+        "layout wrapper or design for a different canvas."
     )
 
 
@@ -71,13 +62,26 @@ def validate_svg_document(svg_text: str, width: int, height: int) -> tuple[bool,
         return False, "root element is not svg"
     if root.tag != "{" + _SVG_NS + "}svg":
         return False, "SVG namespace is missing or incorrect"
+    for name, expected in (("width", width), ("height", height)):
+        value = root.attrib.get(name)
+        if value is None:
+            return False, f"root {name} is missing"
+        try:
+            if float(re.match(r"^\s*[+-]?(?:\d+(?:\.\d*)?|\.\d+)\s*", value).group()) != expected:
+                return False, f"root {name} does not match target region"
+        except (AttributeError, ValueError):
+            return False, f"root {name} is not numeric"
     view_box = root.attrib.get("viewBox", "").replace(",", " ").split()
     if len(view_box) != 4:
         return False, "viewBox must contain four numbers"
     try:
-        _, _, vb_width, vb_height = (float(value) for value in view_box)
+        vb_x, vb_y, vb_width, vb_height = (float(value) for value in view_box)
     except ValueError:
         return False, "viewBox contains non-numeric values"
+    if vb_x != 0 or vb_y != 0:
+        return False, "viewBox must begin at zero"
+    if vb_width != width or vb_height != height:
+        return False, "viewBox dimensions do not match target region"
     if vb_width <= 0 or vb_height <= 0:
         return False, "viewBox dimensions must be positive"
     target_ratio = width / height if height else 1.0
