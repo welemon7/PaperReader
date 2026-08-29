@@ -17,6 +17,7 @@ from src.llm.multimodal_client import (
     downscale_image,
     multimodal_analyze_labeled,
 )
+from src.visual.capture import measure_section_content_size
 from src.renderers.html_renderer import HtmlPosterRenderer
 from src.schemas.analysis import PaperAnalysis
 from src.schemas.paper import Figure, PaperDocument
@@ -44,6 +45,7 @@ except ImportError:  # pragma: no cover - PIL is a hard dependency in practice
 _INVALID_BLANK_RATIO_THRESHOLD = 0.30
 _BLANK_GRAY_VARIANCE_THRESHOLD = 10.0
 _MORPHOLOGY_KERNEL_SIZE = 15
+_HIGHLIGHTS_FILE = Path(__file__).resolve().parents[2] / "highlights.md"
 
 
 @dataclass
@@ -1192,6 +1194,9 @@ def inspect_rendered_poster(
                         const content = section.querySelector('.section-content');
                         return content ? px(getComputedStyle(content).fontSize) : 0;
                     }).filter(Boolean);
+                    const highlights = document.querySelector('#sec-highlights .section-content');
+                    const highlightsRect = highlights ? highlights.getBoundingClientRect() : null;
+                    const highlightsStyle = highlights ? getComputedStyle(highlights) : null;
                     const rect = poster ? poster.getBoundingClientRect() : null;
                     return {
                         section_count: sections.length,
@@ -1201,6 +1206,12 @@ def inspect_rendered_poster(
                         min_body_font_px: fontSizes.length ? Math.min(...fontSizes) : 0,
                         canvas_width: rect ? Math.round(rect.width) : 0,
                         canvas_height: rect ? Math.round(rect.height) : 0,
+                        highlights_region_width: highlightsRect && highlightsStyle
+                            ? Math.max(1, Math.round(highlightsRect.width - px(highlightsStyle.paddingLeft) - px(highlightsStyle.paddingRight)))
+                            : 0,
+                        highlights_region_height: highlightsRect && highlightsStyle
+                            ? Math.max(1, Math.round(highlightsRect.height - px(highlightsStyle.paddingTop) - px(highlightsStyle.paddingBottom)))
+                            : 0,
                     };
                 }"""
             )
@@ -1436,6 +1447,130 @@ def _strip_fences(text: str) -> str:
         lines = text.split("\n")
         text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
     return text.strip()
+
+
+def _highlight_candidates() -> list[str]:
+    text = _highlight_source()
+    candidates = []
+    for line in text.splitlines():
+        line = re.sub(r"^\s*(?:[-*]|\d+[.)])\s*", "", line).strip()
+        if line:
+            candidates.append(line)
+    return candidates
+
+
+def _highlight_source() -> str:
+    try:
+        return _HIGHLIGHTS_FILE.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+
+
+def _parse_four_highlights(raw: str, candidates: list[str]) -> list[str]:
+    selected: list[str] = []
+    try:
+        payload = json.loads(_strip_fences(raw))
+        values = payload.get("highlights") if isinstance(payload, dict) else payload
+        if isinstance(values, list):
+            selected = [str(value).strip() for value in values if str(value).strip()]
+    except (json.JSONDecodeError, TypeError, ValueError):
+        selected = []
+    candidate_set = set(candidates)
+    selected = [item for item in selected if item in candidate_set]
+    if not selected:
+        selected = candidates[:4]
+    selected = list(dict.fromkeys(selected))
+    return (selected + [item for item in candidates if item not in selected])[:4]
+
+
+def _generate_highlights(
+    llm: Optional[LLMClient],
+    doc: PaperDocument,
+    analysis: PaperAnalysis,
+    blueprint: PosterBlueprint,
+    html_path: Path,
+    output_roots: list[Path],
+) -> bool:
+    """Choose four source highlights and render them as a self-contained SVG."""
+    sec = next((item for item in blueprint.sections if item.type == "highlights"), None)
+    if sec is None:
+        return False
+    candidates = _highlight_candidates()
+    source_text = _highlight_source()
+    if not candidates:
+        return False
+
+    size = measure_section_content_size(
+        html_path,
+        "#sec-highlights .section-content",
+        width=blueprint.width_px,
+        height=blueprint.height_px,
+    )
+    width = int(size.get("width") or 0)
+    height = int(size.get("height") or 0)
+    sec.highlights_region_width = width
+    sec.highlights_region_height = height
+    if width <= 0 or height <= 0:
+        logger.warning("Highlights region has no measurable content size")
+        sec.highlights_items = candidates[:4]
+        sec.highlights_svg_ref = ""
+        return False
+
+    selected = candidates[:4]
+    if llm is not None:
+        try:
+            selection = llm.chat(
+                system="You select concise, paper-grounded highlights for a scientific poster.",
+                user=(
+                    "Read the paper core and the candidate highlights below. Select exactly four "
+                    "candidate lines that best represent the paper's actual core. Preserve the "
+                    "selected wording exactly. Return JSON only: {\"highlights\": [\"...\", \"...\", "
+                    "\"...\", \"...\"]}.\n\n"
+                    f"Paper core:\n{_global_poster_context(doc, analysis, blueprint)}\n\n"
+                    f"Full highlights.md source:\n{source_text}\n\n"
+                    f"Candidate highlights parsed from highlights.md:\n" + "\n".join(
+                        f"{index}. {value}" for index, value in enumerate(candidates, 1)
+                    )
+                ),
+            )
+            selected = _parse_four_highlights(selection, candidates)
+        except Exception as exc:
+            logger.warning("Highlight selection failed: %s", exc)
+    selected = (selected + candidates)[:4]
+    sec.highlights_items = selected
+    sec.highlights_svg_ref = ""
+
+    if llm is None:
+        return False
+    try:
+        svg_text = _strip_fences(llm.chat(
+            system=(
+                "You are a scientific SVG information designer. Return only one complete, valid, "
+                "self-contained SVG document. Visualize the supplied four paper highlights clearly."
+            ),
+            user=(
+                f"Paper core:\n{_global_poster_context(doc, analysis, blueprint)}\n\n"
+                f"Full highlights.md source:\n{source_text}\n\n"
+                f"Selected four highlights:\n" + "\n".join(f"- {item}" for item in selected)
+                + "\n\n"
+                + svg_generation_guidance(width, height)
+            ),
+        ))
+        svg_text = normalize_svg_dimensions(svg_text, width, height)
+        valid, reason = validate_svg_document(svg_text, width, height)
+        if not valid:
+            logger.warning("Rejected generated highlights SVG: %s", reason)
+            return False
+        name = sanitize_asset_name(f"{sec.section_id}_highlights", "highlights") + ".svg"
+        for root in output_roots:
+            figures = Path(root) / "figures"
+            figures.mkdir(parents=True, exist_ok=True)
+            (figures / name).write_text(svg_text, encoding="utf-8")
+        sec.highlights_svg_ref = f"figures/{name}"
+        return True
+    except Exception as exc:
+        logger.warning("Highlights SVG generation failed: %s", exc)
+        return False
 
 
 def _trim_dense_text(text: str, max_words: int = 90) -> str:
@@ -2024,6 +2159,23 @@ def run_poster_harness(
             break
         html_str = _apply_css_patches(html_str, css_patches)
         round_html.write_text(html_str, encoding="utf-8")
+
+        # Measure the actual content box, then replace the legacy Highlights
+        # markers with a paper-grounded SVG (or four textual fallbacks).
+        if round_no == 1:
+            generated_svg = _generate_highlights(
+                llm, doc, analysis, blueprint, round_html, [round_dir, output_dir]
+            )
+            if generated_svg or next(
+                (sec for sec in blueprint.sections if sec.type == "highlights"),
+                None,
+            ) is not None:
+                try:
+                    html_str = renderer.render(blueprint, doc, round_dir)
+                    html_str = _apply_css_patches(html_str, css_patches)
+                    round_html.write_text(html_str, encoding="utf-8")
+                except Exception as exc:
+                    logger.warning("Highlights rerender failed: %s", exc)
 
         # 2) Capture + visual review.
         review = review_rendered_poster(

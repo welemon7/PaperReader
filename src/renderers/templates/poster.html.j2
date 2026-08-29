@@ -83,7 +83,7 @@ body {
 .hero-link:hover { background: color-mix(in srgb, var(--poster-primary) 12%, transparent); }
 .header h1 {
     font-family: var(--font-display);
-    font-size: 46px;
+    font-size: clamp(30px, 3vw, 48px);
     color: var(--poster-primary);
     font-weight: 800;
     letter-spacing: 0;
@@ -168,8 +168,8 @@ body {
     background: transparent;
     color: #1D4ED8;
     font-family: "Times New Roman", Times, serif;
-    font-size: 19px;
-    font-weight: 800;
+    font-size: 1.25em;
+    font-weight: 700;
     text-transform: none;
     letter-spacing: 0;
     padding: 12px 18px;
@@ -482,6 +482,26 @@ tbody tr:nth-child(even) { background: color-mix(in srgb, var(--panel-soft) 55%,
     align-items: center;
     justify-content: center;
 }
+.highlights-svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    object-fit: contain;
+}
+.highlights-fallback {
+    width: 100%;
+    padding-left: 20px;
+    display: grid;
+    gap: 8px;
+    color: var(--text-main);
+    font-size: 14px;
+    line-height: 1.3;
+}
+.highlights-fallback li::marker {
+    color: var(--poster-accent);
+    font-weight: 700;
+}
 .row-equal {
     align-self: stretch;
     min-height: 190px;
@@ -627,7 +647,7 @@ tbody tr:nth-child(even) { background: color-mix(in srgb, var(--panel-soft) 55%,
         </div>
 
         <div class="section-block core-band" id="sec-main-method" data-priority="{{ (ns.core_results or ns.core_method).visual_priority if (ns.core_results or ns.core_method) else 'P0' }}" style="grid-area: core;">
-            <div class="section-title core-band-title"><span class="sym">🏆</span>Core Result</div>
+            <div class="section-title core-band-title"><span class="sym">🏆</span>Core Results</div>
             <div class="section-content">
                 {% set core_figs = namespace(items=[]) %}
                 {% if ns.core_results %}
@@ -700,38 +720,14 @@ tbody tr:nth-child(even) { background: color-mix(in srgb, var(--panel-soft) 55%,
         <div class="section-block row-equal" id="sec-highlights" data-priority="{{ ns.highlights.visual_priority if ns.highlights else 'P3' }}" style="grid-area: highlights;">
             <div class="section-title"><span class="sym">⚡</span>{{ ns.highlights.title if ns.highlights else 'Highlights' }}</div>
             <div class="section-content">
-                <div class="highlight-marker-row">
-                    <div class="highlight-marker badge-pill">
-                        <span class="highlight-marker-symbol" aria-hidden="true">◎</span>
-                        <div class="highlight-marker-copy">
-                            <div class="highlight-marker-title">Cross-benchmark</div>
-                            <div class="highlight-marker-desc">Consistent gains across key datasets.</div>
-                        </div>
-                    </div>
-                    <div class="highlight-marker badge-pill">
-                        <span class="highlight-marker-symbol" aria-hidden="true">⚡</span>
-                        <div class="highlight-marker-copy">
-                            <div class="highlight-marker-title">Efficient</div>
-                            <div class="highlight-marker-desc">Designed for fast, practical deployment.</div>
-                        </div>
-                    </div>
-                    <div class="highlight-marker badge-pill">
-                        <span class="highlight-marker-symbol" aria-hidden="true">★</span>
-                        <div class="highlight-marker-copy">
-                            <div class="highlight-marker-title">Strong Results</div>
-                            <div class="highlight-marker-desc">Competitive performance on core metrics.</div>
-                        </div>
-                    </div>
-                    <div class="highlight-marker badge-pill">
-                        <span class="highlight-marker-symbol" aria-hidden="true">◇</span>
-                        <div class="highlight-marker-copy">
-                            <div class="highlight-marker-title">Robust</div>
-                            <div class="highlight-marker-desc">Stable behavior across common settings.</div>
-                        </div>
-                    </div>
-                </div>
-                {% if ns.highlights and ns.highlights.supplement_html %}
-                <div class="mini-visual">{{ ns.highlights.supplement_html|safe }}</div>
+                {% if ns.highlights and ns.highlights.highlights_svg_ref %}
+                <img class="highlights-svg" src="{{ ns.highlights.highlights_svg_ref }}" alt="Four paper highlights">
+                {% elif ns.highlights and ns.highlights.highlights_items %}
+                <ul class="highlights-fallback">
+                    {% for item in ns.highlights.highlights_items %}
+                    <li>{{ item }}</li>
+                    {% endfor %}
+                </ul>
                 {% endif %}
             </div>
         </div>

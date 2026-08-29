@@ -96,6 +96,44 @@ def _as_file_uri(path: Path) -> str:
     return path.resolve().as_uri()
 
 
+def measure_section_content_size(
+    html_path: Path,
+    selector: str,
+    width: int = 1920,
+    height: int = 1080,
+) -> dict[str, int]:
+    """Measure a rendered element's content box in CSS pixels."""
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        return {}
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page(viewport={"width": width, "height": height}, device_scale_factor=1)
+            page.goto(_as_file_uri(html_path), wait_until="load")
+            _wait_render(page)
+            result = page.evaluate(
+                """(selector) => {
+                    const el = document.querySelector(selector);
+                    if (!el) return null;
+                    const r = el.getBoundingClientRect();
+                    const style = getComputedStyle(el);
+                    const px = value => Number.parseFloat(value || '0') || 0;
+                    return {
+                        width: Math.max(1, Math.round(r.width - px(style.paddingLeft) - px(style.paddingRight))),
+                        height: Math.max(1, Math.round(r.height - px(style.paddingTop) - px(style.paddingBottom)))
+                    };
+                }""",
+                selector,
+            )
+            browser.close()
+            return result or {}
+    except Exception as exc:
+        logger.warning("Section content measurement failed for %s: %s", selector, exc)
+        return {}
+
+
 def _wait_render(page, wait_ms: int = 2500) -> None:
     """Wait for fonts and (best-effort) MathJax before screenshotting."""
     page.wait_for_timeout(wait_ms)

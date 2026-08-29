@@ -343,7 +343,10 @@ class TestHtmlPosterRenderer:
         assert html.count('class="figure-card result-card"') >= 2
         assert "code-cta" in html
         assert "Paper-to-Poster · Research Reader" in html
-        assert html.count("badge-pill") >= 4
+        assert "SCALABLE" in html
+        assert "PRINCIPLED" in html
+        assert "Cross-benchmark" not in html
+        assert "Consistent gains across key datasets." not in html
         assert "mini-visual" in html
         assert "Result figure 1 unavailable" not in html
         assert "Result figure 2 unavailable" not in html

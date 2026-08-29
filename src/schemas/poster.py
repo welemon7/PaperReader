@@ -31,6 +31,10 @@ class PosterSection(BaseModel):
     content_md: str = ''
     content_html: str = ''
     supplement_html: str = ''
+    highlights_items: list[str] = Field(default_factory=list)
+    highlights_svg_ref: str = ''
+    highlights_region_width: int = 0
+    highlights_region_height: int = 0
     column: int = Field(default=1, ge=1, le=3)
     col_span: int = Field(default=1, ge=1, le=3)
     row: int = Field(default=0, ge=0, le=3)

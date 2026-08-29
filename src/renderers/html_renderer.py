@@ -105,6 +105,20 @@ class HtmlPosterRenderer:
         return "\n".join(lines).strip()
 
     @staticmethod
+    def _default_highlight_items() -> list[str]:
+        source = Path(__file__).resolve().parents[2] / "highlights.md"
+        try:
+            text = source.read_text(encoding="utf-8")
+        except OSError:
+            return []
+        items = []
+        for line in text.splitlines():
+            line = re.sub(r"^\s*(?:[-*]|\d+[.)])\s*", "", line).strip()
+            if line:
+                items.append(line)
+        return items[:4]
+
+    @staticmethod
     def _remove_core_takeaway_rows(content: str) -> str:
         """Ensure externally supplied Core Results tables follow the poster policy."""
         return re.sub(
@@ -176,6 +190,11 @@ class HtmlPosterRenderer:
             sec.content_html = self._markdown_with_latex(sec.content_md)
             if sec.supplement_html:
                 sec.supplement_html = self._markdown_with_latex(sec.supplement_html)
+            if sec.type == "highlights" and not sec.highlights_items:
+                sec.highlights_items = self._default_highlight_items()
+            if sec.type == "highlights":
+                # The legacy markdown payload must never reappear in this visual-only block.
+                sec.content_html = ""
 
         html = self.template.render(
             poster_title=blueprint.poster_title,
