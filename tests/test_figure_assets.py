@@ -67,3 +67,11 @@ def test_save_svg_asset_wraps_symbol_text(tmp_path):
     content = target.read_text(encoding="utf-8")
     assert "<svg" in content
     assert "◎" in content
+
+
+def test_save_svg_asset_preserves_prefixed_svg_document(tmp_path):
+    source = '<ns0:svg xmlns:ns0="http://www.w3.org/2000/svg"><ns0:rect width="10" height="10"/></ns0:svg>'
+    target = save_svg_asset(source, tmp_path / "figures", "prefixed")
+    content = target.read_text(encoding="utf-8")
+    assert "&lt;ns0:svg" not in content
+    assert "<ns0:svg" in content

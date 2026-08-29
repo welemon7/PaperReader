@@ -240,7 +240,10 @@ def save_svg_asset(
     if not content:
         raise ValueError("svg_or_symbol must not be empty")
 
-    if "<svg" not in content.lower():
+    # Accept both the default SVG namespace and ElementTree's prefixed form
+    # (for example ``<ns0:svg ...>``). Otherwise a valid serialized SVG can be
+    # mistaken for a plain symbol and embedded as escaped text.
+    if not re.search(r"<(?:(?:[A-Za-z_][\w.-]*):)?svg\b", content, flags=re.IGNORECASE):
         symbol = html_escape(content)
         content = (
             f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="{view_box}">'

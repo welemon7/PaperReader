@@ -25,7 +25,11 @@ from src.schemas.poster_harness import HarnessConfig, HarnessResult, HarnessRoun
 from src.schemas.poster_v2 import EvaluationQuestion, PosterComment, PosterQAEval, PosterReview
 from src.agents.content_policy import count_words, section_budget, trim_to_budget
 from src.utils.figure_assets import save_svg_asset, sanitize_asset_name
-from src.agents.svg_skill_adapter import svg_generation_guidance, validate_svg_document
+from src.agents.svg_skill_adapter import (
+    normalize_svg_dimensions,
+    svg_generation_guidance,
+    validate_svg_document,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1038,7 +1042,9 @@ def _generate_blank_supplement_asset(
         try:
             svg_text = _strip_fences(llm.chat(
                 system=(
-                    "You create minimal standalone SVG illustrations for scientific posters. "
+                    "You are a content-driven SVG information designer. The user content and SVG skill "
+                    "define the visual; do not reuse a generic template. Create a distinct composition "
+                    "that represents the supplied relationships and fits the exact target region. "
                     "Return valid SVG only. No markdown, no code fences, no explanations."
                 ),
                 user=(
@@ -1052,6 +1058,7 @@ def _generate_blank_supplement_asset(
             svg_text = None
 
     if svg_text:
+        svg_text = normalize_svg_dimensions(svg_text, target_width, target_height)
         valid, reason = validate_svg_document(svg_text, target_width, target_height)
         if not valid:
             logger.warning("Rejected generated SVG for %s: %s", candidate.section_id, reason)

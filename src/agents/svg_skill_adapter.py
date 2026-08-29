@@ -11,6 +11,7 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _UPSTREAM_SKILL_DIR = _PROJECT_ROOT / ".codex" / "skills" / "svg"
 _SVG_NS = "http://www.w3.org/2000/svg"
 _MAX_ELEMENTS = 90
+ElementTree.register_namespace("", _SVG_NS)
 
 
 def _read_svg_skill() -> str:
@@ -43,13 +44,33 @@ def svg_generation_guidance(width: int, height: int) -> str:
     )
 
 
+def normalize_svg_dimensions(svg_text: str, width: int, height: int) -> str:
+    """Normalize a valid model SVG to the harness region without changing its drawing."""
+    content = (svg_text or "").strip()
+    try:
+        root = ElementTree.fromstring(content)
+    except ElementTree.ParseError:
+        return content
+    if root.tag != "{" + _SVG_NS + "}svg":
+        return content
+    root.set("width", str(width))
+    root.set("height", str(height))
+    view_box = root.attrib.get("viewBox", "").replace(",", " ").split()
+    if len(view_box) == 4:
+        root.set("viewBox", " ".join(view_box))
+    else:
+        root.set("viewBox", f"0 0 {width} {height}")
+    root.set("preserveAspectRatio", "none")
+    return ElementTree.tostring(root, encoding="unicode")
+
+
 def validate_svg_document(svg_text: str, width: int, height: int) -> tuple[bool, str]:
     """Validate a model response before it becomes a browser-loaded asset."""
     content = (svg_text or "").strip()
     if not content or len(content) > 120_000:
         return False, "empty or oversized SVG response"
     if re.search(
-        r"<\s*(script|foreignObject)\b|(?:href|src)\s*=\s*['\"]https?://|url\s*\(",
+        r"<\s*(script|foreignObject)\b|(?:href|src)\s*=\s*['\"](?:https?:|//)|url\s*\(\s*['\"]?(?:https?:|//)",
         content,
         re.I,
     ):
@@ -80,8 +101,6 @@ def validate_svg_document(svg_text: str, width: int, height: int) -> tuple[bool,
         return False, "viewBox contains non-numeric values"
     if vb_x != 0 or vb_y != 0:
         return False, "viewBox must begin at zero"
-    if vb_width != width or vb_height != height:
-        return False, "viewBox dimensions do not match target region"
     if vb_width <= 0 or vb_height <= 0:
         return False, "viewBox dimensions must be positive"
     target_ratio = width / height if height else 1.0
