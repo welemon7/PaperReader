@@ -334,6 +334,8 @@ def _blank_ratio_threshold(sec: PosterSection) -> float:
 
 
 def _should_supplement_report(report: SectionBlankReport, sec: PosterSection) -> bool:
+    if sec.type in {"contributions", "highlights", "project_link"}:
+        return False
     if sec.type == "main_method" and report.core_blank_review:
         return bool(report.core_blank_review.get("has_invalid_blank")) and report.blank_ratio >= _INVALID_BLANK_RATIO_THRESHOLD
     if sec.type == "main_method":
@@ -926,9 +928,10 @@ def _size_supplement_svg(svg_text: str, candidate: BlankRegionCandidate) -> str:
 
 def _supplement_overlay_html(asset_ref: str, candidate: BlankRegionCandidate, alt: str) -> str:
     """Build a non-flow SVG overlay positioned in the section crop coordinates."""
+    description = _supplement_description(candidate, alt)
     regions = candidate.blank_regions or candidate.blank_cells
     if not regions:
-        return f'<div class="figure-card"><img src="{html.escape(asset_ref, quote=True)}" alt="{html.escape(alt, quote=True)} supplement"></div>'
+        return f'<div class="figure-card"><div class="figure-description">{html.escape(description)}</div><img src="{html.escape(asset_ref, quote=True)}" alt="{html.escape(alt, quote=True)} supplement"></div>'
     region = max(
         regions,
         key=lambda item: float(item.get("area_pixels") or item.get("area_ratio") or 0.0),
@@ -959,9 +962,56 @@ def _supplement_overlay_html(asset_ref: str, candidate: BlankRegionCandidate, al
     return (
         '<div class="blank-region-supplement" '
         f'style="left:{left}px;top:{top}px;width:{width}px;height:{height}px;">'
+        f'<div class="figure-description">{html.escape(description)}</div>'
         f'<img src="{html.escape(asset_ref, quote=True)}" alt="{html.escape(alt, quote=True)} supplement">'
         '</div>'
     )
+
+
+def _supplement_description(candidate: BlankRegionCandidate, fallback: str) -> str:
+    """Return one concise sentence from the visual-generation context."""
+    source = next((item for item in candidate.key_signals if item and item != "(empty)"), "")
+    if not source:
+        source = candidate.local_context or candidate.section_title or fallback
+    source = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", source)).strip()
+    source = re.split(r"(?<=[.!?])\s+", source, maxsplit=1)[0].rstrip(".!?")
+    source = re.sub(r"^(?:shows|illustrates|depicts|compares|presents|visualizes)\s+", "", source, flags=re.I)
+    if not source:
+        source = fallback
+    return source.rstrip(".!?") + "."
+
+
+def _clean_llm_figure_title(value: str, fallback: str) -> str:
+    text = re.sub(r"```(?:text|plain)?", "", value or "", flags=re.I)
+    text = re.sub(r"^(?:title|caption)\s*:\s*", "", text.strip(), flags=re.I)
+    quoted = re.search(r"[\"']([^\"']+)[\"']", text)
+    if quoted:
+        text = quoted.group(1)
+    text = text.strip().strip('"\'')
+    text = re.split(r"(?<=[.!?])\s+", text, maxsplit=1)[0]
+    words = re.findall(r"[A-Za-z0-9]+(?:[-'][A-Za-z0-9]+)?", text)
+    if not words:
+        return fallback
+    return " ".join(words[:20]).rstrip(".!?") + "."
+
+
+def _llm_supplement_title(llm: Optional[LLMClient], candidate: BlankRegionCandidate, fallback: str) -> str:
+    if llm is None:
+        return fallback
+    source = "\n".join(candidate.key_signals) or candidate.local_context or candidate.section_title
+    try:
+        result = llm.chat(
+            system="You write short scientific figure titles.",
+            user=(
+                "Write a concise English title for this generated scientific SVG. "
+                "Use at most 20 words. Return title text only, with no label, quotes, or explanation.\n\n"
+                f"SVG generation content:\n{source}"
+            ),
+        )
+        return _clean_llm_figure_title(result, fallback)
+    except (LLMError, OSError) as exc:
+        logger.warning("SVG title generation skipped: %s", exc)
+        return fallback
 
 
 def _generate_blank_supplement_asset(
@@ -1572,6 +1622,10 @@ def _apply_feedback(
 
         elif action == "supplement":
             if sec:
+                if sec.type in {"contributions", "highlights", "project_link"}:
+                    sec.supplement_html = ""
+                    applied.append(f"supplement skipped ({sec.section_id}: no generated visual)")
+                    continue
                 candidate_map: dict[str, BlankRegionCandidate] = {}
                 for item in (review.deterministic_checks or {}).get("blank_region_candidates") or []:
                     if isinstance(item, dict) and item.get("section_id"):
@@ -1628,10 +1682,15 @@ def _apply_feedback(
                     )
                 asset_ref = _generate_blank_supplement_asset(llm, candidate, asset_roots or [])
                 if asset_ref:
+                    fallback_title = _supplement_description(candidate, sec.title or sec.section_id)
+                    supplement_title = _llm_supplement_title(llm, candidate, fallback_title)
                     sec.supplement_html = _supplement_overlay_html(
                         asset_ref,
                         candidate,
                         sec.title or sec.section_id,
+                    )
+                    sec.supplement_html = sec.supplement_html.replace(
+                        html.escape(fallback_title), html.escape(supplement_title), 1
                     )
                     applied.append(f"supplement {sec.section_id} (svg)")
                 else:

@@ -218,3 +218,16 @@ def test_harness_v2_blank_section_creates_svg_supplement(mock_chat, _mock_cfg, t
     poster_html = Path(result.final_html).read_text(encoding="utf-8")
     assert "Blank ratio" not in poster_html
     assert "supplemented with a generated visual cue" not in poster_html.lower()
+
+
+@patch("src.agents.poster_harness._generate_blank_supplement_asset")
+def test_harness_skips_supplements_for_supporting_sections(mock_generate, tmp_path):
+    from src.agents.poster_harness import _should_supplement_report
+    from src.schemas.poster import PosterSection
+    from src.agents.poster_harness import SectionBlankReport
+
+    report = SectionBlankReport(section_id="sec-project", section_type="project_link", section_title="Project", blank_ratio=0.9, content_ratio=0.1, width=100, height=100, text_words=1, figure_count=0, has_figures=False)
+    for section_type in ("contributions", "highlights", "project_link"):
+        section = PosterSection(section_id=f"sec-{section_type}", type=section_type, title=section_type)
+        assert not _should_supplement_report(report, section)
+    mock_generate.assert_not_called()

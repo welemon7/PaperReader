@@ -66,6 +66,65 @@ class TestHtmlPosterRenderer:
         assert html.count("hero-pill") >= 1
         assert "Code & Project" in html
 
+    def test_render_places_author_metadata_and_code_on_one_header_row(self):
+        doc = PaperDocument(
+            paper_id="test-999", arxiv_id="9999.99999", title="Test",
+            raw_markdown="Contact alice@example.com for details.",
+            authors=[{"name": "Alice", "affiliation": "MIT"}],
+        )
+        bp = _make_blueprint()
+        bp.code_url = "https://github.com/example/repo"
+        html = HtmlPosterRenderer().render(bp, doc, Path("output") / "9999.99999")
+        header = html.split('<div class="grid-container">', 1)[0]
+        assert 'class="header-meta"' in header
+        assert header.index("Alice") < header.index("MIT") < header.index("alice@example.com") < header.index("https://github.com/example/repo")
+
+    def test_render_normalizes_and_deduplicates_latex_emails(self):
+        doc = PaperDocument(
+            paper_id="test-999", arxiv_id="9999.99999", title="Test",
+            raw_markdown=r"scc.cs @csu.edu.cn and scc.cs\@csu.edu.cn",
+            authors=[{"name": "Chengchao Shen", "affiliation": "Central South University"}],
+        )
+        html = HtmlPosterRenderer().render(_make_blueprint(), doc, Path("output") / "9999.99999")
+        assert html.count("scc.cs@csu.edu.cn") == 1
+        assert r"scc.cs\@csu.edu.cn" not in html
+
+    def test_render_describes_selected_figures_above_images(self, tmp_path):
+        source_dir = tmp_path / "paper"
+        source_dir.mkdir()
+        image = source_dir / "overview.png"
+        image.write_bytes(_TINY_PNG)
+        doc = PaperDocument(
+            paper_id="test-999", arxiv_id="9999.99999", title="Test",
+            raw_markdown=".", source_dir=str(source_dir),
+            figures=[Figure(figure_id="fig-1", caption="Figure 1: Network architecture overview", local_path=str(image), section_id="s2")],
+        )
+        bp = _make_blueprint()
+        bp.figure_placements = [type("FP", (), {"figure_id": "fig-1", "section_id": "s2", "width_ratio": 0.9, "caption": "Figure 1: Network architecture overview"})()]
+        html = HtmlPosterRenderer().render(bp, doc, tmp_path)
+        assert "Network architecture overview." in html
+        assert "Shows network architecture overview." not in html
+        assert html.index("Network architecture overview.") < html.index('src="figures/fig-1.png"')
+
+    @patch("src.renderers.html_renderer.LLMClient.is_configured", return_value=True)
+    @patch("src.renderers.html_renderer.LLMClient.chat", return_value='Title: "Compact architecture overview with adaptive routing and feature refinement" extra explanation')
+    def test_render_uses_llm_figure_title_and_caps_words(self, mock_chat, _mock_config, tmp_path):
+        source_dir = tmp_path / "paper"
+        source_dir.mkdir()
+        image = source_dir / "overview.png"
+        image.write_bytes(_TINY_PNG)
+        doc = PaperDocument(
+            paper_id="test-999", arxiv_id="9999.99999", title="Test",
+            raw_markdown=".", source_dir=str(source_dir),
+            figures=[Figure(figure_id="fig-1", caption="Network architecture overview", local_path=str(image), section_id="s2")],
+        )
+        bp = _make_blueprint()
+        bp.figure_placements = [type("FP", (), {"figure_id": "fig-1", "section_id": "s2", "width_ratio": 0.9, "caption": "Network architecture overview"})()]
+        html = HtmlPosterRenderer().render(bp, doc, tmp_path)
+        assert "Compact architecture overview with adaptive routing and feature refinement." in html
+        assert "extra explanation" not in html
+        mock_chat.assert_called_once()
+
     def test_render_hides_code_pill_when_missing(self):
         doc = PaperDocument(paper_id="test-999", arxiv_id="9999.99999", title="Test", raw_markdown=".")
         bp = _make_blueprint()

@@ -116,10 +116,12 @@ body {
     flex-wrap: wrap;
     gap: 10px;
     margin-top: 8px;
+    align-items: baseline;
 }
-.author-line { font-size: 16px; color: var(--text-muted); margin-top: 8px; }
+.author-line { font-size: 16px; color: var(--text-muted); margin-top: 8px; flex: 0 1 auto; min-width: 0; }
 .header .hero-pill { margin-left: 0; }
 .github-icon { width: 18px; height: 18px; display: inline-block; vertical-align: -4px; margin-right: 5px; }
+.header .hero-pill { flex: 0 1 auto; white-space: normal; overflow-wrap: anywhere; }
 
 /* ================= grid ================= */
 .grid-container {
@@ -333,6 +335,12 @@ body {
     object-fit: contain;
     background: #fbfcfe;
 }
+.figure-description {
+    margin-bottom: 6px;
+    color: var(--text-muted);
+    font-size: 13px;
+    line-height: 1.25;
+}
 .figure-card.method-card img { max-height: 360px; }
 .figure-card.result-card img { max-height: 300px; }
 .figure-card.method-card { border-color: color-mix(in srgb, var(--poster-accent) 60%, var(--border-color)); }
@@ -517,8 +525,8 @@ tbody tr:nth-child(even) { background: color-mix(in srgb, var(--panel-soft) 55%,
         {% if tagline %}
         <div class="tagline">{{ tagline }}</div>
         {% endif %}
-        {% if author_line %}<div class="author-line">{{ author_line }}</div>{% endif %}
         <div class="header-meta">
+            {% if author_line %}<div class="author-line">{{ author_line }}</div>{% endif %}
             {% if code_url %}
             <a class="hero-pill hero-link" href="{{ code_url }}" target="_blank" rel="noreferrer noopener">
                 {% if github_src %}<img class="github-icon" src="{{ github_src }}" alt="GitHub">{% endif %}{{ code_url }}
@@ -581,6 +589,7 @@ tbody tr:nth-child(even) { background: color-mix(in srgb, var(--panel-soft) 55%,
                     {% for fig in overview_figs[:1] %}
                     {% if fig.src %}
                     <div class="figure-card method-card">
+                        <div class="figure-description">{{ fig.description }}</div>
                         <img src="{{ fig.src }}" alt="">
                     </div>
                     {% endif %}
@@ -607,6 +616,7 @@ tbody tr:nth-child(even) { background: color-mix(in srgb, var(--panel-soft) 55%,
                     {% for fig in key_figs[:1] %}
                     {% if fig.src %}
                     <div class="figure-card">
+                        <div class="figure-description">{{ fig.description }}</div>
                         <img src="{{ fig.src }}" alt="">
                     </div>
                     {% endif %}
@@ -650,6 +660,7 @@ tbody tr:nth-child(even) { background: color-mix(in srgb, var(--panel-soft) 55%,
                     {% if left_fig %}
                     <div class="core-column">
                         <div class="figure-card result-card">
+                            <div class="figure-description">{{ left_fig.description }}</div>
                             <img src="{{ left_fig.src }}" alt="">
                         </div>
                     </div>
@@ -663,6 +674,7 @@ tbody tr:nth-child(even) { background: color-mix(in srgb, var(--panel-soft) 55%,
                     {% if right_fig %}
                     <div class="core-column">
                         <div class="figure-card result-card">
+                            <div class="figure-description">{{ right_fig.description }}</div>
                             <img src="{{ right_fig.src }}" alt="">
                         </div>
                     </div>

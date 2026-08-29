@@ -155,6 +155,7 @@ class HtmlPosterRenderer:
         author_line = self._build_author_line(blueprint.authors_str, doc)
         layout = self._build_layout(blueprint)
         figure_map = self._build_figure_map(blueprint, doc, output_dir)
+        self._add_llm_figure_descriptions(figure_map)
         cleaned_formulas = []
         for formula in blueprint.formula_displays:
             cleaned_latex = self._clean_formula_latex(formula.latex)
@@ -202,8 +203,64 @@ class HtmlPosterRenderer:
         affiliations = "; ".join(dict.fromkeys(
             getattr(a, "affiliation", "") for a in authors if getattr(a, "affiliation", "")
         ))
-        emails = "; ".join(dict.fromkeys(re.findall(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}", doc.raw_markdown or "", re.I)))
-        return " | ".join(part for part in (names, affiliations, emails) if part)
+        normalized_markdown = (doc.raw_markdown or "").replace(r"\@", "@")
+        email_pattern = r"[A-Z0-9._%+-]+\s*@\s*[A-Z0-9.-]+\s*\.\s*[A-Z]{2,}"
+        emails = []
+        seen_emails = set()
+        for raw_email in re.findall(email_pattern, normalized_markdown, re.I):
+            email = re.sub(r"\s+", "", raw_email)
+            if email.casefold() not in seen_emails:
+                seen_emails.add(email.casefold())
+                emails.append(email)
+        return " | ".join(part for part in (names, affiliations, "; ".join(emails)) if part)
+
+    @staticmethod
+    def _figure_description(caption: str, fallback: str = "") -> str:
+        """Return only the first concise sentence from a source caption."""
+        text = re.sub(r"\s+", " ", html_lib.unescape(caption or fallback or "")).strip()
+        text = re.sub(r"^(?:fig(?:ure)?\s*\.?\s*\d*\s*[:.)-]?\s*)", "", text, flags=re.I)
+        if not text:
+            return "This visual summarizes the associated research content."
+        text = re.split(r"(?<=[.!?。！？])\s+", text, maxsplit=1)[0].strip()
+        text = re.sub(r"^(?:shows|illustrates|depicts|compares|presents|visualizes)\s+", "", text, flags=re.I)
+        if re.match(r"^(?:shows|illustrates|depicts|compares|presents|visualizes)\b", text, re.I):
+            return text[0].upper() + text[1:] + "."
+        return text.rstrip(".!?。！？") + "."
+
+    @staticmethod
+    def _clean_llm_figure_title(value: str, fallback: str) -> str:
+        text = html_lib.unescape(value or "")
+        text = re.sub(r"```(?:text|plain)?", "", text, flags=re.I)
+        text = re.sub(r"^(?:title|caption)\s*:\s*", "", text.strip(), flags=re.I)
+        quoted = re.search(r"[\"']([^\"']+)[\"']", text)
+        if quoted:
+            text = quoted.group(1)
+        text = text.strip().strip('"\'')
+        text = re.split(r"(?<=[.!?])\s+", text, maxsplit=1)[0]
+        words = re.findall(r"[A-Za-z0-9]+(?:[-'][A-Za-z0-9]+)?", text)
+        if not words:
+            return fallback
+        return " ".join(words[:20]).rstrip(".!?") + "."
+
+    def _add_llm_figure_descriptions(self, figure_map: dict[str, list[dict]]) -> None:
+        if not LLMClient.is_configured():
+            return
+        client = LLMClient()
+        for entries in figure_map.values():
+            for entry in entries:
+                fallback = entry["description"]
+                try:
+                    result = client.chat(
+                        system="You write short scientific figure titles.",
+                        user=(
+                            "Write a concise English title for this scientific figure. "
+                            "Use at most 20 words. Return title text only, with no label, quotes, or explanation.\n\n"
+                            f"Figure caption:\n{entry.get('caption') or fallback}"
+                        ),
+                    )
+                    entry["description"] = self._clean_llm_figure_title(result, fallback)
+                except (LLMError, OSError) as exc:
+                    logger.warning("Figure title generation skipped: %s", exc)
 
     @staticmethod
     def _prepare_github_asset(output_dir: Path) -> str:
@@ -485,6 +542,10 @@ class HtmlPosterRenderer:
                 "src": None,
                 "width_ratio": fp.width_ratio,
                 "section_type": section_type,
+                "description": HtmlPosterRenderer._figure_description(
+                    fp.caption or (fig.caption if fig else ""),
+                    next((getattr(sec, "title", "") for sec in blueprint.sections if sec.section_id == fp.section_id), ""),
+                ),
             }
             if fig:
                 src = fig.local_path or fig.minio_path
