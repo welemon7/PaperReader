@@ -25,6 +25,7 @@ from src.schemas.poster_harness import HarnessConfig, HarnessResult, HarnessRoun
 from src.schemas.poster_v2 import EvaluationQuestion, PosterComment, PosterQAEval, PosterReview
 from src.agents.content_policy import count_words, section_budget, trim_to_budget
 from src.utils.figure_assets import save_svg_asset, sanitize_asset_name
+from src.agents.svg_skill_adapter import svg_generation_guidance, validate_svg_document
 
 logger = logging.getLogger(__name__)
 
@@ -972,6 +973,12 @@ def _generate_blank_supplement_asset(
         return None
 
     target_name = sanitize_asset_name(f"{candidate.section_id}_supplement", candidate.section_id)
+    region = max(
+        candidate.blank_regions or candidate.blank_cells or [{}],
+        key=lambda item: float(item.get("area_pixels") or item.get("area_ratio") or 0.0),
+    )
+    target_width = max(1, int(region.get("width") or candidate.width or 360))
+    target_height = max(1, int(region.get("height") or candidate.height or 220))
     primary_root = asset_roots[0]
     primary_supplement_dir = primary_root / "supplement"
     primary_browser_dir = primary_root / "figures"
@@ -984,12 +991,21 @@ def _generate_blank_supplement_asset(
                     "You create minimal standalone SVG illustrations for scientific posters. "
                     "Return valid SVG only. No markdown, no code fences, no explanations."
                 ),
-                user=_blank_region_visual_prompt(candidate),
+                user=(
+                    _blank_region_visual_prompt(candidate)
+                    + "\n\n"
+                    + svg_generation_guidance(target_width, target_height)
+                ),
             ))
         except Exception as exc:
             logger.warning("Blank-section SVG generation failed for %s: %s", candidate.section_id, exc)
             svg_text = None
 
+    if svg_text:
+        valid, reason = validate_svg_document(svg_text, target_width, target_height)
+        if not valid:
+            logger.warning("Rejected generated SVG for %s: %s", candidate.section_id, reason)
+            svg_text = None
     if not svg_text:
         svg_text = _fallback_supplement_svg(candidate)
     svg_text = _size_supplement_svg(svg_text, candidate)
