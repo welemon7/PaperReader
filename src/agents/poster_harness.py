@@ -717,7 +717,7 @@ def _fallback_supplement_svg(candidate: BlankRegionCandidate) -> str:
     }.get(candidate.section_type, "#16324f")
     secondary = "#c9a84c"
     if candidate.section_type in {"contributions", "highlights", "project_link"}:
-        return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{target_width}" height="{target_height}" viewBox="0 0 360 220" preserveAspectRatio="none">
+        return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{target_width}" height="{target_height}" viewBox="0 0 360 220" preserveAspectRatio="xMidYMid meet">
   <rect width="360" height="220" rx="18" fill="#ffffff"/>
   <rect x="24" y="26" width="312" height="168" rx="14" fill="#f8fafc" stroke="#e2e8f0"/>
   <rect x="46" y="58" width="54" height="18" rx="9" fill="{accent}" opacity="0.18"/>
@@ -728,7 +728,7 @@ def _fallback_supplement_svg(candidate: BlankRegionCandidate) -> str:
   <rect x="46" y="154" width="232" height="14" rx="7" fill="{accent}" opacity="0.20"/>
 </svg>'''
     if candidate.section_type in {"motivation", "method_overview", "key_idea"}:
-        return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{target_width}" height="{target_height}" viewBox="0 0 360 220" preserveAspectRatio="none">
+        return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{target_width}" height="{target_height}" viewBox="0 0 360 220" preserveAspectRatio="xMidYMid meet">
   <rect width="360" height="220" rx="18" fill="#ffffff"/>
   <rect x="28" y="28" width="304" height="164" rx="16" fill="#f8fafc" stroke="#e2e8f0"/>
   <rect x="52" y="58" width="62" height="84" rx="10" fill="{accent}" opacity="0.18" stroke="{accent}"/>
@@ -739,7 +739,7 @@ def _fallback_supplement_svg(candidate: BlankRegionCandidate) -> str:
   <path d="M138 86l10 14-10 14" fill="none" stroke="{accent}" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
   <path d="M236 86l10 14-10 14" fill="none" stroke="{secondary}" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>'''
-    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{target_width}" height="{target_height}" viewBox="0 0 360 220" preserveAspectRatio="none">
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{target_width}" height="{target_height}" viewBox="0 0 360 220" preserveAspectRatio="xMidYMid meet">
   <rect width="360" height="220" rx="18" fill="#ffffff"/>
   <rect x="24" y="28" width="312" height="164" rx="16" fill="#f8fafc" stroke="#e2e8f0"/>
   <rect x="54" y="52" width="252" height="18" rx="9" fill="{accent}" opacity="0.2"/>
@@ -777,7 +777,7 @@ def _primary_color(blueprint: PosterBlueprint) -> str:
 
 
 def _supplement_overlay_html(asset_ref: str, candidate: BlankRegionCandidate, alt: str) -> str:
-    """Build a bordered, absolutely positioned figure card for a supplement."""
+    """Build a bordered, centered title-plus-SVG box for a supplement."""
     description = _supplement_description(candidate, alt)
     regions = candidate.blank_regions or candidate.blank_cells
     if not regions:

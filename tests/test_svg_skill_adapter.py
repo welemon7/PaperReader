@@ -35,4 +35,5 @@ def test_normalize_svg_dimensions_keeps_internal_references_and_target_size():
     assert 'width="400"' in normalized
     assert 'height="200"' in normalized
     assert 'viewBox="0 0 360 220"' in normalized
+    assert 'preserveAspectRatio="xMidYMid meet"' in normalized
     assert validate_svg_document(normalized, 400, 200) == (True, "ok")

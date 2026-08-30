@@ -60,7 +60,9 @@ def normalize_svg_dimensions(svg_text: str, width: int, height: int) -> str:
         root.set("viewBox", " ".join(view_box))
     else:
         root.set("viewBox", f"0 0 {width} {height}")
-    root.set("preserveAspectRatio", "none")
+    # The detected region controls the available box, but must not distort the
+    # model's internal geometry or text glyphs when its aspect ratio differs.
+    root.set("preserveAspectRatio", "xMidYMid meet")
     return ElementTree.tostring(root, encoding="unicode")
 
 

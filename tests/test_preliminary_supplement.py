@@ -72,6 +72,19 @@ def test_supplement_card_has_external_left_aligned_title_and_image():
     assert html.index('figure-description') < html.index('supplement-image')
 
 
+def test_supplement_card_keeps_detected_box_and_uses_centered_title():
+    candidate = BlankRegionCandidate(
+        section_id="sec-method", section_type="method_overview", section_title="Method Overview",
+        blank_ratio=0.5, content_ratio=0.5, width=300, height=200, text_words=10,
+        figure_count=0, has_figures=False, local_context="Feature Fusion", nearby_context="",
+        global_context="", blank_regions=[{"x": 20, "y": 60, "width": 200, "height": 120, "area_pixels": 24000}],
+    )
+    html = _supplement_overlay_html("figures/sec-method_supplement.svg", candidate, "Method")
+    assert 'style="left:2px;top:6px;width:200px;height:120px;"' in html
+    assert 'class="blank-region-supplement figure-card"' in html
+    assert 'class="figure-description"' in html
+
+
 def test_blank_svg_prompt_forbids_section_headings():
     candidate = BlankRegionCandidate(
         section_id="sec-method", section_type="method_overview", section_title="Method Overview",
