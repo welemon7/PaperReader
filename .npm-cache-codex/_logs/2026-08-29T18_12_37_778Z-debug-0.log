@@ -1,0 +1,136 @@
+0 verbose cli D:\downloads\nodejs\node.exe D:\downloads\nodejs\node_modules\npm\bin\npm-cli.js
+1 info using npm@11.16.0
+2 info using node@v24.18.0
+3 silly config load:file:D:\downloads\nodejs\node_modules\npm\npmrc
+4 silly config load:file:D:\welemon2077\my_cv_storyCVPR\_11PaperReaderLLM\.npmrc
+5 silly config load:file:C:\Users\welemon\.npmrc
+6 silly config load:file:D:\downloads\nodejs\node_global\etc\npmrc
+7 verbose title npm exec skills find poster layout html paper visualization
+8 verbose argv "exec" "--" "skills" "find" "poster layout html paper visualization"
+9 verbose logfile logs-max:10 dir:D:\welemon2077\my_cv_storyCVPR\_11PaperReaderLLM\.npm-cache-codex\_logs\2026-08-29T18_12_37_778Z-
+10 verbose logfile D:\welemon2077\my_cv_storyCVPR\_11PaperReaderLLM\.npm-cache-codex\_logs\2026-08-29T18_12_37_778Z-debug-0.log
+11 silly logfile done cleaning log files
+12 silly packumentCache heap:4496293888 maxSize:1124073472 maxEntrySize:562036736
+13 http fetch GET 200 https://registry.npmmirror.com/skills 433ms (cache miss)
+14 silly packumentCache heap:4496293888 maxSize:1124073472 maxEntrySize:562036736
+15 silly packumentCache heap:4496293888 maxSize:1124073472 maxEntrySize:562036736
+16 warn exec The following package was not found and will be installed: skills@1.5.23
+17 silly idealTree buildDeps
+18 silly fetch manifest skills@1.5.23
+19 silly packumentCache full:https://registry.npmmirror.com/skills cache-miss
+20 http fetch GET 200 https://registry.npmmirror.com/npm 816ms
+21 http fetch GET 200 https://registry.npmmirror.com/skills 189ms (cache miss)
+22 silly packumentCache full:https://registry.npmmirror.com/skills set size:47983 disposed:false
+23 silly placeDep ROOT skills@1.5.23 OK for:  want: 1.5.23
+24 silly fetch manifest tar@^7.5.20
+25 silly packumentCache full:https://registry.npmmirror.com/tar cache-miss
+26 silly fetch manifest yaml@^2.8.3
+27 silly packumentCache full:https://registry.npmmirror.com/yaml cache-miss
+28 http fetch GET 200 https://registry.npmmirror.com/tar 137ms (cache miss)
+29 silly packumentCache full:https://registry.npmmirror.com/tar set size:78756 disposed:false
+30 http fetch GET 200 https://registry.npmmirror.com/yaml 140ms (cache miss)
+31 silly packumentCache full:https://registry.npmmirror.com/yaml set size:57741 disposed:false
+32 silly placeDep ROOT tar@7.5.22 OK for: skills@1.5.23 want: ^7.5.20
+33 silly placeDep ROOT yaml@2.9.0 OK for: skills@1.5.23 want: ^2.8.3
+34 silly fetch manifest chownr@^3.0.0
+35 silly packumentCache full:https://registry.npmmirror.com/chownr cache-miss
+36 silly fetch manifest yallist@^5.0.0
+37 silly packumentCache full:https://registry.npmmirror.com/yallist cache-miss
+38 silly fetch manifest minipass@^7.1.2
+39 silly packumentCache full:https://registry.npmmirror.com/minipass cache-miss
+40 silly fetch manifest minizlib@^3.1.0
+41 silly packumentCache full:https://registry.npmmirror.com/minizlib cache-miss
+42 silly fetch manifest @isaacs/fs-minipass@^4.0.0
+43 silly packumentCache full:https://registry.npmmirror.com/@isaacs%2ffs-minipass cache-miss
+44 http fetch GET 200 https://registry.npmmirror.com/chownr 112ms (cache miss)
+45 silly packumentCache full:https://registry.npmmirror.com/chownr set size:4259 disposed:false
+46 http fetch GET 200 https://registry.npmmirror.com/yallist 181ms (cache miss)
+47 silly packumentCache full:https://registry.npmmirror.com/yallist set size:7662 disposed:false
+48 http fetch GET 200 https://registry.npmmirror.com/@isaacs%2ffs-minipass 295ms (cache miss)
+49 silly packumentCache full:https://registry.npmmirror.com/@isaacs%2ffs-minipass set size:2989 disposed:false
+50 http fetch GET 200 https://registry.npmmirror.com/minizlib 382ms (cache miss)
+51 silly packumentCache full:https://registry.npmmirror.com/minizlib set size:9513 disposed:false
+52 http fetch GET 200 https://registry.npmmirror.com/minipass 488ms (cache miss)
+53 silly packumentCache full:https://registry.npmmirror.com/minipass set size:57428 disposed:false
+54 silly placeDep ROOT @isaacs/fs-minipass@4.0.1 OK for: tar@7.5.22 want: ^4.0.0
+55 silly placeDep ROOT chownr@3.0.0 OK for: tar@7.5.22 want: ^3.0.0
+56 silly placeDep ROOT minipass@7.1.3 OK for: tar@7.5.22 want: ^7.1.2
+57 silly placeDep ROOT minizlib@3.1.0 OK for: tar@7.5.22 want: ^3.1.0
+58 silly placeDep ROOT yallist@5.0.0 OK for: tar@7.5.22 want: ^5.0.0
+59 silly fetch manifest minipass@^7.0.4
+60 silly packumentCache full:https://registry.npmmirror.com/minipass cache-hit
+61 silly reify moves {}
+62 silly audit bulk request {
+62 silly audit   skills: [ '1.5.23' ],
+62 silly audit   tar: [ '7.5.22' ],
+62 silly audit   yaml: [ '2.9.0' ],
+62 silly audit   '@isaacs/fs-minipass': [ '4.0.1' ],
+62 silly audit   chownr: [ '3.0.0' ],
+62 silly audit   minipass: [ '7.1.3' ],
+62 silly audit   minizlib: [ '3.1.0' ],
+62 silly audit   yallist: [ '5.0.0' ]
+62 silly audit }
+63 http cache @isaacs/fs-minipass@https://registry.npmmirror.com/@isaacs/fs-minipass/-/fs-minipass-4.0.1.tgz 0ms (cache hit)
+64 http cache yallist@https://registry.npmmirror.com/yallist/-/yallist-5.0.0.tgz 0ms (cache hit)
+65 http cache minipass@https://registry.npmmirror.com/minipass/-/minipass-7.1.3.tgz 0ms (cache hit)
+66 http cache minizlib@https://registry.npmmirror.com/minizlib/-/minizlib-3.1.0.tgz 0ms (cache hit)
+67 http cache chownr@https://registry.npmmirror.com/chownr/-/chownr-3.0.0.tgz 0ms (cache hit)
+68 http cache yaml@https://registry.npmmirror.com/yaml/-/yaml-2.9.0.tgz 0ms (cache hit)
+69 silly tarball no local data for @isaacs/fs-minipass@https://registry.npmmirror.com/@isaacs/fs-minipass/-/fs-minipass-4.0.1.tgz. Extracting by manifest.
+70 silly tarball no local data for yallist@https://registry.npmmirror.com/yallist/-/yallist-5.0.0.tgz. Extracting by manifest.
+71 silly tarball no local data for minipass@https://registry.npmmirror.com/minipass/-/minipass-7.1.3.tgz. Extracting by manifest.
+72 silly tarball no local data for minizlib@https://registry.npmmirror.com/minizlib/-/minizlib-3.1.0.tgz. Extracting by manifest.
+73 silly tarball no local data for chownr@https://registry.npmmirror.com/chownr/-/chownr-3.0.0.tgz. Extracting by manifest.
+74 silly tarball no local data for yaml@https://registry.npmmirror.com/yaml/-/yaml-2.9.0.tgz. Extracting by manifest.
+75 http cache tar@https://registry.npmmirror.com/tar/-/tar-7.5.22.tgz 0ms (cache hit)
+76 http cache skills@https://registry.npmmirror.com/skills/-/skills-1.5.23.tgz 0ms (cache hit)
+77 silly tarball no local data for tar@https://registry.npmmirror.com/tar/-/tar-7.5.22.tgz. Extracting by manifest.
+78 silly tarball no local data for skills@https://registry.npmmirror.com/skills/-/skills-1.5.23.tgz. Extracting by manifest.
+79 http fetch POST 404 https://registry.npmmirror.com/-/npm/v1/security/advisories/bulk 101ms
+80 verbose audit error HttpErrorGeneral: 404 Not Found - POST https://registry.npmmirror.com/-/npm/v1/security/advisories/bulk - [NOT_IMPLEMENTED] /-/npm/v1/security/* not implemented yet
+80 verbose audit error     at D:\downloads\nodejs\node_modules\npm\node_modules\npm-registry-fetch\lib\check-response.js:103:15
+80 verbose audit error     at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+80 verbose audit error     at async #getReport (D:\downloads\nodejs\node_modules\npm\node_modules\@npmcli\arborist\lib\audit-report.js:275:19)
+80 verbose audit error     at async AuditReport.run (D:\downloads\nodejs\node_modules\npm\node_modules\@npmcli\arborist\lib\audit-report.js:100:19) {
+80 verbose audit error   headers: [Object: null prototype] {
+80 verbose audit error     server: [ 'Tengine' ],
+80 verbose audit error     date: [ 'Sat, 29 Aug 2026 18:12:40 GMT' ],
+80 verbose audit error     'content-type': [ 'application/json' ],
+80 verbose audit error     'transfer-encoding': [ 'chunked' ],
+80 verbose audit error     connection: [ 'keep-alive' ],
+80 verbose audit error     'strict-transport-security': [ 'max-age=5184000' ],
+80 verbose audit error     via: [ 'kunlun9.cn7728[,404666]' ],
+80 verbose audit error     'timing-allow-origin': [ '*' ],
+80 verbose audit error     eagleid: [ '7030a39117880271600022893e' ],
+80 verbose audit error     'x-fetch-attempts': [ '1' ]
+80 verbose audit error   },
+80 verbose audit error   statusCode: 404,
+80 verbose audit error   code: 'E404',
+80 verbose audit error   method: 'POST',
+80 verbose audit error   uri: 'https://registry.npmmirror.com/-/npm/v1/security/advisories/bulk',
+80 verbose audit error   body: {
+80 verbose audit error     error: '[NOT_IMPLEMENTED] /-/npm/v1/security/* not implemented yet'
+80 verbose audit error   },
+80 verbose audit error   pkgid: undefined
+80 verbose audit error }
+81 silly audit error [object Object]
+82 silly audit report null
+83 http fetch GET 200 https://cdn.npmmirror.com/packages/%40isaacs/fs-minipass/4.0.1/fs-minipass-4.0.1.tgz 567ms (cache miss)
+84 http fetch GET 200 https://cdn.npmmirror.com/packages/yallist/5.0.0/yallist-5.0.0.tgz 569ms (cache miss)
+85 http fetch GET 200 https://cdn.npmmirror.com/packages/minizlib/3.1.0/minizlib-3.1.0.tgz 603ms (cache miss)
+86 http fetch GET 200 https://cdn.npmmirror.com/packages/chownr/3.0.0/chownr-3.0.0.tgz 629ms (cache miss)
+87 http fetch GET 200 https://cdn.npmmirror.com/packages/minipass/7.1.3/minipass-7.1.3.tgz 770ms (cache miss)
+88 http fetch GET 200 https://cdn.npmmirror.com/packages/yaml/2.9.0/yaml-2.9.0.tgz 1073ms (cache miss)
+89 http fetch GET 200 https://cdn.npmmirror.com/packages/skills/1.5.23/skills-1.5.23.tgz 1070ms (cache miss)
+90 http fetch GET 200 https://cdn.npmmirror.com/packages/tar/7.5.22/tar-7.5.22.tgz 1674ms (cache miss)
+91 verbose cwd D:\welemon2077\my_cv_storyCVPR\_11PaperReaderLLM
+92 verbose os Windows_NT 10.0.26200
+93 verbose node v24.18.0
+94 verbose npm  v11.16.0
+95 notice
+95 notice New major version of npm available! 11.16.0 -> 12.0.2
+95 notice Changelog: https://github.com/npm/cli/releases/tag/v12.0.2
+95 notice To update run: npm install -g npm@12.0.2
+95 notice  { force: true, Symbol(proc-log.meta): true }
+96 verbose exit 0
+97 info ok

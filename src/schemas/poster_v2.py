@@ -61,6 +61,19 @@ class LayoutNode(BaseModel):
     source_section_id: str = ""
 
 
+class LayoutResult(BaseModel):
+    """Resolved grid placement retained for the legacy solver API."""
+
+    node_id: str
+    row: int
+    col: int
+    row_span: int = 1
+    col_span: int = 1
+    width_ratio: float = 0.0
+    height_ratio: float = 0.0
+    overflow: bool = False
+
+
 class LayoutTree(BaseModel):
     paper_id: str
     arxiv_id: str

@@ -8,14 +8,11 @@ import shutil
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Optional
 
-from src.config import settings
 from src.llm.client import LLMClient, LLMError
 from src.llm.multimodal_client import (
     capture_poster_full_and_sections,
-    downscale_image,
-    multimodal_analyze_labeled,
 )
 from src.visual.capture import measure_section_content_size
 from src.renderers.html_renderer import HtmlPosterRenderer
@@ -23,8 +20,8 @@ from src.schemas.analysis import PaperAnalysis
 from src.schemas.paper import Figure, PaperDocument
 from src.schemas.poster import PosterBlueprint, PosterSection
 from src.schemas.poster_harness import HarnessConfig, HarnessResult, HarnessRound
-from src.schemas.poster_v2 import EvaluationQuestion, PosterComment, PosterQAEval, PosterReview
-from src.agents.content_policy import count_words, section_budget, trim_to_budget
+from src.schemas.poster_v2 import PosterReview
+from src.agents.content_policy import count_words
 from src.utils.figure_assets import save_svg_asset, sanitize_asset_name
 from src.agents.svg_skill_adapter import (
     normalize_svg_dimensions,
@@ -42,7 +39,7 @@ except ImportError:  # pragma: no cover - PIL is a hard dependency in practice
     ImageStat = None  # type: ignore[assignment]
 
 
-_INVALID_BLANK_RATIO_THRESHOLD = 0.30
+_INVALID_BLANK_RATIO_THRESHOLD = 0.35
 _BLANK_GRAY_VARIANCE_THRESHOLD = 10.0
 _MORPHOLOGY_KERNEL_SIZE = 15
 _HIGHLIGHTS_FILE = Path(__file__).resolve().parents[2] / "highlights.md"
@@ -87,100 +84,6 @@ class BlankRegionCandidate:
     blank_regions: list[dict[str, Any]] = field(default_factory=list)
     core_blank_review: dict[str, Any] = field(default_factory=dict)
 
-
-@dataclass
-class CoreBlankReview:
-    """VLM's coarse location prior for the Core Results blank-space pass."""
-
-    has_invalid_blank: bool
-    location: str = "none"
-    description: str = ""
-    confidence: float = 0.0
-    region_hint: dict[str, float] = field(default_factory=dict)
-
-
-# ---------------------------------------------------------------------------
-# Prompts
-# ---------------------------------------------------------------------------
-
-_REVIEW_SYSTEM_PROMPT = """You are a strict scientific poster reviewer (VLM judge).
-You are shown the rendered poster image (and possibly zoomed-in section crops).
-
-Evaluate the poster on these visual-quality dimensions:
-- layout: balance, alignment, column structure, whitespace
-- typography: font hierarchy, readability, text overflow, density
-- figures: figure size, cropping, relevance, caption readability
-- color: palette harmony, contrast, section differentiation
-- coverage: whether the core paper content (problem, method, results) is visibly present
-- overflow: text clipping, overlapping elements, cut-off content
-- text_density: whether the amount of text is appropriate for a poster
-  (a good poster keeps the whole body around 250-500 words; flag any over-dense
-  section that reads like a paragraph dump)
-
-Return JSON ONLY, with this exact structure:
-{
-  "quality_score": <int 0-10 overall>,
-  "dimension_scores": {"layout": <0-10>, "typography": <0-10>, "figures": <0-10>, "color": <0-10>, "coverage": <0-10>, "overflow": <0-10>, "text_density": <0-10>},
-  "needs_improvement": <true|false>,
-  "summary": "<one or two sentence summary>",
-  "issues": [
-    {
-      "description": "<what is wrong>",
-      "severity": "error|warning|info",
-      "target": "<section id, section type, or section title, e.g. sec-motivation | Motivation | Core Results>",
-      "suggestion": "<concrete fix suggestion>",
-      "action": "rewrite|condense|resize|reflow|replace_figure|remove|keep"
-    }
-  ]
-}
-
-Rules:
-- If the poster already looks good, set needs_improvement=false and return an empty issues list.
-- Do not invent issues. Only report what is visible in the images.
-- Every issue MUST carry an action from the allowed set.
-- If a region is visibly empty/blank (e.g. a figure column with nothing in it),
-  report it with action "replace_figure" or "reflow".
-- Use action "condense" (not "rewrite") when the section is over-dense and just
-  needs to be shortened; use "rewrite" only when the content itself is wrong.
-"""
-
-_REWRITE_SYSTEM_PROMPT = (
-    "You are an expert scientific poster editor. Rewrite the given section content to fix the "
-    "reported visual/structural issue. Keep ALL factual claims, numbers, formulas, citations and "
-    "technical meaning intact. Prefer concise bullet points. Output ONLY the rewritten markdown "
-    "content — no explanations, no code fences, no JSON."
-)
-
-_QA_SYSTEM_PROMPT = (
-    "You are a scientific poster evaluator. Answer the question using ONLY the poster content. "
-    "Return JSON with answer, short_reason, and confidence."
-)
-
-_VISUAL_QA_SYSTEM_PROMPT = """You are a strict scientific-poster comprehension evaluator.
-Answer each question using ONLY what is legible in the supplied poster image. Do not use
-outside knowledge and do not guess. Return JSON ONLY in this exact format:
-{"answers": [{"question_id": "...", "answer": "...", "confidence": 0.0}]}
-If the answer is absent or unreadable, return an empty answer with confidence 0.
-"""
-
-_CORE_BLANK_SYSTEM_PROMPT = """You inspect ONLY the supplied Core Results section crop from a scientific poster.
-Decide whether there is a large, visually useless empty area that should be filled
-with a compact paper-grounded diagram. Existing charts, tables, axes, legends,
-white plot backgrounds, and whitespace needed for readability are NOT useless.
-If a genuine empty area exists, identify its coarse location and describe what is
-missing. Use a normalized region_hint (all values from 0 to 1, relative to this
-crop) that covers the suspected area. If no reliable empty area exists, set
-has_invalid_blank=false and region_hint=null.
-
-Return JSON ONLY:
-{
-  "has_invalid_blank": true,
-  "location": "top_left|top_center|top_right|center_left|center|center_right|bottom_left|bottom_center|bottom_right|none",
-  "description": "short visual description",
-  "confidence": 0.0,
-  "region_hint": {"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0}
-}
-"""
 
 # ---------------------------------------------------------------------------
 # Normalization helpers (review JSON -> PosterReview)
@@ -342,10 +245,6 @@ def _blank_ratio_threshold(sec: PosterSection) -> float:
 def _should_supplement_report(report: SectionBlankReport, sec: PosterSection) -> bool:
     if sec.type in {"contributions", "highlights", "project_link"}:
         return False
-    if sec.type == "main_method" and report.core_blank_review:
-        return bool(report.core_blank_review.get("has_invalid_blank")) and report.blank_ratio >= _INVALID_BLANK_RATIO_THRESHOLD
-    if sec.type == "main_method":
-        return False
     return report.blank_ratio >= _INVALID_BLANK_RATIO_THRESHOLD
 
 
@@ -424,67 +323,6 @@ def _normalize_region_hint(value: object, location: str = "none") -> dict[str, f
     result["width"] = round(min(result["width"], 1.0 - result["x"]), 6)
     result["height"] = round(min(result["height"], 1.0 - result["y"]), 6)
     return result
-
-
-def _normalize_core_blank_review(raw: object) -> Optional[CoreBlankReview]:
-    if not isinstance(raw, dict):
-        return None
-    location = str(raw.get("location") or "none").strip().lower()
-    location = re.sub(r"[\s-]+", "_", location)
-    location = {
-        "右下角": "bottom_right",
-        "右下方": "bottom_right",
-        "右上角": "top_right",
-        "左下角": "bottom_left",
-        "左下方": "bottom_left",
-        "左上角": "top_left",
-        "下方": "bottom_center",
-        "底部": "bottom_center",
-        "上方": "top_center",
-        "顶部": "top_center",
-        "中间": "center",
-        "中心": "center",
-        "没有": "none",
-        "无": "none",
-    }.get(location, location)
-    allowed = {
-        "top_left", "top_center", "top_right", "center_left", "center",
-        "center_right", "bottom_left", "bottom_center", "bottom_right", "none",
-    }
-    if location not in allowed:
-        location = "none"
-    try:
-        confidence = min(1.0, max(0.0, float(raw.get("confidence") or 0.0)))
-    except (TypeError, ValueError):
-        confidence = 0.0
-    has_blank = bool(raw.get("has_invalid_blank", False)) and location != "none"
-    if confidence and confidence < 0.45:
-        has_blank = False
-    return CoreBlankReview(
-        has_invalid_blank=has_blank,
-        location=location,
-        description=str(raw.get("description") or "").strip(),
-        confidence=confidence,
-        region_hint=_normalize_region_hint(raw.get("region_hint"), location),
-    )
-
-
-def _inspect_core_blank_with_vlm(crop_path: Path, model: Optional[str] = None) -> Optional[CoreBlankReview]:
-    if not crop_path.exists():
-        return None
-    raw = multimodal_analyze_labeled(
-        _CORE_BLANK_SYSTEM_PROMPT,
-        [(str(crop_path), "Core Results section crop")],
-        user_text=(
-            "Is there a large invalid blank area in this Core Results section? "
-            "If yes, state the most important location and what appears to be missing."
-        ),
-        model=model,
-    )
-    review = _normalize_core_blank_review(raw)
-    if review is None:
-        logger.warning("Core Results blank-space VLM review returned no valid result")
-    return review
 
 
 def _largest_pure_background_rectangle(
@@ -650,7 +488,7 @@ def _make_blank_region_candidates(
     doc: PaperDocument,
     analysis: PaperAnalysis,
     round_dir: Path,
-    core_blank_review: Optional[CoreBlankReview] = None,
+    core_blank_review: Optional[object] = None,
 ) -> list[BlankRegionCandidate]:
     reports = _section_blank_reports(round_dir, blueprint, core_blank_review)
     if not reports:
@@ -723,7 +561,7 @@ def _measure_png_blank_ratio(png_path: Path) -> Optional[float]:
 def _section_blank_reports(
     round_dir: Path,
     blueprint: PosterBlueprint,
-    core_blank_review: Optional[CoreBlankReview] = None,
+    core_blank_review: Optional[object] = None,
 ) -> list[SectionBlankReport]:
     sections_dir = round_dir / "sections"
     if not sections_dir.exists():
@@ -741,8 +579,7 @@ def _section_blank_reports(
         if sec is None:
             continue
         width, height = _image_size(png_path)
-        hint = core_blank_review.region_hint if sec.type == "main_method" and core_blank_review and core_blank_review.has_invalid_blank else None
-        blank_regions = _analyze_blank_regions(png_path, region_hint=hint)
+        blank_regions = _analyze_blank_regions(png_path)
         blank_cells = list(blank_regions)
         region_ratio = min(
             1.0,
@@ -762,7 +599,7 @@ def _section_blank_reports(
             crop_path=str(png_path.resolve()),
             blank_cells=blank_cells,
             blank_regions=blank_regions,
-            core_blank_review=(asdict(core_blank_review) if sec.type == "main_method" and core_blank_review else {}),
+            core_blank_review={},
         ))
     return reports
 
@@ -1038,6 +875,16 @@ def _generate_blank_supplement_asset(
     primary_root = asset_roots[0]
     primary_supplement_dir = primary_root / "supplement"
     primary_browser_dir = primary_root / "figures"
+    # Reuse an existing generated asset when the preliminary pass is rerun.
+    for root in asset_roots:
+        existing = root / "supplement" / f"{target_name}.svg"
+        if existing.exists():
+            for target_root in asset_roots:
+                (target_root / "supplement").mkdir(parents=True, exist_ok=True)
+                (target_root / "figures").mkdir(parents=True, exist_ok=True)
+                (target_root / "supplement" / existing.name).write_bytes(existing.read_bytes())
+                (target_root / "figures" / existing.name).write_bytes(existing.read_bytes())
+            return f"figures/{existing.name}"
     svg_text: str | None = None
 
     if llm is not None:
@@ -1294,11 +1141,7 @@ def review_rendered_poster(
         doc: Optional[PaperDocument] = None,
         analysis: Optional[PaperAnalysis] = None,
 ) -> Optional[PosterReview]:
-    """Capture the rendered poster (full + zoom crops) and ask the VLM for a review.
-
-    Returns None when vision capture or VLM analysis is unavailable (caller should
-    fall back to the legacy single-shot HTML optimizer).
-    """
+    """Capture section crops and record deterministic blank-region findings."""
     png_path = round_dir / "poster.png"
     sections_dir = round_dir / "sections"
     sections_dir.mkdir(parents=True, exist_ok=True)
@@ -1311,20 +1154,8 @@ def review_rendered_poster(
         height=blueprint.height_px,
     )
     if not png_path.exists():
-        logger.warning("Poster PNG capture failed; vision review unavailable")
+        logger.warning("Poster PNG capture failed; supplement pass unavailable")
         return None
-
-    full_small = downscale_image(png_path, max_width=1400) or png_path
-
-    # multimodal_analyze_labeled takes (image_path, label), not the reverse.
-    images: list[tuple[str, str]] = [(str(full_small), "poster (full view)")]
-    if config.zoom_crops:
-        for sec_id in _dense_section_ids(blueprint, config.max_crops):
-            crop = crops.get(sec_id)
-            if crop and crop.exists():
-                sec = next((s for s in blueprint.sections if s.section_id == sec_id), None)
-                label = f"section: {sec.title if sec else sec_id}"
-                images.append((str(crop), label))
 
     for sec_id, crop in crops.items():
         if not crop.exists():
@@ -1336,54 +1167,21 @@ def review_rendered_poster(
         except Exception as exc:
             logger.warning("Failed to stage section crop %s: %s", sec_id, exc)
 
-    core_blank_review: Optional[CoreBlankReview] = None
-    core_crop = crops.get("sec-main-method")
-    if core_crop and core_crop.exists():
-        core_blank_review = _inspect_core_blank_with_vlm(core_crop, model=model)
-
-    user_text = (
-        "Review the rendered scientific poster for visual quality. Report concrete issues "
-        "with exact targets (section id/title) and actionable fixes."
-    )
-    raw = multimodal_analyze_labeled(
-        _REVIEW_SYSTEM_PROMPT,
-        images,
-        user_text=user_text,
-        model=model,
-    )
-    if not raw:
-        logger.warning("VLM review returned no result; vision review unavailable")
-        return None
-
-    issues: list[PosterComment] = []
-    for item in raw.get("issues") or []:
-        issue = _normalize_issue(item)
-        if issue:
-            issues.append(issue)
-
     review = PosterReview(
-        quality_score=_normalize_quality_score(raw.get("quality_score")),
-        needs_improvement=bool(raw.get("needs_improvement", True)),
-        issues=issues,
-        summary=str(raw.get("summary") or ""),
-        layout_feedback=[str(x) for x in (raw.get("layout_feedback") or []) if x],
-        dimension_scores=_normalize_dimension_scores(raw.get("dimension_scores")),
+        quality_score=10,
+        needs_improvement=False,
+        issues=[],
+        summary="Preliminary Supplement completed deterministic blank-region analysis.",
     )
-    blank_reports = _section_blank_reports(round_dir, blueprint, core_blank_review)
-    if blank_reports or core_blank_review is not None:
-        review.deterministic_checks = dict(review.deterministic_checks or {})
-        if core_blank_review is not None:
-            review.deterministic_checks["core_blank_review"] = asdict(core_blank_review)
+    blank_reports = _section_blank_reports(round_dir, blueprint)
     if blank_reports:
         review.deterministic_checks["section_blank_reports"] = [asdict(r) for r in blank_reports]
         if doc is not None and analysis is not None:
             review.deterministic_checks["blank_region_candidates"] = [
                 asdict(c) for c in _make_blank_region_candidates(
-                    blueprint, doc, analysis, round_dir, core_blank_review
+                    blueprint, doc, analysis, round_dir
                 )
             ]
-        _merge_blank_reports(review, blank_reports, blueprint)
-    _merge_deterministic_issues(review, inspect_rendered_poster(html_path, blueprint))
     return review
 
 
@@ -2095,7 +1893,7 @@ def evaluate_poster_visual_qa(
 # ---------------------------------------------------------------------------
 
 
-def run_poster_harness(
+def _legacy_visual_harness(
         doc: PaperDocument,
         analysis: PaperAnalysis,
         blueprint: PosterBlueprint,
@@ -2540,3 +2338,109 @@ def _write_report(output_dir: Path, result: HarnessResult, config: Optional[Harn
     report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
     result.report_path = str(report_path)
     return report_path
+
+
+def run_poster_harness(
+    doc: PaperDocument,
+    analysis: PaperAnalysis,
+    blueprint: PosterBlueprint,
+    html_path: Path | str,
+    output_dir: Path | str,
+    config: Optional[HarnessConfig] = None,
+    on_round: Optional[object] = None,
+    fallback_optimizer: Optional[object] = None,
+) -> HarnessResult:
+    """Run the one-pass Preliminary Supplement flow.
+
+    The pass uses local screenshot/pixel analysis only. LLM calls are limited to
+    the existing highlights and blank-region SVG/title generation helpers.
+    """
+    del config, fallback_optimizer
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    round_dir = output_dir / "harness" / "round_1"
+    round_dir.mkdir(parents=True, exist_ok=True)
+    draft = Path(html_path)
+    renderer = HtmlPosterRenderer()
+    llm = LLMClient() if LLMClient.is_configured() else None
+    round_html = round_dir / "poster.html"
+
+    try:
+        round_html.write_text(renderer.render(blueprint, doc, round_dir), encoding="utf-8")
+        _generate_highlights(llm, doc, analysis, blueprint, round_html, [round_dir, output_dir])
+        round_html.write_text(renderer.render(blueprint, doc, round_dir), encoding="utf-8")
+
+        review = review_rendered_poster(
+            round_html, round_dir, HarnessConfig(), blueprint, doc=doc, analysis=analysis
+        )
+        if review is None:
+            raise RuntimeError("Unable to capture poster sections for blank-region analysis")
+
+        candidates = [
+            BlankRegionCandidate(**item)
+            for item in review.deterministic_checks.get("blank_region_candidates", [])
+            if isinstance(item, dict)
+        ]
+        actions: list[str] = []
+        for candidate in candidates:
+            sec = _section_lookup(blueprint).get(candidate.section_id)
+            if sec is None:
+                continue
+            asset_ref = _generate_blank_supplement_asset(
+                llm, candidate, [round_dir, output_dir]
+            )
+            if not asset_ref:
+                continue
+            fallback_title = _supplement_description(candidate, sec.title or sec.section_id)
+            title = _llm_supplement_title(llm, candidate, fallback_title)
+            sec.supplement_html = _supplement_overlay_html(
+                asset_ref, candidate, sec.title or sec.section_id
+            ).replace(html.escape(fallback_title), html.escape(title), 1)
+            actions.append(f"supplement {sec.section_id} (svg)")
+
+        final_html = output_dir / "poster_final.html"
+        final_png = output_dir / "poster_final.png"
+        final_html.write_text(renderer.render(blueprint, doc, output_dir), encoding="utf-8")
+        _refresh_round_artifacts(final_html, output_dir / "harness" / "round_1", blueprint)
+        captured = output_dir / "harness" / "round_1" / "poster.png"
+        if captured.exists():
+            final_png.write_bytes(captured.read_bytes())
+
+        round_record = HarnessRound(
+            round_no=1,
+            quality_score=10,
+            total_score=100.0,
+            needs_improvement=False,
+            deterministic_checks=review.deterministic_checks,
+            summary="Preliminary Supplement completed.",
+            applied_actions=actions,
+            png_path=str(captured) if captured.exists() else "",
+            html_path=str(final_html),
+            review_path="",
+            captured_at=datetime.now(timezone.utc).isoformat(),
+        )
+        result = HarnessResult(
+            passed=True,
+            stop_reason="supplement_complete",
+            rounds=[round_record],
+            best_round_no=1,
+            best_score=10,
+            final_html=str(final_html),
+            final_png=str(final_png) if final_png.exists() else "",
+            total_rounds=1,
+        )
+        _write_report(output_dir, result)
+        if on_round:
+            on_round(1, 1, 10, False, result.rounds[0].summary)
+        return result
+    except Exception as exc:
+        logger.exception("Preliminary Supplement failed: %s", exc)
+        result = HarnessResult(
+            passed=False,
+            stop_reason="supplement_error",
+            final_html=str(draft),
+            fallback=False,
+            fallback_reason=str(exc),
+        )
+        _write_report(output_dir, result)
+        return result

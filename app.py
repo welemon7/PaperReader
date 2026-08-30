@@ -24,7 +24,6 @@ from src.agents.poster_planner import generate_blueprint, normalize_analysis_for
 from src.agents.poster_v2 import run_poster_v2
 from src.agents.poster_harness import run_poster_harness
 from src.renderers.html_renderer import HtmlPosterRenderer
-from src.agents.html_optimizer import optimize_html_with_llm
 from src.schemas.poster_harness import HarnessConfig
 from src.storage.sqlite import PaperDatabase
 from src.utils.output_paths import resolve_paper_output_dir
@@ -175,7 +174,7 @@ def generate_poster_task(
                 logger.warning(f"Understand attempt {attempt}/3 failed: {e}")
                 if attempt == 3:
                     raise
-                time.sleep(2)
+                time.sleep(0.01)
         analysis = normalize_analysis_for_poster(analysis)
 
         # ---- Phase 3: Plan ----
@@ -193,28 +192,14 @@ def generate_poster_task(
         draft_path = output_dir / "poster_draft.html"
         renderer.render_to_file(blueprint, paper_doc, draft_path, optimize_with_llm=False)
 
-        # ---- Phase 5: Visual Review Harness (视觉审查循环) ----
-        task.message = '视觉审查循环准备中...'
+        # ---- Phase 5: Preliminary Supplement ----
+        task.message = '正在检测板块空白区域并生成补充图...'
         task.progress = 85
         logger.info(f"Task {task_id}: Phase 5 - Visual Harness")
 
-        # ✅ 优先使用用户自定义提示词，否则使用项目根目录的 LLM-up.txt
-        if custom_prompt:
-            # 使用用户自定义提示词
-            prompt_path = app.config['TEMP_DIR'] / f"{task_id}_custom_prompt.txt"
-            prompt_path.write_text(custom_prompt, encoding='utf-8')
-            user_prompt = prompt_path
-        else:
-            # 使用项目根目录的 LLM-up.txt
-            user_prompt = DEFAULT_PROMPT_PATH
-            if not user_prompt.exists():
-                logger.warning(f"LLM-up.txt not found at {user_prompt}, using built-in prompt")
-                user_prompt = app.config['TEMP_DIR'] / f"{task_id}_default_prompt.txt"
-                user_prompt.write_text(get_default_prompt(), encoding='utf-8')
-
         def _on_harness_round(round_no: int, total: int, score: int, needs_improvement: bool, summary: str):
-            """回调：每轮视觉审查结束后更新任务进度与轮次历史"""
-            task.message = f'视觉审查第 {round_no}/{total} 轮，评分 {score}/10'
+            """回调：更新 Preliminary Supplement 状态。"""
+            task.message = '补充图处理中...'
             task.progress = min(99, 85 + int(round_no / max(total, 1) * 14))
             task.harness_rounds.append({
                 'round_no': round_no,
@@ -223,21 +208,13 @@ def generate_poster_task(
                 'summary': summary,
             })
 
-        def _fallback_optimize(old_html: Path, new_html: Path):
-            """视觉不可用时的回退：沿用原来的单次 LLM 优化"""
-            optimize_html_with_llm(
-                html_path=old_html,
-                prompt_path=user_prompt,
-                output_path=new_html,
-            )
-
         harness_config = HarnessConfig(
             threshold=quality_threshold if quality_threshold is not None else settings.harness_threshold,
             max_rounds=max_rounds if max_rounds is not None else settings.harness_max_rounds,
-            enable_qa_eval=enable_qa_eval if enable_qa_eval is not None else settings.harness_enable_qa,
+            enable_qa_eval=False,
             qa_threshold=settings.harness_qa_threshold,
             zoom_crops=settings.harness_zoom_crops,
-            max_crops=settings.harness_max_crops,
+            max_crops=0,
             vision_model=settings.harness_vision_model or None,
         )
 
@@ -249,7 +226,6 @@ def generate_poster_task(
             output_dir=output_dir,
             config=harness_config,
             on_round=_on_harness_round,
-            fallback_optimizer=_fallback_optimize,
         )
 
         task.harness_status = (
@@ -268,9 +244,7 @@ def generate_poster_task(
         task.html_draft = str(draft_path)
         task.progress = 100
         task.status = 'complete'
-        task.message = '海报已通过视觉与内容门禁！' if harness_result.passed else (
-            '已生成最优候选，但未达到交付门槛；请查看视觉审查报告。'
-        )
+        task.message = '海报补充图生成完成' if harness_result.passed else '海报补充图生成失败'
         task.result = {
             'arxiv_id': arxiv_id,
             'draft': str(draft_path),
@@ -307,7 +281,6 @@ def generate():
     custom_prompt = data.get('custom_prompt', '')
     quality_threshold = data.get('quality_threshold')
     max_rounds = data.get('max_rounds')
-    enable_qa_eval = data.get('enable_qa_eval')
 
     if not arxiv_id:
         return jsonify({'error': '请提供 arXiv ID'}), 400
@@ -323,8 +296,6 @@ def generate():
             max_rounds = int(max_rounds)
         except (TypeError, ValueError):
             return jsonify({'error': 'max_rounds 必须是整数'}), 400
-    if enable_qa_eval is not None:
-        enable_qa_eval = bool(enable_qa_eval)
 
     # 生成任务 ID
     import uuid
@@ -344,7 +315,7 @@ def generate():
             custom_prompt if custom_prompt else None,
             quality_threshold,
             max_rounds,
-            enable_qa_eval,
+            False,
         ),
         daemon=True
     )
@@ -438,7 +409,7 @@ def get_harness(task_id):
 
 @app.route('/api/round_image/<task_id>/<int:round_no>', methods=['GET'])
 def round_image(task_id, round_no):
-    """获取某一轮视觉审查的海报快照 PNG"""
+    """获取 Preliminary Supplement 处理后的海报快照 PNG"""
     task = tasks.get(task_id)
     if not task:
         return jsonify({'error': '任务不存在'}), 404
@@ -492,7 +463,7 @@ if __name__ == '__main__':
     if not os.environ.get('WERKZEUG_RUN_MAIN'):
         def open_browser():
             """延迟打开浏览器"""
-            time.sleep(1)
+            time.sleep(0.01)
             webbrowser.open('http://localhost:5000')
 
         threading.Thread(target=open_browser, daemon=True).start()

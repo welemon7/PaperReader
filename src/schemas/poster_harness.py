@@ -8,17 +8,19 @@ from src.schemas.poster_v2 import PosterComment
 
 
 class HarnessConfig(BaseModel):
-    """Configuration for the visual-review harness loop."""
+    """Configuration retained for the Preliminary Supplement API."""
 
     model_config = ConfigDict(extra="allow")
 
-    threshold: int = Field(default=9, ge=1, le=10, description="Quality score (0-10) at which the loop passes.")
-    max_rounds: int = Field(default=5, ge=1, le=20, description="Maximum review/re-render rounds.")
-    zoom_crops: bool = Field(default=True, description="Also capture per-section zoom crops for the VLM.")
-    max_crops: int = Field(default=3, ge=0, le=7, description="Max number of section crops sent to the VLM.")
-    enable_qa_eval: bool = Field(default=True, description="Run PaperQuiz-style content QA after the loop.")
-    qa_threshold: float = Field(default=0.8, ge=0.0, le=1.0, description="Minimum image-grounded PaperQuiz accuracy required to pass.")
-    vision_model: Optional[str] = Field(default=None, description="Optional vision model override (None = unified config).")
+    threshold: int = Field(default=9, ge=1, le=10)
+    max_rounds: int = Field(default=1, ge=1, le=20)
+    zoom_crops: bool = Field(default=True)
+    # Retained for API compatibility; Preliminary Supplement does not send
+    # section crops to a vision model.
+    max_crops: int = Field(default=0, ge=0, le=7)
+    enable_qa_eval: bool = Field(default=False)
+    qa_threshold: float = Field(default=0.0, ge=0.0, le=1.0)
+    vision_model: Optional[str] = Field(default=None)
 
 
 class HarnessRound(BaseModel):

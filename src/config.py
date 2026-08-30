@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     llm_max_tokens: int = 8192
     llm_temperature: float = 0.1
 
-    # Harness (视觉审查循环)
+    # Preliminary Supplement
     harness_threshold: int = 9  # 达标分数 (0-10)
     harness_max_rounds: int = 5  # 最大审查轮数
     harness_enable_qa: bool = True  # 循环结束后运行 PaperQuiz 式内容评测
