@@ -672,7 +672,7 @@ def _blank_region_visual_prompt(candidate: BlankRegionCandidate) -> str:
     ) or "none"
     return (
         f"Target section: {candidate.section_id} ({candidate.section_type})\n"
-        f"Section title: {candidate.section_title}\n"
+        f"Section context: {candidate.section_title}\n"
         f"Canvas size: {candidate.width}x{candidate.height}\n"
         f"Blank ratio: {candidate.blank_ratio:.0%}\n"
         f"Content ratio: {candidate.content_ratio:.0%}\n"
@@ -692,6 +692,8 @@ def _blank_region_visual_prompt(candidate: BlankRegionCandidate) -> str:
         "Choose the simplest visual grammar that preserves the content relationships, such as a flow, comparison, timeline, architecture, chart, or symbolic concept. "
         "Let the supplied dimensions determine orientation, density, spacing, and label wrapping. Preserve important content rather than imposing a fixed label count or palette. "
         "Match the visual emphasis to the blank geometry; do not add decorative elements unrelated to the content. "
+        "Do not add any standalone title, heading, section name, or generic label such as Motivation, Method, Method Overview, Key Idea, Main Method, or Experiments. "
+        "Only include labels that are necessary parts of the visual itself, such as real module names, variables, datasets, metrics, or process nodes. "
         "Return ONLY a valid standalone SVG document."
     )
 
@@ -769,12 +771,17 @@ def _size_supplement_svg(svg_text: str, candidate: BlankRegionCandidate) -> str:
     return svg_text[:match.start(1)] + attrs + svg_text[match.end(1):]
 
 
+def _primary_color(blueprint: PosterBlueprint) -> str:
+    value = (blueprint.color_scheme or {}).get("primary")
+    return str(value).strip() if value else "#ffffff"
+
+
 def _supplement_overlay_html(asset_ref: str, candidate: BlankRegionCandidate, alt: str) -> str:
-    """Build a non-flow SVG overlay positioned in the section crop coordinates."""
+    """Build a bordered, absolutely positioned figure card for a supplement."""
     description = _supplement_description(candidate, alt)
     regions = candidate.blank_regions or candidate.blank_cells
     if not regions:
-        return f'<div class="figure-card"><div class="figure-description">{html.escape(description)}</div><img src="{html.escape(asset_ref, quote=True)}" alt="{html.escape(alt, quote=True)} supplement"></div>'
+        return f'<div class="blank-region-supplement figure-card"><div class="figure-description">{html.escape(description)}</div><div class="supplement-image"><img src="{html.escape(asset_ref, quote=True)}" alt="{html.escape(alt, quote=True)} supplement"></div></div>'
     region = max(
         regions,
         key=lambda item: float(item.get("area_pixels") or item.get("area_ratio") or 0.0),
@@ -803,10 +810,10 @@ def _supplement_overlay_html(asset_ref: str, candidate: BlankRegionCandidate, al
     width = right_edge - left_edge
     height = bottom_edge - top_edge
     return (
-        '<div class="blank-region-supplement" '
+        '<div class="blank-region-supplement figure-card" '
         f'style="left:{left}px;top:{top}px;width:{width}px;height:{height}px;">'
         f'<div class="figure-description">{html.escape(description)}</div>'
-        f'<img src="{html.escape(asset_ref, quote=True)}" alt="{html.escape(alt, quote=True)} supplement">'
+        f'<div class="supplement-image"><img src="{html.escape(asset_ref, quote=True)}" alt="{html.escape(alt, quote=True)} supplement"></div>'
         '</div>'
     )
 
@@ -1288,6 +1295,7 @@ def _generate_highlights(
     blueprint: PosterBlueprint,
     html_path: Path,
     output_roots: list[Path],
+    primary_color: str = "#ffffff",
 ) -> bool:
     """Choose four source highlights and render them as a self-contained SVG."""
     sec = next((item for item in blueprint.sections if item.type == "highlights"), None)
@@ -1350,6 +1358,9 @@ def _generate_highlights(
                 f"Paper core:\n{_global_poster_context(doc, analysis, blueprint)}\n\n"
                 f"Full highlights.md source:\n{source_text}\n\n"
                 f"Selected four highlights:\n" + "\n".join(f"- {item}" for item in selected)
+                + f"\n\nUse this poster primary color as the only accent color: {primary_color}. "
+                "Use only this accent color and its opacity variations. Use fixed neutral white or light gray backgrounds, dark neutral text, and gray borders. "
+                "Do not introduce purple, fluorescent colors, or unrelated high-saturation colors."
                 + "\n\n"
                 + svg_generation_guidance(width, height)
             ),
@@ -2367,7 +2378,10 @@ def run_poster_harness(
 
     try:
         round_html.write_text(renderer.render(blueprint, doc, round_dir), encoding="utf-8")
-        _generate_highlights(llm, doc, analysis, blueprint, round_html, [round_dir, output_dir])
+        _generate_highlights(
+            llm, doc, analysis, blueprint, round_html, [round_dir, output_dir],
+            primary_color=_primary_color(blueprint),
+        )
         round_html.write_text(renderer.render(blueprint, doc, round_dir), encoding="utf-8")
 
         review = review_rendered_poster(

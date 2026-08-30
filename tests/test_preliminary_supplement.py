@@ -8,6 +8,8 @@ from src.agents.poster_harness import (
     _should_supplement_report,
     _size_supplement_svg,
     _supplement_overlay_html,
+    _blank_region_visual_prompt,
+    _primary_color,
 )
 from src.schemas.poster import PosterSection
 
@@ -54,3 +56,38 @@ def test_svg_supplement_uses_detected_region_geometry():
     assert 'left:0px;top:6px;width:64px;height:24px' in _supplement_overlay_html(
         "figures/sec-motivation_supplement.svg", candidate, "Motivation"
     )
+
+
+def test_supplement_card_has_external_left_aligned_title_and_image():
+    candidate = BlankRegionCandidate(
+        section_id="sec-method", section_type="method_overview", section_title="Method Overview",
+        blank_ratio=0.5, content_ratio=0.5, width=300, height=200, text_words=10,
+        figure_count=0, has_figures=False, local_context="Feature Fusion", nearby_context="",
+        global_context="", blank_regions=[{"x": 20, "y": 60, "width": 200, "height": 120, "area_pixels": 24000}],
+    )
+    html = _supplement_overlay_html("figures/sec-method_supplement.svg", candidate, "Method")
+    assert 'class="blank-region-supplement figure-card"' in html
+    assert 'class="figure-description"' in html
+    assert 'class="supplement-image"' in html
+    assert html.index('figure-description') < html.index('supplement-image')
+
+
+def test_blank_svg_prompt_forbids_section_headings():
+    candidate = BlankRegionCandidate(
+        section_id="sec-method", section_type="method_overview", section_title="Method Overview",
+        blank_ratio=0.5, content_ratio=0.5, width=300, height=200, text_words=10,
+        figure_count=0, has_figures=False, local_context="Feature Fusion", nearby_context="",
+        global_context="", blank_regions=[],
+    )
+    prompt = _blank_region_visual_prompt(candidate)
+    assert "Do not add any standalone title" in prompt
+    assert "Method Overview" in prompt
+
+
+def test_primary_color_falls_back_to_white():
+    from src.schemas.poster import PosterBlueprint
+
+    blueprint = PosterBlueprint(paper_id="p", poster_title="Poster")
+    assert _primary_color(blueprint) == "#ffffff"
+    blueprint.color_scheme = {"primary": "#16324f"}
+    assert _primary_color(blueprint) == "#16324f"
