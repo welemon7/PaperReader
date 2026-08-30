@@ -53,7 +53,7 @@ def test_svg_supplement_uses_detected_region_geometry():
         global_context="", blank_regions=[{"x": 0, "y": 60, "width": 100, "height": 40, "area_pixels": 4000}],
     )
     assert 'width="100"' in _size_supplement_svg('<svg viewBox="0 0 10 10"></svg>', candidate)
-    assert 'left:0px;top:6px;width:64px;height:24px' in _supplement_overlay_html(
+    assert 'left:6px;top:12px;width:52px;height:12px' in _supplement_overlay_html(
         "figures/sec-motivation_supplement.svg", candidate, "Motivation"
     )
 
@@ -80,7 +80,7 @@ def test_supplement_card_keeps_detected_box_and_uses_centered_title():
         global_context="", blank_regions=[{"x": 20, "y": 60, "width": 200, "height": 120, "area_pixels": 24000}],
     )
     html = _supplement_overlay_html("figures/sec-method_supplement.svg", candidate, "Method")
-    assert 'style="left:2px;top:6px;width:200px;height:120px;"' in html
+    assert 'style="left:9px;top:13px;width:186px;height:106px;"' in html
     assert 'class="blank-region-supplement figure-card"' in html
     assert 'class="figure-description"' in html
 

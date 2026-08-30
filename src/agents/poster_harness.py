@@ -771,6 +771,65 @@ def _size_supplement_svg(svg_text: str, candidate: BlankRegionCandidate) -> str:
     return svg_text[:match.start(1)] + attrs + svg_text[match.end(1):]
 
 
+def _supplement_region(candidate: BlankRegionCandidate) -> dict[str, int] | None:
+    """Return a safe inner placement box for a detected blank region.
+
+    Blank-pixel detection is intentionally permissive and often finds strips
+    that touch a section edge.  Keep detection geometry as the source of truth,
+    but inset the final placement so the framed supplement does not visually
+    collide with the section border or nearby copy.
+    """
+    regions = [
+        item for item in (candidate.blank_regions or candidate.blank_cells)
+        if isinstance(item, dict)
+    ]
+    if not regions:
+        regions = [{}]
+
+    canvas_width = max(1, int(candidate.width or 360))
+    canvas_height = max(1, int(candidate.height or 220))
+    content_left = 18
+    content_top = 54
+    content_right = max(content_left + 1, canvas_width - 18)
+    content_bottom = max(content_top + 1, canvas_height - 16)
+
+    def metrics(item: dict[str, Any]) -> tuple[float, int, int, int, int]:
+        width = max(1, int(item.get("width") or candidate.width or 360))
+        height = max(1, int(item.get("height") or candidate.height or 220))
+        x = int(item.get("x") or 0)
+        y = int(item.get("y") or 0)
+        area = float(item.get("area_pixels") or item.get("area_ratio") or width * height)
+        touches = bool(item.get("touches_border")) or x <= 0 or y <= 0 or x + width >= canvas_width or y + height >= canvas_height
+        # Prefer usable, non-edge regions without discarding an edge-only result.
+        score = area * (0.72 if touches else 1.0)
+        if width < 90 or height < 60:
+            score *= 0.55
+        return score, x, y, width, height
+
+    selected = max(regions, key=metrics)
+    _, x, y, width, height = metrics(selected)
+    right = min(content_right, x + width)
+    bottom = min(content_bottom, y + height)
+    left = max(content_left, x)
+    top = max(content_top, y)
+    if right <= left or bottom <= top:
+        return None
+
+    available_width = right - left
+    available_height = bottom - top
+    # The inset scales with the detected box but has a small absolute floor so
+    # narrow strips still receive a visible breathing room.
+    inset = max(6, min(14, int(round(min(available_width, available_height) * 0.06))))
+    left += inset
+    top += inset
+    right -= inset
+    bottom -= inset
+    if right <= left or bottom <= top:
+        return None
+    return {"left": left - content_left, "top": top - content_top,
+            "width": right - left, "height": bottom - top}
+
+
 def _primary_color(blueprint: PosterBlueprint) -> str:
     value = (blueprint.color_scheme or {}).get("primary")
     return str(value).strip() if value else "#ffffff"
@@ -779,39 +838,12 @@ def _primary_color(blueprint: PosterBlueprint) -> str:
 def _supplement_overlay_html(asset_ref: str, candidate: BlankRegionCandidate, alt: str) -> str:
     """Build a bordered, centered title-plus-SVG box for a supplement."""
     description = _supplement_description(candidate, alt)
-    regions = candidate.blank_regions or candidate.blank_cells
-    if not regions:
-        return f'<div class="blank-region-supplement figure-card"><div class="figure-description">{html.escape(description)}</div><div class="supplement-image"><img src="{html.escape(asset_ref, quote=True)}" alt="{html.escape(alt, quote=True)} supplement"></div></div>'
-    region = max(
-        regions,
-        key=lambda item: float(item.get("area_pixels") or item.get("area_ratio") or 0.0),
-    )
-    region_x = int(region.get("x") or 0)
-    region_y = int(region.get("y") or 0)
-    region_right = region_x + max(1, int(region.get("width") or candidate.width or 360))
-    region_bottom = region_y + max(1, int(region.get("height") or candidate.height or 220))
-    canvas_width = max(1, candidate.width or region_right)
-    canvas_height = max(1, candidate.height or region_bottom)
-    # Section crops include the border, title band, and content padding. Map the
-    # detected crop coordinates into the content box so the overlay stays in
-    # the section without changing its grid/flex dimensions.
-    content_left = 18
-    content_top = 54
-    content_right = max(content_left, canvas_width - 18)
-    content_bottom = max(content_top, canvas_height - 16)
-    left_edge = max(region_x, content_left)
-    top_edge = max(region_y, content_top)
-    right_edge = min(region_right, content_right)
-    bottom_edge = min(region_bottom, content_bottom)
-    if right_edge <= left_edge or bottom_edge <= top_edge:
+    placement = _supplement_region(candidate)
+    if placement is None:
         return ""
-    left = left_edge - content_left
-    top = top_edge - content_top
-    width = right_edge - left_edge
-    height = bottom_edge - top_edge
     return (
         '<div class="blank-region-supplement figure-card" '
-        f'style="left:{left}px;top:{top}px;width:{width}px;height:{height}px;">'
+        f'style="left:{placement["left"]}px;top:{placement["top"]}px;width:{placement["width"]}px;height:{placement["height"]}px;">'
         f'<div class="figure-description">{html.escape(description)}</div>'
         f'<div class="supplement-image"><img src="{html.escape(asset_ref, quote=True)}" alt="{html.escape(alt, quote=True)} supplement"></div>'
         '</div>'
