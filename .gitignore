@@ -12,6 +12,8 @@ dist/
 build/
 *.egg-info/
 *.egg
+.npm-cache/
+.npm-cache-codex/
 
 # IDE
 .idea/
@@ -53,3 +55,4 @@ example/
 output/
 reference/
 data/
+
