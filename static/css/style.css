@@ -703,3 +703,21 @@ header {
     color: #718096;
     font-size: 12px;
 }
+
+.progress-eta {
+    display: flex;
+    justify-content: flex-end;
+    align-items: baseline;
+    gap: 6px;
+    margin-top: 10px;
+    color: #718096;
+    font-size: 13px;
+}
+
+.progress-eta strong {
+    color: #1a365d;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    min-width: 92px;
+    text-align: right;
+}

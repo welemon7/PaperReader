@@ -13,6 +13,7 @@ const progressSection = document.getElementById('progressSection');
 const progressBar = document.getElementById('progressBar');
 const progressMessage = document.getElementById('progressMessage');
 const progressPercent = document.getElementById('progressPercent');
+const progressEta = document.getElementById('progressEta');
 
 const resultSection = document.getElementById('resultSection');
 const errorSection = document.getElementById('errorSection');
@@ -28,7 +29,9 @@ const harnessReportLink = document.getElementById('harnessReportLink');
 
 // 任务轮询
 let pollInterval = null;
+let etaInterval = null;
 let currentTaskId = null;
+let remainingSeconds = null;
 
 // 检查服务健康状态
 async function checkHealth() {
@@ -97,6 +100,8 @@ form.addEventListener('submit', async (e) => {
         // 开始轮询状态
         currentTaskId = data.task_id;
         progressSection.style.display = 'block';
+        remainingSeconds = null;
+        startEtaTicker();
         startPolling(currentTaskId);
 
     } catch (error) {
@@ -147,6 +152,38 @@ function stopPolling() {
     }
     submitBtn.disabled = false;
     submitBtn.innerHTML = '<span class="btn-icon">🚀</span> 生成海报';
+    stopEtaTicker();
+}
+
+function formatEta(seconds) {
+    if (!Number.isFinite(seconds) || seconds < 0) return '-- mins -- s';
+    const rounded = Math.max(0, Math.ceil(seconds));
+    const minutes = Math.floor(rounded / 60);
+    const secs = rounded % 60;
+    return `${minutes} mins ${String(secs).padStart(2, '0')} s`;
+}
+
+function renderEta() {
+    if (progressEta && remainingSeconds !== null) {
+        progressEta.textContent = formatEta(remainingSeconds);
+    }
+}
+
+function startEtaTicker() {
+    stopEtaTicker();
+    etaInterval = setInterval(() => {
+        if (remainingSeconds !== null && remainingSeconds > 0) {
+            remainingSeconds -= 1;
+            renderEta();
+        }
+    }, 1000);
+}
+
+function stopEtaTicker() {
+    if (etaInterval) {
+        clearInterval(etaInterval);
+        etaInterval = null;
+    }
 }
 
 // 更新进度
@@ -155,6 +192,12 @@ function updateProgress(data) {
     progressBar.style.width = `${progress}%`;
     progressPercent.textContent = `${Math.round(progress)}%`;
     progressMessage.textContent = data.message || '处理中...';
+    if (data.status === 'complete' || data.status === 'error') {
+        remainingSeconds = 0;
+    } else if (Number.isFinite(Number(data.estimated_remaining_seconds))) {
+        remainingSeconds = Math.max(0, Number(data.estimated_remaining_seconds));
+    }
+    renderEta();
 
     // 更新步骤
     const steps = document.querySelectorAll('.step');

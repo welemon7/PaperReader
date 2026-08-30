@@ -74,8 +74,33 @@ class TaskStatus:
         self.harness_status = None
         self.harness_report = None
         self.best_png = None
+        self.started_at = None
+        self.finished_at = None
+        self.estimated_total_seconds = 180
 
     def to_dict(self):
+        now = time.time()
+        if self.started_at is None:
+            elapsed_seconds = 0
+        else:
+            end_time = self.finished_at or now
+            elapsed_seconds = max(0, int(end_time - self.started_at))
+        progress_ratio = max(0.0, min(1.0, float(self.progress or 0) / 100.0))
+        if self.status == 'complete':
+            remaining_seconds = 0
+        elif self.status == 'error':
+            remaining_seconds = 0
+        elif progress_ratio > 0:
+            # Use observed throughput after the first real phase.  Keep a
+            # small baseline for the initial startup period, when progress is
+            # intentionally coarse and a linear projection is unstable.
+            projected_total = max(
+                float(self.estimated_total_seconds),
+                elapsed_seconds / progress_ratio,
+            )
+            remaining_seconds = max(1, int(round(projected_total - elapsed_seconds)))
+        else:
+            remaining_seconds = int(self.estimated_total_seconds)
         return {
             'task_id': self.task_id,
             'status': self.status,
@@ -90,6 +115,9 @@ class TaskStatus:
             'harness_status': self.harness_status,
             'harness_report': self.harness_report,
             'best_png': self.best_png,
+            'elapsed_seconds': elapsed_seconds,
+            'estimated_total_seconds': self.estimated_total_seconds,
+            'estimated_remaining_seconds': remaining_seconds,
         }
 
 
@@ -150,6 +178,9 @@ def generate_poster_task(
         return
 
     task.status = 'running'
+    task.started_at = time.time()
+    task.finished_at = None
+    task.estimated_total_seconds = max(150, 135 + 45 * max(0, int(max_rounds or 1) - 1))
     task.progress = 10
     task.message = f'开始处理 arXiv: {arxiv_id}'
     task.arxiv_id = arxiv_id
@@ -244,6 +275,7 @@ def generate_poster_task(
         task.html_draft = str(draft_path)
         task.progress = 100
         task.status = 'complete'
+        task.finished_at = time.time()
         task.message = '海报补充图生成完成' if harness_result.passed else '海报补充图生成失败'
         task.result = {
             'arxiv_id': arxiv_id,
@@ -261,6 +293,7 @@ def generate_poster_task(
     except Exception as e:
         logger.exception(f"Task {task_id} failed")
         task.status = 'error'
+        task.finished_at = time.time()
         task.error = str(e)
         task.message = f'生成失败: {str(e)}'
 
