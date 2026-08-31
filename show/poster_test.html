@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Adaptive MLP Pruning for Large Vision Transformers - Poster</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+<style>
+:root {
+    /* ---- design tokens (theme + blueprint overrides, with safe fallbacks) ---- */
+    --poster-primary: #16324f;
+    --poster-blue: var(--poster-primary);
+    --poster-accent: #c9a84c;
+    --accent-orange: var(--poster-accent);
+    --accent-text: #a8842c;
+    --poster-dark-blue: #1f4a75;
+    --poster-bg: #ffffff;
+    --panel-soft: #f7f9fc;
+    --text-main: #182433;
+    --text-muted: #4a5568;
+    --border-color: #cfd8e3;
+    --highlight: #8fb3d9;
+    --header-text: #ffffff;
+    --band-top: #16324f;
+    --band-bottom: #1f4a75;
+    --section-symbol: "▸ ";
+    --radius: 10px;
+    --radius-sm: 7px;
+    --shadow: 0 6px 16px rgba(22, 50, 79, 0.10);
+    --font-display: "Times New Roman", Times, serif;
+    --font-body: "Times New Roman", Times, serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { min-height: 100%; margin: 0; }
+body {
+    background: #eef1f5;
+    font-family: var(--font-body);
+    color: var(--text-main);
+    line-height: 1.5;
+    padding: 26px 18px;
+    display: flex;
+    justify-content: center;
+}
+.poster-container {
+    width: 1920px;
+    min-height: 1080px;
+    max-width: none;
+    flex-shrink: 0;
+    background: var(--poster-bg);
+    box-shadow: var(--shadow);
+    border-radius: var(--radius);
+    padding: 0;
+    overflow: hidden;
+    position: relative;
+}
+
+/* ================= header ================= */
+.header {
+    text-align: left;
+    padding: 34px 48px 20px;
+    margin-bottom: 18px;
+}
+.hero-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 30px;
+    padding: 6px 14px;
+    border: 1px solid color-mix(in srgb, var(--poster-primary) 22%, transparent);
+    border-radius: 999px;
+    color: var(--poster-primary);
+    background: color-mix(in srgb, var(--poster-primary) 6%, transparent);
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background 0.15s ease;
+}
+.hero-link:hover { background: color-mix(in srgb, var(--poster-primary) 12%, transparent); }
+.header h1 {
+    font-family: var(--font-display);
+    font-size: clamp(30px, 3vw, 48px);
+    color: var(--poster-primary);
+    font-weight: 800;
+    letter-spacing: 0;
+    line-height: 1.12;
+    text-wrap: balance;
+}
+.header-rule {
+    display: none;
+}
+.tagline {
+    margin-top: 10px;
+    color: var(--text-main);
+    font-size: 19px;
+    font-weight: 600;
+    line-height: 1.3;
+}
+.header .authors {
+    font-size: 17px;
+    color: var(--text-muted);
+    font-weight: 600;
+    margin-top: 10px;
+}
+.header .affiliation {
+    font-size: 15px;
+    color: var(--text-muted);
+}
+.header .header-meta {
+    display: flex;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 8px;
+    align-items: baseline;
+}
+.author-line { font-size: 16px; color: var(--text-muted); margin-top: 8px; flex: 0 1 auto; min-width: 0; }
+.header .hero-pill { margin-left: 0; }
+.github-icon { width: 18px; height: 18px; display: inline-block; vertical-align: -4px; margin-right: 5px; }
+.header .hero-pill { flex: 0 1 auto; white-space: normal; overflow-wrap: anywhere; }
+
+/* ================= grid ================= */
+.grid-container {
+    display: grid;
+    grid-template-columns: 1fr 1.2fr 1.2fr;
+    grid-template-areas:
+        "motivation overview key_idea"
+        "core core core"
+        "contributions highlights project";
+    gap: 18px;
+    padding: 0 22px 22px;
+    align-items: stretch;
+}
+.grid-container > .section-block#sec-contributions,
+.grid-container > .section-block#sec-highlights,
+.grid-container > .section-block#sec-project {
+    align-self: stretch;
+    min-height: 190px;
+    height: 100%;
+}
+.grid-container > .section-block#sec-contributions .section-title,
+.grid-container > .section-block#sec-highlights .section-title,
+.grid-container > .section-block#sec-project .section-title {
+    padding-top: 9px;
+    padding-bottom: 9px;
+}
+.grid-container > .section-block#sec-contributions .section-content,
+.grid-container > .section-block#sec-highlights .section-content,
+.grid-container > .section-block#sec-project .section-content {
+    padding: 10px 14px;
+    overflow: hidden;
+}
+.section-block {
+    border: 1px solid var(--border-color);
+    background: var(--poster-bg);
+    border-radius: var(--radius);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    box-shadow: 0 2px 6px rgba(16, 36, 64, 0.04);
+}
+.section-title {
+    background: transparent;
+    color: #1D4ED8;
+    font-family: "Times New Roman", Times, serif;
+    font-size: 1.25em;
+    font-weight: 700;
+    text-transform: none;
+    letter-spacing: 0;
+    padding: 12px 18px;
+    border-bottom: none;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-align: left;
+    justify-content: flex-start;
+}
+
+.section-block[data-priority="P0"] { border-width: 3px; box-shadow: 0 8px 20px rgba(22, 50, 79, 0.16); }
+.section-block[data-priority="P1"] { border-width: 2px; }
+.section-block[data-priority="P2"] { opacity: 0.94; }
+.section-block[data-priority="P3"] { opacity: 0.82; }
+.section-title .sym {
+    color: #1D4ED8;
+    font-size: 19px;
+    line-height: 1;
+}
+.section-content {
+    padding: 16px 18px;
+    font-size: 16px;
+    line-height: 1.5;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    min-height: 0;
+    overflow: hidden;
+    position: relative;
+}
+.section-content p { margin: 0; }
+.section-content ul, .section-content ol { padding-left: 20px; margin: 2px 0; }
+.section-content li { margin-bottom: 6px; }
+.section-content li::marker { color: var(--poster-accent); }
+.section-content strong { color: var(--poster-primary); font-weight: 700; }
+.section-content em { color: var(--accent-text); }
+.section-content a {
+    color: var(--poster-primary);
+    font-weight: 600;
+    text-decoration: underline;
+    text-decoration-color: var(--poster-accent);
+    text-underline-offset: 2px;
+}
+.mini-visual {
+    width: 100%;
+    min-height: 110px;
+    border: 1px solid color-mix(in srgb, var(--border-color) 92%, var(--poster-accent));
+    border-radius: var(--radius-sm);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--panel-soft) 72%, transparent), #fff);
+    padding: 10px 12px;
+    display: grid;
+    gap: 8px;
+    align-content: start;
+    overflow: hidden;
+}
+.mini-visual-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+.mini-node {
+    min-width: 0;
+    border: 1px solid color-mix(in srgb, var(--poster-primary) 22%, var(--border-color));
+    background: #fff;
+    border-radius: 6px;
+    padding: 8px 9px;
+    box-shadow: 0 1px 3px rgba(16, 36, 64, 0.05);
+}
+.mini-node-title {
+    color: var(--poster-primary);
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.15;
+}
+.mini-node-copy {
+    margin-top: 3px;
+    color: var(--text-muted);
+    font-size: 11px;
+    line-height: 1.25;
+}
+.mini-pill-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.mini-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 8px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--poster-primary) 7%, #fff);
+    border: 1px solid color-mix(in srgb, var(--poster-primary) 18%, var(--border-color));
+    color: var(--poster-primary);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+}
+.accent-text, .highlight-orange { color: var(--accent-text); font-weight: 700; }
+.muted { color: var(--text-muted); }
+
+/* ================= callouts / formulas ================= */
+.callout {
+    background: var(--panel-soft);
+    border-left: 4px solid var(--poster-accent);
+    padding: 9px 13px;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    font-size: 15px;
+}
+.callout.alt { border-left-color: var(--poster-primary); }
+.formula-box {
+    background: var(--panel-soft);
+    border: 1px solid var(--border-color);
+    border-left: 3px solid var(--poster-accent);
+    padding: 10px 13px;
+    border-radius: var(--radius-sm);
+    font-size: 15px;
+}
+.formula-label {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--accent-text);
+    font-weight: 800;
+    margin-bottom: 6px;
+}
+.key-idea-formulas {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+.key-idea-formulas .formula-box {
+    min-width: 0;
+    padding: 8px 10px;
+    font-size: 13px;
+}
+.key-idea-formulas .formula-label { font-size: 12px; margin-bottom: 4px; }
+.key-idea-formulas mjx-container[display="true"] {
+    font-size: 0.82em !important;
+    margin: 0.28em 0 !important;
+}
+#sec-key-idea .figure-stack { grid-column: 1 / -1; }
+
+/* ================= figures ================= */
+.figure-stack { display: grid; gap: 10px; }
+.figure-stack.one { grid-template-columns: 1fr; }
+.figure-stack.two { grid-template-columns: 1fr 1fr; }
+.figure-card {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: #fff;
+    padding: 7px;
+}
+.figure-card img {
+    width: 100%;
+    height: auto;
+    display: block;
+    border-radius: 5px;
+    object-fit: contain;
+    background: #fbfcfe;
+}
+.figure-description {
+    margin-bottom: 6px;
+    color: var(--text-muted);
+    font-size: 13px;
+    line-height: 1.25;
+}
+.figure-card.method-card img { max-height: 360px; }
+.figure-card.result-card img { max-height: 300px; }
+.figure-card.method-card { border-color: color-mix(in srgb, var(--poster-accent) 60%, var(--border-color)); }
+.blank-region-supplement {
+    position: absolute;
+    z-index: 3;
+    margin: 0;
+    padding: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: #fff;
+    overflow: hidden;
+    pointer-events: none;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+}
+.blank-region-supplement .figure-description {
+    flex: 0 0 auto;
+    width: 100%;
+    text-align: center;
+    margin: 0 0 7px;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+}
+.blank-region-supplement .supplement-image {
+    min-height: 0;
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+.blank-region-supplement img {
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    display: block;
+    object-fit: contain;
+    border-radius: 5px;
+}
+.mini-visual:has(.blank-region-supplement) {
+    width: 0;
+    height: 0;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    overflow: visible;
+}
+
+/* ================= core band ================= */
+.core-band { grid-area: core; }
+.core-band .section-content { gap: 12px; }
+.core-band-title {
+    background: transparent;
+    border-bottom: none;
+}
+.core-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) minmax(0, 1fr);
+    gap: 12px;
+    align-items: start;
+}
+.core-grid.two-col { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
+.core-grid.one-col { grid-template-columns: minmax(0, 1fr); }
+.core-column { min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.core-column .section-copy { font-size: 16px; line-height: 1.5; }
+
+/* ================= tables ================= */
+.core-table-wrap, .table-wrap { width: 100%; max-width: 100%; overflow: hidden; }
+.core-table-header { display: flex; flex-direction: column; gap: 5px; margin-bottom: 8px; }
+.core-table-caption { font-size: 14px; font-weight: 700; color: var(--poster-primary); }
+.core-table-meta { font-size: 12px; color: var(--text-muted); line-height: 1.35; }
+table { width: 100%; border-collapse: collapse; margin: 4px 0 0; font-size: 14px; }
+th, td { border: 1px solid var(--border-color); padding: 7px 9px; text-align: left; vertical-align: top; }
+th {
+    background: var(--panel-soft);
+    color: var(--poster-primary);
+    font-weight: 700;
+    border-bottom: 2px solid var(--poster-accent);
+}
+tbody tr:nth-child(even) { background: color-mix(in srgb, var(--panel-soft) 55%, transparent); }
+.core-table-wrap th, .core-table-wrap td { border: 1px solid var(--border-color); padding: 7px 9px; text-align: left; vertical-align: top; }
+.core-table-wrap th { background: var(--panel-soft); color: var(--poster-primary); font-weight: 700; }
+
+.core-metrics-table { width: 100%; max-width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 13px; margin: 0; }
+.core-metrics-table th, .core-metrics-table td { border: 1px solid var(--border-color); padding: 5px 6px; text-align: center; vertical-align: middle; }
+.core-metrics-table th { background: color-mix(in srgb, var(--poster-primary) 8%, var(--poster-bg)); color: var(--poster-primary); font-weight: 800; }
+.core-metrics-table th:first-child, .core-metrics-table td:first-child { text-align: left; font-weight: 700; }
+.core-metrics-table th, .core-metrics-table td { max-width: 150px; overflow-wrap: anywhere; word-break: break-word; }
+
+.core-empty, .figure-placeholder { display: none; }
+
+/* ================= project / code link ================= */
+.project-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    text-align: center;
+    flex: 1;
+    min-height: 0;
+}
+.code-cta { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+.code-cta .label { font-size: 15px; color: var(--text-muted); font-weight: 600; }
+.code-link {
+    word-break: break-all;
+    color: var(--poster-primary);
+    font-weight: 700;
+    text-decoration: none;
+    border-bottom: 1px solid var(--poster-accent);
+    padding-bottom: 1px;
+}
+.code-link:hover { text-decoration: underline; }
+.link-text { font-size: 15px; font-weight: 600; color: var(--poster-primary); word-break: break-all; }
+
+/* ================= highlight markers ================= */
+.highlight-marker-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 10px;
+    align-items: start;
+    width: 100%;
+    max-width: 330px;
+    margin: auto;
+}
+.highlight-marker {
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr);
+    gap: 8px;
+    align-items: start;
+    min-width: 0;
+}
+.highlight-marker-symbol {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    color: var(--poster-accent);
+    font-size: 28px;
+    line-height: 1;
+    font-weight: 800;
+}
+.highlight-marker-copy { min-width: 0; }
+.highlight-marker-title {
+    color: var(--poster-primary);
+    font-size: 12px;
+    line-height: 1.15;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+.highlight-marker-desc {
+    margin-top: 3px;
+    color: var(--text-muted);
+    font-size: 10px;
+    line-height: 1.25;
+}
+.grid-container > .section-block#sec-highlights .section-content {
+    align-items: center;
+    justify-content: center;
+}
+.highlights-svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    object-fit: contain;
+}
+.highlights-fallback {
+    width: 100%;
+    padding-left: 20px;
+    display: grid;
+    gap: 8px;
+    color: var(--text-main);
+    font-size: 14px;
+    line-height: 1.3;
+}
+.highlights-fallback li::marker {
+    color: var(--poster-accent);
+    font-weight: 700;
+}
+.row-equal {
+    align-self: stretch;
+    min-height: 190px;
+}
+.row-equal .section-content {
+    height: 100%;
+}
+.project-footer { margin-top: 8px; font-size: 13px; color: var(--text-muted); letter-spacing: 0.3px; }
+
+/* ================= responsive ================= */
+@media (max-width: 1100px) {
+    .grid-container {
+        grid-template-columns: 1fr;
+        grid-template-areas:
+            "motivation"
+            "overview"
+            "key_idea"
+            "core"
+            "contributions"
+            "highlights"
+            "project";
+    }
+    .figure-stack.two { grid-template-columns: 1fr; }
+    .key-idea-formulas { grid-template-columns: 1fr; }
+}
+
+/* ================= print ================= */
+@media print {
+    @page { size: 20.0in 11.25in; margin: 0; }
+    body { background: white; padding: 0; }
+    .poster-container { box-shadow: none; border-radius: 0; border-top: none; }
+}
+</style>
+</head>
+<body>
+
+<div class="poster-container">
+    <header class="header">
+        <h1>Adaptive MLP Pruning for Large Vision Transformers</h1>
+        <div class="header-rule"></div>
+        
+        <div class="tagline">AMP first evaluates MLP hidden-neuron importance using Taylor expansion with a label-free information entropy criterion, then ranks neurons for pruning.</div>
+        
+        <div class="header-meta">
+            <div class="author-line">Chengchao Shen \\ Central South University \\ scc.cs@csu.edu.cn | scc.cs@csu.edu.cn</div>
+            
+            <a class="hero-pill hero-link" href="https://github.com/visresearch/AMP" target="_blank" rel="noreferrer noopener">
+                <img class="github-icon" src="logo/github.svg" alt="GitHub">https://github.com/visresearch/AMP
+            </a>
+            
+        </div>
+    </header>
+
+    <div class="grid-container">
+        
+        
+            
+                
+            
+        
+            
+                
+            
+        
+            
+                
+            
+        
+            
+                
+            
+        
+            
+                
+            
+        
+            
+                
+            
+        
+            
+                
+            
+        
+        
+
+        <div class="section-block row-equal" id="sec-motivation" data-priority="P2" style="grid-area: motivation;">
+            <div class="section-title"><span class="sym">📑</span>Motivation</div>
+            <div class="section-content">
+                
+                    <p>Large vision transformers achieve strong performance through increased model capacity, but their cumbersome parameters impose exorbitant computational and memory demands.</p>
+                
+                
+                <div class="mini-visual"><div class="blank-region-supplement figure-card" style="left:14px;top:99px;width:478px;height:484px;"><div class="figure-description">Entropy-Guided MLP Neuron Pruning Reduces Vision Transformer Complexity While Preserving Performance.</div><div class="supplement-image"><img src="figures/sec-motivation_supplement.svg" alt="Motivation supplement"></div></div></div>
+                
+            </div>
+        </div>
+
+        <div class="section-block row-equal" id="sec-method-overview" data-priority="P1" style="grid-area: overview;">
+            <div class="section-title"><span class="sym">⚙</span>Method Overview</div>
+            <div class="section-content">
+                
+                    <p>AMP first evaluates MLP hidden-neuron importance using Taylor expansion with a label-free information entropy criterion, then ranks neurons for pruning.</p>
+<ul>
+<li>AMP first evaluates MLP hidden-neuron importance using Taylor expansion with a label-free information entropy criterion, then ranks neurons</li>
+<li>Introduces label-free information entropy for more accurate neuron importance evaluation.</li>
+</ul>
+                
+                
+                
+                
+                <div class="figure-stack one">
+                    
+                    
+                    <div class="figure-card method-card">
+                        <div class="figure-description">Information Entropy Improves Neuron Importance Evaluation by Exploiting All Model Predictions.</div>
+                        <img src="figures/fig-002.png" alt="">
+                    </div>
+                    
+                    
+                </div>
+                
+            </div>
+        </div>
+
+        <div class="section-block row-equal" id="sec-key-idea" data-priority="P1" style="grid-area: key_idea;">
+            <div class="section-title"><span class="sym">💡</span>Key Idea</div>
+            <div class="section-content">
+                
+                    <div class="key-idea-formulas"><div class="formula-box"><div class="formula-label">Measures Average in Formation Entropy over Model Predictions</div><div>$$ \mathcal{E} = - \frac{1}{B} \sum_{i=1}^B \sum_{j=1}^B {p_{ij} \cdot \log{p_{ij}}}. $$</div></div><div class="formula-box"><div class="formula-label">Key Formula</div><div>$$ \mathcal{L}_{\rm distill} = \frac{1}{C} \Vert z^{\rm cls} - \hat{z}^{\rm cls} \Vert^2 + \frac{1}{N \cdot C} \Vert z^{\rm patch} - \hat{z}^{\rm patch} \Vert^2. $$</div></div></div>
+                
+                
+                
+                
+                <div class="figure-stack one">
+                    
+                    
+                    <div class="figure-card">
+                        <div class="figure-description">Relationship Between MLP Hidden Size and Information Entropy.</div>
+                        <img src="figures/fig-004.png" alt="">
+                    </div>
+                    
+                    
+                </div>
+                
+            </div>
+        </div>
+
+        <div class="section-block core-band" id="sec-main-method" data-priority="P0" style="grid-area: core;">
+            <div class="section-title core-band-title"><span class="sym">🏆</span>Core Results</div>
+            <div class="section-content">
+                
+                
+                
+                    
+                        
+                    
+                        
+                    
+                
+                
+                
+                
+                    
+                
+                    
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                <div class="section-copy"><p><strong>Hook:</strong> AMP reduces parameters and FLOPs by roughly 40% while retaining or slightly improving downstream performance after distillation.</p>
+<p>AMP reduces parameters and FLOPs by roughly 40% while retaining or slightly improving downstream performance after distillation. The main advantages are reflected in #Params, FLOPs.</p>
+<p></div>
+                
+                
+                <div class="core-grid ">
+                    
+                    <div class="core-column">
+                        <div class="figure-card result-card">
+                            <div class="figure-description">Adaptive Taylor-Based Hidden-Neuron Pruning with Binary Search and Knowledge Distillation for Transformer MLPs.</div>
+                            <img src="figures/fig-001.png" alt="">
+                        </div>
+                    </div>
+                    
+                
+                    <div class="core-column">
+                        
+                        </p>
+<div class="core-table-wrap"><div class="core-table-header"><div class="core-table-caption">The performance comparison on zero-shot image classification tasks of various ImageNet variants and ObjectNet. ``\#Params&#x27;&#x27; denotes the number of vision encoder&#x27;s parameters, excluding the parameters of text encoder. Throughout is averaged over 10 runs on single A6000 GPU with batch size of 1000. ``prune&#x27;&#x27; and ``distill&#x27;&#x27; indicate the pruned model without finetuning and the distilled one, respectively.</div><div class="core-table-meta">Datasets: ImageNet-1K, ImageNet-A, ImageNet-R, ImageNet-V2, ImageNet-Sketch, ObjectNet · Metrics: #Params, FLOPs, Throughout, IN-1K, Avg. Acc.</div></div><table class="core-metrics-table"><thead><tr><th>Method</th><th>\#Params</th><th>FLOPs</th><th>Throughout</th><th>IN-1K</th><th>Avg. Acc.</th></tr></thead><tbody><tr><td>OpenCLIP-g (ours, prune)</td><td>0.62B</td><td>0.32T</td><td>222.3 imgs/s</td><td>65.0%</td><td>53.8%</td></tr><tr><td>OpenCLIP-g (ours, distill)</td><td>0.62B</td><td>0.32T</td><td>222.3 imgs/s</td><td>78.4%</td><td>73.1%</td></tr><tr><td>EVA-CLIP-E (ours, prune)</td><td>2.50B</td><td>1.28T</td><td>69.5 imgs/s</td><td>59.2%</td><td>44.1%</td></tr><tr><td>EVA-CLIP-E (ours, distill)</td><td>2.50B</td><td>1.28T</td><td>69.5 imgs/s</td><td>82.0%</td><td>81.0%</td></tr></tbody></table></div>
+                    </div>
+                
+                    
+                    <div class="core-column">
+                        <div class="figure-card result-card">
+                            <div class="figure-description">Entropy-Guided Binary Search for Adaptive MLP Hidden-Size Pruning.</div>
+                            <img src="figures/fig-003.png" alt="">
+                        </div>
+                    </div>
+                    
+                </div>
+            </div>
+        </div>
+
+        <div class="section-block row-equal" id="sec-contributions" data-priority="P3" style="grid-area: contributions;">
+            <div class="section-title"><span class="sym">⭐</span>Contributions</div>
+            <div class="section-content">
+                
+                    <ul>
+<li>Introduces label-free information entropy for more accurate neuron importance evaluation.</li>
+<li>Enables pruning without relying on original loss functions or unpublished module weights.</li>
+</ul>
+                
+                
+            </div>
+        </div>
+
+        <div class="section-block row-equal" id="sec-highlights" data-priority="P3" style="grid-area: highlights;">
+            <div class="section-title"><span class="sym">⚡</span>Highlights</div>
+            <div class="section-content">
+                
+                <img class="highlights-svg" src="figures/sec-highlights_highlights.svg" alt="Four paper highlights">
+                
+            </div>
+        </div>
+
+        <div class="section-block row-equal" id="sec-project" data-priority="P3" style="grid-area: project;">
+            <div class="section-title"><span class="sym"><img class="github-icon" src="logo/github.svg" alt="GitHub"></span>Project</div>
+            <div class="section-content">
+                <div class="project-box">
+                    <div class="code-cta">
+                        <div class="label">Code & Project</div>
+                        
+                        <a class="code-link" href="https://github.com/visresearch/AMP" target="_blank" rel="noreferrer noopener">https://github.com/visresearch/AMP</a>
+                        
+                    </div>
+                </div>
+                
+                <div class="project-footer">Paper-to-Poster · Research Reader</div>
+            </div>
+        </div>
+
+<script>
+MathJax = { tex: { inlineMath: [['$', '$']] } };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+
+</body>
+</html>
