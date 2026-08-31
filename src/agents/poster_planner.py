@@ -208,11 +208,6 @@ def _apply_story_plan(sections: list[PosterSection], story_plan) -> None:
         if how.text not in current:
             by_type["method_overview"].content_md = f"{current}\n\n**How:** {how.text}"
 
-    idea = beats.get("idea")
-    if idea and by_type.get("key_idea") and idea.text:
-        by_type["key_idea"].title = "Key Idea"
-        by_type["key_idea"].supplement_html = f"<p class=\"story-claim\">{idea.text}</p>"
-
     hook = beats.get("hook")
     evidence = beats.get("evidence")
     core = by_type.get("main_method")
@@ -312,11 +307,10 @@ def _build_method_overview_section(analysis: PaperAnalysis) -> PosterSection:
 
 
 def _build_key_idea_section(analysis: PaperAnalysis) -> PosterSection:
-    key_title = _infer_key_idea_title(analysis)
     content = _build_key_idea_content(analysis) or "(key idea not provided)"
     return PosterSection(
         section_id="sec-key-idea", type="key_idea",
-        title=f"Key Idea: {key_title}",
+        title="Key Idea",
         content_md=content,
         column=3, col_span=1, row=1,
     )
@@ -781,41 +775,6 @@ def _result_hint(analysis: PaperAnalysis) -> str:
     if parts:
         return " ".join(parts).strip().rstrip(" ,;:.-") + "."
     return ""
-
-
-def _infer_key_idea_title(analysis: PaperAnalysis) -> str:
-    candidates = [
-        _clean_poster_text(analysis.problem_statement or ""),
-        _clean_poster_text(analysis.method_overview or ""),
-    ]
-    candidates.extend(_clean_poster_text(c.text) for c in analysis.contributions[:3])
-    candidates.extend(_clean_poster_text(fig.caption) for fig in analysis.key_figures[:2])
-
-    keyword_patterns = [
-        r"detail injection",
-        r"global context",
-        r"shadow interaction",
-        r"two-stage fine-tuning",
-        r"latent diffusion",
-        r"retinex",
-        r"multi-scale channel attention",
-        r"attention",
-        r"architecture",
-    ]
-    for candidate in candidates:
-        if not candidate:
-            continue
-        lowered = candidate.lower()
-        for pattern in keyword_patterns:
-            match = re.search(pattern, lowered)
-            if match:
-                return candidate[match.start():match.end()].title()
-
-    fallback = _clean_poster_text(analysis.contributions[0].text) if analysis.contributions else ""
-    if fallback:
-        words = fallback.split()
-        return " ".join(words[:4]) if words else "Core Idea"
-    return "Core Idea"
 
 
 def _format_formula_title(text: str) -> str:

@@ -26,7 +26,7 @@ def _make_blueprint() -> PosterBlueprint:
                         content_md="Our problem is **important**.", column=1, col_span=1, row=1),
             PosterSection(section_id="s2", type="method_overview", title="Method Overview",
                         content_md="We propose a method with $E=mc^2$.", column=2, col_span=1, row=1),
-            PosterSection(section_id="s3", type="key_idea", title="Key Idea: Core Trick",
+            PosterSection(section_id="s3", type="key_idea", title="Key Idea",
                         content_md="Details here.", column=3, col_span=1, row=1),
             PosterSection(section_id="s4", type="main_method", title="Core",
                         content_md="Results and details here.", column=1, col_span=3, row=2),

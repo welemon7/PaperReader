@@ -4,7 +4,7 @@ from unittest.mock import patch
 from src.schemas.analysis import PaperAnalysis, Contribution, ExperimentSummary, KeyFormula, KeyFigure
 from src.schemas.paper import PaperDocument, Author, Section, Formula, Figure, Reference
 from src.schemas.poster import PosterBlueprint
-from src.agents.poster_planner import generate_blueprint, _build_row1, _build_row2, _build_row3, _place_figures, _place_formulas
+from src.agents.poster_planner import generate_blueprint, _apply_story_plan, _build_row1, _build_row2, _build_row3, _place_figures, _place_formulas
 
 def _make_analysis():
     return PaperAnalysis(
@@ -69,6 +69,20 @@ class TestPosterBlueprint:
         assert 'sec-contributions' in titles
         assert 'sec-highlights' in titles
         assert 'sec-project' in titles
+
+    def test_key_idea_title_is_fixed_and_story_idea_is_not_injected(self):
+        bp = generate_blueprint(_make_doc(), _make_analysis())
+        key_idea = next(section for section in bp.sections if section.section_id == 'sec-key-idea')
+        key_idea.supplement_html = ''
+        story_plan = type('StoryPlan', (), {
+            'beats': [type('Beat', (), {'type': 'idea', 'text': 'This should not be shown'})()]
+        })()
+
+        _apply_story_plan(bp.sections, story_plan)
+
+        assert key_idea.title == 'Key Idea'
+        assert key_idea.supplement_html == ''
+        assert 'This should not be shown' not in key_idea.content_md
 
     def test_compact_layout_positions(self):
         bp = generate_blueprint(_make_doc(), _make_analysis())
