@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     llm_base_url: str = ""  # 统一Base URL
     llm_max_tokens: int = 8192
     llm_temperature: float = 0.1
+    # Comma-separated OpenAI-compatible model names to try when the primary
+    # model is blocked by the gateway, for example: gemini-3.5-flash,gpt-5.1
+    llm_fallback_models: str = ""
 
     # Preliminary Supplement
     harness_threshold: int = 9  # 达标分数 (0-10)

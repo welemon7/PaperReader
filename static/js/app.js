@@ -68,7 +68,7 @@ form.addEventListener('submit', async (e) => {
 
     // 禁用按钮
     submitBtn.disabled = true;
-    submitBtn.innerHTML = '<span class="btn-icon">⏳</span> 生成中...';
+    submitBtn.innerHTML = '<span class="btn-icon">…</span><span>生成中...</span>';
 
     // 隐藏旧结果
     resultSection.style.display = 'none';
@@ -107,7 +107,7 @@ form.addEventListener('submit', async (e) => {
     } catch (error) {
         showError('提交失败: ' + error.message);
         submitBtn.disabled = false;
-        submitBtn.innerHTML = '<span class="btn-icon">🚀</span> 生成海报';
+        submitBtn.innerHTML = '<span class="btn-icon">→</span><span>生成海报</span>';
     }
 });
 
@@ -151,7 +151,7 @@ function stopPolling() {
         pollInterval = null;
     }
     submitBtn.disabled = false;
-    submitBtn.innerHTML = '<span class="btn-icon">🚀</span> 生成海报';
+    submitBtn.innerHTML = '<span class="btn-icon">→</span><span>生成海报</span>';
     stopEtaTicker();
 }
 
@@ -265,8 +265,8 @@ function showResult(data) {
 
 function harnessStatusLabel(status) {
     if (status === 'passed') return '✅ 已达标（视觉审查通过）';
-    if (status === 'fallback') return '🔄 视觉审查不可用，已回退到单次优化';
-    return '⚠️ 未完全达标，已保留最优版本';
+    if (status === 'fallback') return '视觉审查不可用，已回退到单次优化';
+    return '未完全达标，已保留最优版本';
 }
 
 // 加载并渲染 harness 报告
@@ -383,7 +383,7 @@ function showError(message) {
     errorMessage.textContent = message;
     progressSection.style.display = 'none';
     submitBtn.disabled = false;
-    submitBtn.innerHTML = '<span class="btn-icon">🚀</span> 生成海报';
+    submitBtn.innerHTML = '<span class="btn-icon">→</span><span>生成海报</span>';
 
     errorSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }

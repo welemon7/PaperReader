@@ -3,21 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Paper Reader LLM - 学术海报生成器</title>
+    <title>Paper Reader LLM | 学术海报工作台</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="container">
+    <div class="app-shell">
         <!-- Header -->
-        <header>
-            <div class="logo">
-                <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-                    <rect width="40" height="40" rx="10" fill="#1a365d"/>
-                    <path d="M12 12h16v4H12v-4zm0 8h16v4H12v-4zm0 8h10v4H12v-4z" fill="white"/>
-                    <path d="M26 28l4-4v8l-4-4z" fill="#c9a84c"/>
-                </svg>
-                <h1>Paper Poster Generator</h1>
+        <header class="topbar">
+            <div class="brand">
+                <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span>
+                <span class="brand-copy"><strong>Paper Reader</strong><small>LLM WORKSPACE</small></span>
             </div>
             <div class="status-badge" id="healthStatus">
                 <span class="dot"></span>
@@ -25,175 +20,267 @@
             </div>
         </header>
 
-        <!-- Main Form -->
-        <section class="form-section">
-            <div class="form-card">
-                <h2>生成学术海报</h2>
-                <p class="subtitle">输入 arXiv ID，自动生成初稿，并通过「视觉审查循环」反复评审与重渲染直到达标</p>
+        <main>
+            <!-- Intro Section -->
+            <section class="intro-grid" aria-labelledby="pageTitle">
+                <div class="intro-copy">
+                    <p class="eyebrow">RESEARCH TO VISUAL STORY</p>
+                    <h1 id="pageTitle">把论文，变成<br><em>一眼读懂的海报。</em></h1>
+                    <p class="intro-lede">输入 arXiv ID，Paper Reader 会提炼研究脉络、组织视觉层级，并通过视觉审查循环生成可发布的 HTML 海报。</p>
+                    <div class="intro-meta">
+                        <span class="meta-line"></span>
+                        <span>解析 · 理解 · 设计 · 审查</span>
+                    </div>
+                </div>
+                <div class="signal-panel">
+                    <div class="signal-top">
+                        <span>WORKFLOW</span>
+                        <span class="signal-live"><i></i> READY</span>
+                    </div>
+                    <div class="signal-figure">
+                        <span class="signal-number">05</span>
+                        <span class="signal-label">STAGES<br>TO POSTER</span>
+                    </div>
+                    <div class="signal-rule"></div>
+                    <p>从原始论文到可分享视觉摘要，每一步都可追踪。</p>
+                </div>
+            </section>
 
-                <form id="generateForm">
-                    <div class="form-group">
-                        <label for="arxivId">arXiv ID</label>
-                        <div class="input-wrapper">
-                            <span class="input-icon">📄</span>
-                            <input
-                                type="text"
-                                id="arxivId"
-                                placeholder="例如: 2212.04711"
-                                required
-                                autofocus
-                            >
+            <!-- Workspace Section - 已修复闭合标签 -->
+            <section class="workspace-section" aria-labelledby="generateTitle">
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">NEW OUTPUT</p>
+                        <h2 id="generateTitle">生成一张新海报</h2>
+                    </div>
+                    <span class="section-index">01 / 01</span>
+                </div>
+                <div class="workspace-grid">
+                    <div class="form-panel">
+                        <form id="generateForm">
+                            <div class="form-group">
+                                <label for="arxivId">论文标识 <span>ARXIV ID</span></label>
+                                <div class="input-wrapper">
+                                    <span class="field-symbol" aria-hidden="true">↗</span>
+                                    <input
+                                        type="text"
+                                        id="arxivId"
+                                        placeholder="例如: 2212.04711"
+                                        required
+                                        autofocus
+                                    >
+                                </div>
+                                <small>支持 2212.04711 或 2212.04711v1</small>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="qualityThreshold">质量阈值 <span>01 - 10</span></label>
+                                    <input
+                                        type="number"
+                                        id="qualityThreshold"
+                                        min="1"
+                                        max="10"
+                                        step="1"
+                                        value="9"
+                                    >
+                                    <small>达到评分后停止循环</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="maxRounds">最大审查轮数 <span>ROUNDS</span></label>
+                                    <input
+                                        type="number"
+                                        id="maxRounds"
+                                        min="1"
+                                        max="20"
+                                        step="1"
+                                        value="1"
+                                    >
+                                    <small>防止无效重复优化</small>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="customPrompt">自定义优化提示词 <span>OPTIONAL</span></label>
+                                <textarea
+                                    id="customPrompt"
+                                    rows="4"
+                                    placeholder="留空则使用默认提示词..."
+                                ></textarea>
+                                <small>默认提示词来自项目根目录的 LLM-up.txt</small>
+                            </div>
+
+                            <div class="form-footer">
+                                <span class="form-note"><b>TIP</b> 从一篇具体论文开始</span>
+                                <button type="submit" id="submitBtn" class="btn-primary">
+                                    <span class="btn-icon" aria-hidden="true">→</span>
+                                    <span>生成海报</span>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                    <aside class="workflow-list">
+                        <p class="aside-label">WHAT HAPPENS NEXT</p>
+                        <div class="workflow-item">
+                            <span>01</span>
+                            <div>
+                                <strong>解析论文</strong>
+                                <p>提取正文、图表与参考信息</p>
+                            </div>
                         </div>
-                        <small>支持 arXiv ID 格式: 2212.04711 或 2212.04711v1</small>
-                    </div>
-
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="qualityThreshold">质量阈值（0-10）</label>
-                            <input
-                                type="number"
-                                id="qualityThreshold"
-                                min="1"
-                                max="10"
-                                step="1"
-                                value="9"
-                            >
-                            <small>达到该评分即判定达标，停止循环</small>
+                        <div class="workflow-item">
+                            <span>02</span>
+                            <div>
+                                <strong>理解内容</strong>
+                                <p>建立研究问题与方法脉络</p>
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label for="maxRounds">最大审查轮数</label>
-                            <input
-                                type="number"
-                                id="maxRounds"
-                                min="1"
-                                max="20"
-                                step="1"
-                                value="1"
-                            >
-                            <small>超过轮数或评分不再提升时自动停止</small>
+                        <div class="workflow-item">
+                            <span>03</span>
+                            <div>
+                                <strong>设计布局</strong>
+                                <p>生成适合阅读的海报蓝图</p>
+                            </div>
                         </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="customPrompt">自定义优化提示词（可选）</label>
-                        <textarea
-                            id="customPrompt"
-                            rows="4"
-                            placeholder="输入自定义的优化提示词，或留空使用默认提示词..."
-                        ></textarea>
-                        <small>默认提示词位于 LLM-up.txt；仅视觉审查不可用（回退）时使用</small>
-                    </div>
-
-                    <button type="submit" id="submitBtn" class="btn-primary">
-                        <span class="btn-icon">🚀</span>
-                        生成海报
-                    </button>
-                </form>
-            </div>
-        </section>
-
-        <!-- Progress Section -->
-        <section class="progress-section" id="progressSection" style="display: none;">
-            <div class="progress-card">
-                <h3>生成进度</h3>
-                <div class="progress-bar-container">
-                    <div class="progress-bar" id="progressBar" style="width: 0%"></div>
-                </div>
-                <div class="progress-info">
-                    <span id="progressMessage">初始化...</span>
-                    <span id="progressPercent">0%</span>
-                </div>
-                <div class="progress-eta" aria-live="polite">
-                    <span>预计剩余</span>
-                    <strong id="progressEta">-- mins -- s</strong>
-                </div>
-                <div class="progress-steps">
-                    <div class="step" id="step1">
-                        <span class="step-icon">📥</span>
-                        <span>解析论文</span>
-                    </div>
-                    <div class="step" id="step2">
-                        <span class="step-icon">🧠</span>
-                        <span>理解内容</span>
-                    </div>
-                    <div class="step" id="step3">
-                        <span class="step-icon">📐</span>
-                        <span>设计布局</span>
-                    </div>
-                    <div class="step" id="step4">
-                        <span class="step-icon">🖼️</span>
-                        <span>生成初稿</span>
-                    </div>
-                    <div class="step" id="step5">
-                        <span class="step-icon">🔍</span>
-                        <span>初步补充</span>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Result Section -->
-        <section class="result-section" id="resultSection" style="display: none;">
-            <div class="result-card">
-                <h3 id="resultTitle">✅ 生成完成！</h3>
-                <div class="result-info">
-                    <p><strong>arXiv ID:</strong> <span id="resultArxivId"></span></p>
-                    <p><strong>输出目录:</strong> <span id="resultOutputDir"></span></p>
-                    <p id="resultHarnessLine" style="display: none;"><strong>视觉审查:</strong> <span id="resultHarnessStatus"></span></p>
-                </div>
-
-                <div class="preview-container">
-                    <div class="preview-card">
-                        <h4>📄 初稿</h4>
-                        <p class="preview-desc">基于论文内容的静态生成</p>
-                        <div class="preview-actions">
-                            <a href="#" id="viewDraft" class="btn-outline" target="_blank">预览</a>
-                            <a href="#" id="downloadDraft" class="btn-outline">下载</a>
+                        <div class="workflow-item">
+                            <span>04</span>
+                            <div>
+                                <strong>视觉审查</strong>
+                                <p>检查空白、信息密度与可读性</p>
+                            </div>
                         </div>
+                    </aside>
+                </div>
+            </section>
+            <!-- workspace-section 闭合修复完成 -->
+
+            <!-- Progress Section -->
+            <section class="progress-section" id="progressSection" style="display: none;">
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">PROCESSING</p>
+                        <h2>正在构建你的海报</h2>
                     </div>
-                    <div class="preview-card highlight">
-                        <h4>✨ 最优候选</h4>
-                        <p class="preview-desc">仅通过视觉与内容门禁时才标记为“达标”</p>
-                        <div class="preview-actions">
-                            <a href="#" id="viewOptimized" class="btn-primary" target="_blank">预览</a>
-                            <a href="#" id="downloadOptimized" class="btn-outline">下载</a>
+                    <span class="section-index" id="progressPercent">0%</span>
+                </div>
+                <div class="progress-panel">
+                    <div class="progress-track">
+                        <div class="progress-bar" id="progressBar" style="width: 0%"></div>
+                    </div>
+                    <div class="progress-info">
+                        <span id="progressMessage">初始化...</span>
+                        <span class="eta" aria-live="polite">
+                            <span>预计剩余</span>
+                            <strong id="progressEta">-- mins -- s</strong>
+                        </span>
+                    </div>
+                    <div class="progress-steps">
+                        <div class="step" id="step1">
+                            <span class="step-icon">01</span>
+                            <span>解析论文</span>
+                        </div>
+                        <div class="step" id="step2">
+                            <span class="step-icon">02</span>
+                            <span>理解内容</span>
+                        </div>
+                        <div class="step" id="step3">
+                            <span class="step-icon">03</span>
+                            <span>设计布局</span>
+                        </div>
+                        <div class="step" id="step4">
+                            <span class="step-icon">04</span>
+                            <span>生成初稿</span>
+                        </div>
+                        <div class="step" id="step5">
+                            <span class="step-icon">05</span>
+                            <span>初步补充</span>
                         </div>
                     </div>
                 </div>
+            </section>
 
-                <!-- Harness Panel -->
-                <div class="harness-panel" id="harnessPanel" style="display: none;">
-                    <div class="harness-head">
-                        <h4>🔍 视觉审查报告</h4>
-                        <span class="harness-badge" id="harnessBadge"></span>
+            <!-- Result Section -->
+            <section class="result-section" id="resultSection" style="display: none;">
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">OUTPUT READY</p>
+                        <h2 id="resultTitle">海报生成完成</h2>
                     </div>
-                    <div class="score-history" id="scoreHistory"></div>
-                    <div class="round-grid" id="roundSnapshots"></div>
-                    <div class="issue-list" id="harnessIssues"></div>
-                    <div class="harness-actions">
-                        <a href="#" id="harnessReportLink" class="btn-outline" target="_blank">📊 查看完整报告 (JSON)</a>
+                    <span class="section-index">DONE</span>
+                </div>
+                <div class="result-panel">
+                    <div class="result-info">
+                        <span>ARXIV ID</span>
+                        <strong id="resultArxivId"></strong>
+                        <span>OUTPUT</span>
+                        <strong id="resultOutputDir"></strong>
+                        <p id="resultHarnessLine" style="display: none;">
+                            <span>REVIEW</span>
+                            <strong id="resultHarnessStatus"></strong>
+                        </p>
+                    </div>
+
+                    <div class="preview-container">
+                        <div class="preview-card">
+                            <div class="preview-kicker">DRAFT</div>
+                            <h3>初稿</h3>
+                            <p>基于论文内容的静态生成版本</p>
+                            <div class="preview-actions">
+                                <a href="#" id="viewDraft" class="btn-outline" target="_blank">预览 <span>↗</span></a>
+                                <a href="#" id="downloadDraft" class="btn-text">下载</a>
+                            </div>
+                        </div>
+                        <div class="preview-card highlight">
+                            <div class="preview-kicker">BEST CANDIDATE</div>
+                            <h3>最优候选</h3>
+                            <p>通过视觉审查后保留的最佳版本</p>
+                            <div class="preview-actions">
+                                <a href="#" id="viewOptimized" class="btn-primary" target="_blank">预览 <span>↗</span></a>
+                                <a href="#" id="downloadOptimized" class="btn-text">下载</a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Harness Panel -->
+                    <div class="harness-panel" id="harnessPanel" style="display: none;">
+                        <div class="harness-head">
+                            <h3>视觉审查报告</h3>
+                            <span class="harness-badge" id="harnessBadge"></span>
+                        </div>
+                        <div class="score-history" id="scoreHistory"></div>
+                        <div class="round-grid" id="roundSnapshots"></div>
+                        <div class="issue-list" id="harnessIssues"></div>
+                        <div class="harness-actions">
+                            <a href="#" id="harnessReportLink" class="btn-outline" target="_blank">查看完整报告 <span>↗</span></a>
+                        </div>
+                    </div>
+
+                    <div class="result-actions">
+                        <button id="downloadAllBtn" class="btn-secondary">
+                            <span>↓</span> 下载全部 ZIP
+                        </button>
+                        <button id="newTaskBtn" class="btn-outline">
+                            生成新的 <span>+</span>
+                        </button>
                     </div>
                 </div>
+            </section>
 
-                <div class="result-actions">
-                    <button id="downloadAllBtn" class="btn-secondary">
-                        📦 下载全部 (ZIP)
-                    </button>
-                    <button id="newTaskBtn" class="btn-outline">
-                        🔄 生成新的
-                    </button>
+            <!-- Error Section -->
+            <section class="error-section" id="errorSection" style="display: none;">
+                <div class="error-card">
+                    <p class="eyebrow">PROCESS ERROR</p>
+                    <h2>这次生成没有完成</h2>
+                    <p id="errorMessage"></p>
+                    <button id="retryBtn" class="btn-primary">重新尝试 <span>→</span></button>
                 </div>
-            </div>
-        </section>
+            </section>
+        </main>
 
-        <!-- Error Section -->
-        <section class="error-section" id="errorSection" style="display: none;">
-            <div class="error-card">
-                <h3>❌ 生成失败</h3>
-                <p id="errorMessage"></p>
-                <button id="retryBtn" class="btn-primary">🔄 重试</button>
-            </div>
-        </section>
+        <footer>
+            <span>Paper Reader LLM</span>
+            <span>Academic visual synthesis workspace</span>
+        </footer>
     </div>
 
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
